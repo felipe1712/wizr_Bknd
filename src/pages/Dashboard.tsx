@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import wizrLogo from "@/assets/wizr-logo.png";
 import { LogOut, User, LayoutDashboard, FileText, Bell, Settings, Plus } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ProjectList from "@/components/projects/ProjectList";
 
 const Dashboard = () => {
   const { user, roles, signOut } = useAuth();
@@ -73,67 +75,56 @@ const Dashboard = () => {
           </Button>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <DashboardCard
-            icon={<LayoutDashboard className="h-6 w-6" />}
-            title="Panorama General"
-            description="Vista consolidada de todas las fuentes"
-            color="primary"
-          />
-          <DashboardCard
-            icon={<FileText className="h-6 w-6" />}
-            title="Proyectos"
-            description="Gestiona tus proyectos de análisis"
-            color="secondary"
-          />
-          <DashboardCard
-            icon={<Bell className="h-6 w-6" />}
-            title="Alertas"
-            description="Notificaciones y eventos críticos"
-            color="accent"
-          />
-          <DashboardCard
-            icon={<Settings className="h-6 w-6" />}
-            title="Configuración"
-            description="Ajustes de cuenta y sistema"
-            color="muted"
-          />
-        </div>
+        {/* Tabs */}
+        <Tabs defaultValue="projects" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="overview" className="gap-2">
+              <LayoutDashboard className="h-4 w-4" />
+              Panorama
+            </TabsTrigger>
+            <TabsTrigger value="projects" className="gap-2">
+              <FileText className="h-4 w-4" />
+              Proyectos
+            </TabsTrigger>
+            <TabsTrigger value="alerts" className="gap-2">
+              <Bell className="h-4 w-4" />
+              Alertas
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="gap-2">
+              <Settings className="h-4 w-4" />
+              Configuración
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Placeholder for future content */}
-        <div className="mt-8 rounded-lg border border-dashed border-border p-12 text-center">
-          <p className="text-lg text-muted-foreground">
-            Próximamente: Project Spec Builder y Vistas de Análisis
-          </p>
-        </div>
+          <TabsContent value="overview">
+            <div className="rounded-lg border border-dashed border-border p-12 text-center">
+              <p className="text-lg text-muted-foreground">
+                Próximamente: Vista panorámica consolidada
+              </p>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="projects">
+            <ProjectList />
+          </TabsContent>
+
+          <TabsContent value="alerts">
+            <div className="rounded-lg border border-dashed border-border p-12 text-center">
+              <p className="text-lg text-muted-foreground">
+                Próximamente: Sistema de alertas y notificaciones
+              </p>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="settings">
+            <div className="rounded-lg border border-dashed border-border p-12 text-center">
+              <p className="text-lg text-muted-foreground">
+                Próximamente: Configuración de cuenta y preferencias
+              </p>
+            </div>
+          </TabsContent>
+        </Tabs>
       </main>
-    </div>
-  );
-};
-
-interface DashboardCardProps {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  color: "primary" | "secondary" | "accent" | "muted";
-}
-
-const DashboardCard = ({ icon, title, description, color }: DashboardCardProps) => {
-  const bgColors = {
-    primary: "bg-primary/10 text-primary",
-    secondary: "bg-secondary text-secondary-foreground",
-    accent: "bg-accent/10 text-accent",
-    muted: "bg-muted text-muted-foreground",
-  };
-
-  return (
-    <div className="group cursor-pointer rounded-lg border border-border bg-card p-6 transition-colors hover:bg-muted/50">
-      <div className={`mb-4 inline-flex rounded-lg p-3 ${bgColors[color]}`}>
-        {icon}
-      </div>
-      <h3 className="mb-1 font-semibold">{title}</h3>
-      <p className="text-sm text-muted-foreground">{description}</p>
     </div>
   );
 };
