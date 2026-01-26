@@ -60,14 +60,19 @@ const ITEMS_PER_PAGE = 10;
 const extractDomains = (items: { url?: string; source_domain?: string }[]): string[] => {
   const domains = new Set<string>();
   items.forEach((item) => {
+    let domain = "";
     if (item.source_domain) {
-      domains.add(item.source_domain);
+      domain = item.source_domain.trim();
     } else if (item.url) {
       try {
-        domains.add(new URL(item.url).hostname.replace("www.", ""));
+        domain = new URL(item.url).hostname.replace("www.", "").trim();
       } catch {
         // ignore invalid URLs
       }
+    }
+    // Only add non-empty domains
+    if (domain) {
+      domains.add(domain);
     }
   });
   return Array.from(domains).sort();
