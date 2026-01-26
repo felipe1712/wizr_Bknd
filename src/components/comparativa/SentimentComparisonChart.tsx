@@ -82,7 +82,7 @@ export function SentimentComparisonChart({
                 dataKey="neutral"
                 name="Neutral"
                 stackId="a"
-                fill="hsl(var(--muted-foreground))"
+                fill="hsl(220, 9%, 46%)"
               />
               <Bar
                 dataKey="negative"

@@ -291,7 +291,7 @@ export function ContentEditor({
                             "capitalize",
                             sentiment === "positivo" && "border-green-500 text-green-600",
                             sentiment === "negativo" && "border-red-500 text-red-600",
-                            sentiment === "neutral" && "border-blue-500 text-blue-600"
+                            sentiment === "neutral" && "border-gray-500 text-gray-600"
                           )}
                         >
                           {sentiment}

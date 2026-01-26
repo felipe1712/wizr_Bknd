@@ -15,7 +15,7 @@ interface KeywordsChartProps {
 
 const sentimentColors = {
   positivo: "hsl(142, 76%, 36%)",
-  neutral: "hsl(221, 83%, 53%)",
+  neutral: "hsl(220, 9%, 46%)",
   negativo: "hsl(0, 84%, 60%)",
 };
 

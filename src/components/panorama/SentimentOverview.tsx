@@ -12,9 +12,9 @@ interface SentimentOverviewProps {
 
 const SENTIMENT_CONFIG = [
   { key: "positivo", label: "Positivo", color: "#22c55e" },
-  { key: "neutral", label: "Neutral", color: "#3b82f6" },
+  { key: "neutral", label: "Neutral", color: "#6b7280" },
   { key: "negativo", label: "Negativo", color: "#ef4444" },
-  { key: "sinAnalizar", label: "Sin analizar", color: "#9ca3af" },
+  { key: "sinAnalizar", label: "Sin analizar", color: "#d1d5db" },
 ];
 
 export function SentimentOverview({ data }: SentimentOverviewProps) {

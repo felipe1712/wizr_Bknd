@@ -269,7 +269,7 @@ export function ThematicCardForm({ projectId, onSuccess, onCancel }: ThematicCar
                           "shrink-0",
                           mention.sentiment === "positivo" && "border-green-500 text-green-600",
                           mention.sentiment === "negativo" && "border-red-500 text-red-600",
-                          mention.sentiment === "neutral" && "border-blue-500 text-blue-600"
+                          mention.sentiment === "neutral" && "border-gray-500 text-gray-600"
                         )}
                       >
                         {mention.sentiment}

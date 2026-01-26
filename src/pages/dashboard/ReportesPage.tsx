@@ -53,7 +53,7 @@ const ReportesPage = () => {
   // Prepare chart data
   const sentimentData = reportData ? [
     { name: "Positivo", value: reportData.trends.summary.sentimentBreakdown.positivo, color: "#22c55e" },
-    { name: "Neutral", value: reportData.trends.summary.sentimentBreakdown.neutral, color: "#3b82f6" },
+    { name: "Neutral", value: reportData.trends.summary.sentimentBreakdown.neutral, color: "#6b7280" },
     { name: "Negativo", value: reportData.trends.summary.sentimentBreakdown.negativo, color: "#ef4444" },
   ].filter(d => d.value > 0) : [];
 

@@ -19,7 +19,7 @@ const chartConfig: ChartConfig = {
   },
   neutral: {
     label: "Neutral",
-    color: "hsl(221, 83%, 53%)",
+    color: "hsl(220, 9%, 46%)",
   },
   negativo: {
     label: "Negativo",
@@ -29,7 +29,7 @@ const chartConfig: ChartConfig = {
 
 const COLORS = [
   "hsl(142, 76%, 36%)", // positivo - green
-  "hsl(221, 83%, 53%)", // neutral - blue
+  "hsl(220, 9%, 46%)",  // neutral - gray
   "hsl(0, 84%, 60%)",   // negativo - red
 ];
 
