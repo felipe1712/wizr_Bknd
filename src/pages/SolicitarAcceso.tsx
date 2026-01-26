@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import wizrLogoFull from "@/assets/wizr-logo-full.png";
+import wizrIcon from "@/assets/wizr-icon-transparent.png";
 import { Loader2, ArrowLeft, User, Mail, FileText, CheckCircle, Shield, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -127,9 +127,9 @@ const SolicitarAcceso = () => {
           <div className="flex flex-col items-center gap-4">
             <Link to="/">
               <img
-                src={wizrLogoFull}
+                src={wizrIcon}
                 alt="Wizr"
-                className="h-16 w-auto transition-transform hover:scale-105"
+                className="h-20 w-auto transition-transform hover:scale-105"
               />
             </Link>
             <div className="text-center">
@@ -246,7 +246,15 @@ const SolicitarAcceso = () => {
           </div>
 
           <p className="text-center text-xs text-muted-foreground">
-            Un producto de <span className="text-primary font-medium">Kimedia</span>
+            Un producto de{" "}
+            <a 
+              href="https://kimedia.mx" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary font-medium hover:underline"
+            >
+              KiMedia
+            </a>
           </p>
         </motion.div>
       </div>
