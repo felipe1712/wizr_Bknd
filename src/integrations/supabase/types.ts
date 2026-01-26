@@ -285,6 +285,82 @@ export type Database = {
           },
         ]
       }
+      post_comments: {
+        Row: {
+          author_name: string | null
+          author_url: string | null
+          author_username: string | null
+          content: string
+          created_at: string
+          external_id: string | null
+          id: string
+          likes: number | null
+          mention_id: string | null
+          project_id: string
+          published_at: string | null
+          raw_data: Json | null
+          replies_count: number | null
+          sentiment: string | null
+          social_result_id: string | null
+        }
+        Insert: {
+          author_name?: string | null
+          author_url?: string | null
+          author_username?: string | null
+          content: string
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          likes?: number | null
+          mention_id?: string | null
+          project_id: string
+          published_at?: string | null
+          raw_data?: Json | null
+          replies_count?: number | null
+          sentiment?: string | null
+          social_result_id?: string | null
+        }
+        Update: {
+          author_name?: string | null
+          author_url?: string | null
+          author_username?: string | null
+          content?: string
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          likes?: number | null
+          mention_id?: string | null
+          project_id?: string
+          published_at?: string | null
+          raw_data?: Json | null
+          replies_count?: number | null
+          sentiment?: string | null
+          social_result_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_comments_mention_id_fkey"
+            columns: ["mention_id"]
+            isOneToOne: false
+            referencedRelation: "mentions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_comments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_comments_social_result_id_fkey"
+            columns: ["social_result_id"]
+            isOneToOne: false
+            referencedRelation: "social_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
