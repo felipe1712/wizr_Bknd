@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
-import { Search, FileSearch, AlertTriangle, BarChart3, Calendar, Globe, MoreHorizontal, Plus } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Search, FileSearch, AlertTriangle, BarChart3, Calendar, Globe, MoreHorizontal, Plus, Pencil, Trash2, Power, PowerOff } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -59,7 +61,11 @@ const ProjectList = () => {
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { user } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -82,6 +88,73 @@ const ProjectList = () => {
       console.error("Error fetching projects:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEdit = (project: Project) => {
+    navigate(`/proyecto/${project.id}/editar`);
+  };
+
+  const handleDeleteClick = (project: Project) => {
+    setProjectToDelete(project);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!projectToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("projects")
+        .delete()
+        .eq("id", projectToDelete.id);
+
+      if (error) throw error;
+
+      setProjects(projects.filter((p) => p.id !== projectToDelete.id));
+      toast({
+        title: "Proyecto eliminado",
+        description: `"${projectToDelete.nombre}" ha sido eliminado exitosamente`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error al eliminar",
+        description: error.message || "No se pudo eliminar el proyecto",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
+    }
+  };
+
+  const handleToggleStatus = async (project: Project) => {
+    try {
+      const { error } = await supabase
+        .from("projects")
+        .update({ activo: !project.activo })
+        .eq("id", project.id);
+
+      if (error) throw error;
+
+      setProjects(
+        projects.map((p) =>
+          p.id === project.id ? { ...p, activo: !p.activo } : p
+        )
+      );
+
+      toast({
+        title: project.activo ? "Proyecto desactivado" : "Proyecto activado",
+        description: `"${project.nombre}" ha sido ${project.activo ? "desactivado" : "activado"}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo cambiar el estado",
+        variant: "destructive",
+      });
     }
   };
 
@@ -111,151 +184,199 @@ const ProjectList = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Tipo:</span>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-40 bg-background">
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent className="bg-popover">
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="monitoreo">Monitoreo</SelectItem>
-              <SelectItem value="investigacion">Investigación</SelectItem>
-              <SelectItem value="crisis">Crisis</SelectItem>
-              <SelectItem value="benchmark">Benchmark</SelectItem>
-            </SelectContent>
-          </Select>
+    <>
+      <div className="space-y-6">
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Tipo:</span>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-40 bg-background">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="monitoreo">Monitoreo</SelectItem>
+                <SelectItem value="investigacion">Investigación</SelectItem>
+                <SelectItem value="crisis">Crisis</SelectItem>
+                <SelectItem value="benchmark">Benchmark</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Estado:</span>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-40 bg-background">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="activo">Activos</SelectItem>
+                <SelectItem value="inactivo">Inactivos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="ml-auto text-sm text-muted-foreground">
+            {filteredProjects.length} proyecto{filteredProjects.length !== 1 ? "s" : ""}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Estado:</span>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40 bg-background">
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent className="bg-popover">
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="activo">Activos</SelectItem>
-              <SelectItem value="inactivo">Inactivos</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Project Grid */}
+        {filteredProjects.length === 0 ? (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <div className="rounded-full bg-muted p-4">
+                <FileSearch className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="mt-4 text-lg font-semibold">No hay proyectos</h3>
+              <p className="mt-1 text-center text-sm text-muted-foreground">
+                {projects.length === 0
+                  ? "Crea tu primer proyecto para comenzar"
+                  : "No hay proyectos que coincidan con los filtros"}
+              </p>
+              {projects.length === 0 && (
+                <Button className="mt-4" onClick={() => navigate("/nuevo-proyecto")}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Crear Proyecto
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filteredProjects.map((project) => {
+              const typeConfig = TYPE_CONFIG[project.tipo];
+              const TypeIcon = typeConfig.icon;
 
-        <div className="ml-auto text-sm text-muted-foreground">
-          {filteredProjects.length} proyecto{filteredProjects.length !== 1 ? "s" : ""}
-        </div>
-      </div>
-
-      {/* Project Grid */}
-      {filteredProjects.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <div className="rounded-full bg-muted p-4">
-              <FileSearch className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h3 className="mt-4 text-lg font-semibold">No hay proyectos</h3>
-            <p className="mt-1 text-center text-sm text-muted-foreground">
-              {projects.length === 0
-                ? "Crea tu primer proyecto para comenzar"
-                : "No hay proyectos que coincidan con los filtros"}
-            </p>
-            {projects.length === 0 && (
-              <Button className="mt-4" onClick={() => navigate("/nuevo-proyecto")}>
-                <Plus className="mr-2 h-4 w-4" />
-                Crear Proyecto
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredProjects.map((project) => {
-            const typeConfig = TYPE_CONFIG[project.tipo];
-            const TypeIcon = typeConfig.icon;
-
-            return (
-              <Card
-                key={project.id}
-                className={`group cursor-pointer transition-all hover:shadow-md ${
-                  !project.activo ? "opacity-60" : ""
-                }`}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={`rounded-lg p-2 ${typeConfig.color}`}>
-                        <TypeIcon className="h-4 w-4" />
+              return (
+                <Card
+                  key={project.id}
+                  className={`group transition-all hover:shadow-md ${
+                    !project.activo ? "opacity-60" : ""
+                  }`}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`rounded-lg p-2 ${typeConfig.color}`}>
+                          <TypeIcon className="h-4 w-4" />
+                        </div>
+                        <Badge variant="outline" className="text-xs">
+                          {typeConfig.label}
+                        </Badge>
                       </div>
-                      <Badge variant="outline" className="text-xs">
-                        {typeConfig.label}
-                      </Badge>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-popover">
+                          <DropdownMenuItem onClick={() => handleEdit(project)}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleToggleStatus(project)}>
+                            {project.activo ? (
+                              <>
+                                <PowerOff className="mr-2 h-4 w-4" />
+                                Desactivar
+                              </>
+                            ) : (
+                              <>
+                                <Power className="mr-2 h-4 w-4" />
+                                Activar
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteClick(project)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Eliminar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-popover">
-                        <DropdownMenuItem>Ver detalles</DropdownMenuItem>
-                        <DropdownMenuItem>Editar</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">
-                          Eliminar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <CardTitle className="mt-2 line-clamp-1 text-lg">
-                    {project.nombre}
-                  </CardTitle>
-                  {project.descripcion && (
-                    <CardDescription className="line-clamp-2">
-                      {project.descripcion}
-                    </CardDescription>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <p className="line-clamp-2 text-sm text-muted-foreground">
-                    {project.objetivo}
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={SENSITIVITY_BADGES[project.sensibilidad].variant}>
-                      {SENSITIVITY_BADGES[project.sensibilidad].label}
-                    </Badge>
-                    {!project.activo && (
-                      <Badge variant="outline" className="border-muted-foreground/30">
-                        Inactivo
-                      </Badge>
+                    <CardTitle className="mt-2 line-clamp-1 text-lg">
+                      {project.nombre}
+                    </CardTitle>
+                    {project.descripcion && (
+                      <CardDescription className="line-clamp-2">
+                        {project.descripcion}
+                      </CardDescription>
                     )}
-                  </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="line-clamp-2 text-sm text-muted-foreground">
+                      {project.objetivo}
+                    </p>
 
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {format(new Date(project.created_at), "d MMM yyyy", { locale: es })}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Globe className="h-3 w-3" />
-                      {project.alcance_geografico
-                        .slice(0, 2)
-                        .map((r) => REGION_LABELS[r] || r)
-                        .join(", ")}
-                      {project.alcance_geografico.length > 2 && (
-                        <span>+{project.alcance_geografico.length - 2}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={SENSITIVITY_BADGES[project.sensibilidad].variant}>
+                        {SENSITIVITY_BADGES[project.sensibilidad].label}
+                      </Badge>
+                      {!project.activo && (
+                        <Badge variant="outline" className="border-muted-foreground/30">
+                          Inactivo
+                        </Badge>
                       )}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </div>
+
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {format(new Date(project.created_at), "d MMM yyyy", { locale: es })}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Globe className="h-3 w-3" />
+                        {project.alcance_geografico
+                          .slice(0, 2)
+                          .map((r) => REGION_LABELS[r] || r)
+                          .join(", ")}
+                        {project.alcance_geografico.length > 2 && (
+                          <span>+{project.alcance_geografico.length - 2}</span>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="bg-background">
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar proyecto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. El proyecto{" "}
+              <span className="font-semibold text-foreground">
+                "{projectToDelete?.nombre}"
+              </span>{" "}
+              será eliminado permanentemente junto con todos sus datos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Eliminando..." : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
 

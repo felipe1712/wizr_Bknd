@@ -75,6 +75,14 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/proyecto/:id/editar"
+        element={
+          <ProtectedRoute>
+            <ProjectSpecBuilder />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Dashboard routes with layout */}
       <Route

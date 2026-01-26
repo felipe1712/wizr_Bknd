@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { ArrowLeft, ArrowRight, Check, FileText } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, FileText, Loader2 } from "lucide-react";
 import wizrLogo from "@/assets/wizr-logo.png";
 
 import StepBasicInfo from "@/components/project-spec/StepBasicInfo";
@@ -46,8 +46,12 @@ const STEPS = [
 ];
 
 const ProjectSpecBuilder = () => {
+  const { id: projectId } = useParams<{ id: string }>();
+  const isEditMode = Boolean(projectId);
+  
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(isEditMode);
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -66,6 +70,57 @@ const ProjectSpecBuilder = () => {
     },
     mode: "onChange",
   });
+
+  // Load project data in edit mode
+  useEffect(() => {
+    if (isEditMode && projectId) {
+      loadProject(projectId);
+    }
+  }, [projectId, isEditMode]);
+
+  const loadProject = async (id: string) => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (!data) {
+        toast({
+          title: "Proyecto no encontrado",
+          description: "El proyecto que intentas editar no existe",
+          variant: "destructive",
+        });
+        navigate("/dashboard/proyectos");
+        return;
+      }
+
+      // Populate form with existing data
+      form.reset({
+        nombre: data.nombre,
+        descripcion: data.descripcion || "",
+        tipo: data.tipo as ProjectFormData["tipo"],
+        objetivo: data.objetivo,
+        audiencia: data.audiencia,
+        sensibilidad: data.sensibilidad as ProjectFormData["sensibilidad"],
+        alcance_temporal: data.alcance_temporal as ProjectFormData["alcance_temporal"],
+        alcance_geografico: data.alcance_geografico || [],
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error al cargar proyecto",
+        description: error.message || "Ocurrió un error inesperado",
+        variant: "destructive",
+      });
+      navigate("/dashboard/proyectos");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const validateCurrentStep = async (): Promise<boolean> => {
     let fieldsToValidate: (keyof ProjectFormData)[] = [];
@@ -108,7 +163,7 @@ const ProjectSpecBuilder = () => {
     if (!user) {
       toast({
         title: "Error",
-        description: "Debes iniciar sesión para crear un proyecto",
+        description: "Debes iniciar sesión para guardar el proyecto",
         variant: "destructive",
       });
       return;
@@ -117,29 +172,54 @@ const ProjectSpecBuilder = () => {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.from("projects").insert({
-        user_id: user.id,
-        nombre: data.nombre,
-        descripcion: data.descripcion || null,
-        tipo: data.tipo,
-        objetivo: data.objetivo,
-        audiencia: data.audiencia,
-        sensibilidad: data.sensibilidad,
-        alcance_temporal: data.alcance_temporal,
-        alcance_geografico: data.alcance_geografico,
-      });
+      if (isEditMode && projectId) {
+        // Update existing project
+        const { error } = await supabase
+          .from("projects")
+          .update({
+            nombre: data.nombre,
+            descripcion: data.descripcion || null,
+            tipo: data.tipo,
+            objetivo: data.objetivo,
+            audiencia: data.audiencia,
+            sensibilidad: data.sensibilidad,
+            alcance_temporal: data.alcance_temporal,
+            alcance_geografico: data.alcance_geografico,
+          })
+          .eq("id", projectId);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      toast({
-        title: "¡Proyecto creado!",
-        description: "Tu proyecto ha sido creado exitosamente",
-      });
+        toast({
+          title: "¡Proyecto actualizado!",
+          description: "Los cambios han sido guardados exitosamente",
+        });
+      } else {
+        // Create new project
+        const { error } = await supabase.from("projects").insert({
+          user_id: user.id,
+          nombre: data.nombre,
+          descripcion: data.descripcion || null,
+          tipo: data.tipo,
+          objetivo: data.objetivo,
+          audiencia: data.audiencia,
+          sensibilidad: data.sensibilidad,
+          alcance_temporal: data.alcance_temporal,
+          alcance_geografico: data.alcance_geografico,
+        });
 
-      navigate("/dashboard");
+        if (error) throw error;
+
+        toast({
+          title: "¡Proyecto creado!",
+          description: "Tu proyecto ha sido creado exitosamente",
+        });
+      }
+
+      navigate("/dashboard/proyectos");
     } catch (error: any) {
       toast({
-        title: "Error al crear proyecto",
+        title: isEditMode ? "Error al actualizar proyecto" : "Error al crear proyecto",
         description: error.message || "Ocurrió un error inesperado",
         variant: "destructive",
       });
@@ -148,6 +228,14 @@ const ProjectSpecBuilder = () => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -155,9 +243,11 @@ const ProjectSpecBuilder = () => {
         <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4">
           <div className="flex items-center gap-3">
             <img src={wizrLogo} alt="Wizr" className="h-8 w-auto" />
-            <span className="text-lg font-semibold">Project Spec Builder</span>
+            <span className="text-lg font-semibold">
+              {isEditMode ? "Editar Proyecto" : "Project Spec Builder"}
+            </span>
           </div>
-          <Button variant="ghost" onClick={() => navigate("/dashboard")}>
+          <Button variant="ghost" onClick={() => navigate("/dashboard/proyectos")}>
             Cancelar
           </Button>
         </div>
@@ -246,7 +336,7 @@ const ProjectSpecBuilder = () => {
                     </Button>
                   ) : (
                     <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? "Creando..." : "Crear Proyecto"}
+                      {isSubmitting ? "Guardando..." : isEditMode ? "Guardar Cambios" : "Crear Proyecto"}
                       <Check className="ml-2 h-4 w-4" />
                     </Button>
                   )}
