@@ -64,6 +64,78 @@ export type Database = {
           },
         ]
       }
+      mentions: {
+        Row: {
+          created_at: string
+          description: string | null
+          entity_id: string | null
+          id: string
+          is_archived: boolean
+          is_read: boolean
+          matched_keywords: string[]
+          project_id: string
+          published_at: string | null
+          raw_metadata: Json | null
+          relevance_score: number | null
+          sentiment: string | null
+          source_domain: string | null
+          title: string | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          entity_id?: string | null
+          id?: string
+          is_archived?: boolean
+          is_read?: boolean
+          matched_keywords?: string[]
+          project_id: string
+          published_at?: string | null
+          raw_metadata?: Json | null
+          relevance_score?: number | null
+          sentiment?: string | null
+          source_domain?: string | null
+          title?: string | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          entity_id?: string | null
+          id?: string
+          is_archived?: boolean
+          is_read?: boolean
+          matched_keywords?: string[]
+          project_id?: string
+          published_at?: string | null
+          raw_metadata?: Json | null
+          relevance_score?: number | null
+          sentiment?: string | null
+          source_domain?: string | null
+          title?: string | null
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentions_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mentions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
