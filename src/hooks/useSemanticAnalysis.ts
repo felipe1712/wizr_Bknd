@@ -49,20 +49,39 @@ export function useSemanticAnalysis(projectId: string | undefined) {
   const queryClient = useQueryClient();
   const [cachedResult, setCachedResult] = useState<SemanticAnalysisResult | null>(null);
 
+  const MAX_MENTIONS_FOR_ANALYSIS = 120;
+  const MAX_TEXT_CHARS = 900;
+
+  const truncate = (value: string | null | undefined, max = MAX_TEXT_CHARS) => {
+    if (!value) return null;
+    const s = value.trim();
+    if (s.length <= max) return s;
+    return `${s.slice(0, max)}…`;
+  };
+
   const analyzeMutation = useMutation({
     mutationFn: async (mentions: Mention[]): Promise<SemanticAnalysisResult> => {
       if (!mentions.length) {
         throw new Error("No hay menciones para analizar");
       }
 
+      const mentionsLimited = mentions.slice(0, MAX_MENTIONS_FOR_ANALYSIS);
+
+      if (mentions.length > mentionsLimited.length) {
+        toast({
+          title: "Análisis parcial",
+          description: `Para evitar errores de envío, se analizarán ${mentionsLimited.length} de ${mentions.length} menciones (las más recientes).`,
+        });
+      }
+
       // Prepare mentions for analysis (only send necessary fields)
-      const mentionsForAnalysis = mentions.map((m) => ({
+      const mentionsForAnalysis = mentionsLimited.map((m) => ({
         id: m.id,
-        title: m.title,
-        description: m.description,
+        title: truncate(m.title),
+        description: truncate(m.description),
         url: m.url,
         source_domain: m.source_domain,
-        matched_keywords: m.matched_keywords,
+        matched_keywords: Array.isArray(m.matched_keywords) ? m.matched_keywords.slice(0, 25) : [],
       }));
 
       const { data, error } = await supabase.functions.invoke<AnalyzeResponse>(
@@ -78,7 +97,7 @@ export function useSemanticAnalysis(projectId: string | undefined) {
       const result: SemanticAnalysisResult = {
         ...data.analysis,
         analyzedAt: new Date(),
-        mentionCount: mentions.length,
+        mentionCount: mentionsLimited.length,
       };
 
       return result;
