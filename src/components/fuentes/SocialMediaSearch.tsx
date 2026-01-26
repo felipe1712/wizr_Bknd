@@ -154,12 +154,11 @@ const PLATFORM_CONFIG: Record<Platform, {
     label: "Facebook",
     icon: FacebookIcon,
     color: "bg-blue-600 text-white",
-    placeholder: "Ej: NombrePagina o término",
+    placeholder: "Ej: ActinverMexico, CocaColaMexico",
     searchTypes: [
-      { value: "query", label: "Búsqueda general", tooltip: "Busca publicaciones públicas que contengan los términos especificados." },
-      { value: "username", label: "Por página", tooltip: "Busca las publicaciones de una página específica de Facebook." },
+      { value: "username", label: "Por página", tooltip: "Requiere el nombre exacto de una página de Facebook. La búsqueda general no está soportada." },
     ],
-    helpText: "Busca en publicaciones públicas de páginas de Facebook. Para páginas específicas, usa el nombre exacto de la página.",
+    helpText: "⚠️ Facebook solo permite extraer contenido de páginas específicas. Ingresa el nombre exacto de la página (sin espacios ni URL). Ejemplo: 'ActinverMexico'.",
   },
   tiktok: {
     label: "TikTok",
