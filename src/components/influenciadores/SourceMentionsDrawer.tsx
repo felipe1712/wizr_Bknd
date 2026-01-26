@@ -68,6 +68,21 @@ export function SourceMentionsDrawer({
     ? `https://www.google.com/s2/favicons?domain=${sourceDomain}&sz=32`
     : null;
 
+  const openExternalUrl = (url: string) => {
+    // Some environments (e.g., sandboxed iframes / strict popup blockers) may block window.open
+    // even on user gestures. If so, fall back to same-tab navigation.
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    if (!win) {
+      window.location.assign(url);
+      return;
+    }
+    try {
+      win.opener = null;
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg">
@@ -141,7 +156,11 @@ export function SourceMentionsDrawer({
                       })}
                     </span>
                     <button
-                      onClick={() => window.open(mention.url, "_blank", "noopener,noreferrer")}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openExternalUrl(mention.url);
+                      }}
                       className="text-xs text-primary hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       Ver fuente
