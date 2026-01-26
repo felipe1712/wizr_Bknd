@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import wizrLogoFull from "@/assets/wizr-logo-full.png";
-import wizrHeroLogo from "@/assets/wizr-hero-logo.png";
+import wizrHeroLogo from "@/assets/wizr-logo-full-transparent.png";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Sparkles, BarChart3, Bell, TrendingUp, Shield, Zap } from "lucide-react";
 import { motion } from "framer-motion";
