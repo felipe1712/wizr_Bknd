@@ -96,19 +96,25 @@ serve(async (req) => {
         break;
         
       case "tiktok":
+        // TikTok: send the keyword to filter results on the backend
         input = {
           hashtags: hashtag ? [hashtag] : [],
           profiles: username ? [username] : [],
           searchQueries: query ? [query] : [],
           resultsPerPage: maxResults,
+          // Pass keyword for post-processing filter (handled in apify-status)
+          _filterKeyword: query || hashtag || username || "",
         };
         break;
         
       case "instagram":
+        // Instagram: Reduce parameters to speed up - only fetch posts, no stories/reels extras
         input = {
           directUrls: username ? [`https://www.instagram.com/${username}/`] : [],
           hashtags: hashtag ? [hashtag] : [],
-          resultsLimit: maxResults,
+          resultsLimit: Math.min(maxResults, 20), // Limit to prevent long runs
+          addParentData: false,
+          searchType: "hashtag", // Faster mode
         };
         break;
         
@@ -148,13 +154,13 @@ serve(async (req) => {
         break;
         
       case "reddit":
-        // Reddit scraper configuration
+        // Reddit scraper configuration - now includes comments
         if (subreddit) {
           input = {
-            startUrls: [`https://www.reddit.com/r/${subreddit}/`],
+            startUrls: [{ url: `https://www.reddit.com/r/${subreddit}/` }],
             maxItems: maxResults,
             maxPostCount: maxResults,
-            maxComments: 0,
+            maxComments: 10, // Include top 10 comments per post
             sort: "hot",
           };
         } else if (query) {
@@ -162,7 +168,7 @@ serve(async (req) => {
             searches: [query],
             maxItems: maxResults,
             maxPostCount: maxResults,
-            maxComments: 0,
+            maxComments: 10, // Include top 10 comments per post
             sort: "relevance",
           };
         }

@@ -404,11 +404,14 @@ serve(async (req) => {
       throw new Error("APIFY_API_TOKEN is not configured");
     }
 
-    const { runId, platform = "twitter" } = await req.json();
+    const { runId, platform = "twitter", filterKeyword = "" } = await req.json();
 
     if (!runId) {
       throw new Error("runId is required");
     }
+
+    // Normalize filterKeyword for case-insensitive matching
+    const keywordLower = (filterKeyword || "").toLowerCase().trim();
 
     // Get run status
     const statusResponse = await fetch(
@@ -437,7 +440,18 @@ serve(async (req) => {
 
       if (datasetResponse.ok) {
         const rawItems = await datasetResponse.json();
-        items = normalizeResults(rawItems, platform as Platform);
+        let normalized = normalizeResults(rawItems, platform as Platform);
+
+        // Filter by keyword if provided (especially for TikTok to reduce false positives)
+        if (keywordLower && platform === "tiktok") {
+          normalized = normalized.filter((item) => {
+            const text = `${item.title} ${item.description} ${(item.hashtags || []).join(" ")}`.toLowerCase();
+            return text.includes(keywordLower);
+          });
+          console.log(`Filtered TikTok results from ${rawItems.length} to ${normalized.length} using keyword: ${keywordLower}`);
+        }
+
+        items = normalized;
         console.log(`Retrieved and normalized ${items.length} items from dataset`);
       }
     }
