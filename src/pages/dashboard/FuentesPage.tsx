@@ -18,6 +18,8 @@ import { useToast } from "@/hooks/use-toast";
 import { EntityForm } from "@/components/entities/EntityForm";
 import { SocialMediaSearch } from "@/components/fuentes/SocialMediaSearch";
 import { SocialHistoryTab } from "@/components/fuentes/SocialHistoryTab";
+import { GoogleNewsSearch } from "@/components/fuentes/GoogleNewsSearch";
+import { CommentsAnalysisTab } from "@/components/fuentes/CommentsAnalysisTab";
 import wizrLogoIcon from "@/assets/wizr-logo-icon.png";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
@@ -55,7 +57,7 @@ import { format, formatDistanceToNow, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 
 type SearchMode = "manual" | "entities";
-type ViewMode = "search" | "social" | "social-history" | "history";
+type ViewMode = "search" | "google-news" | "social" | "social-history" | "comments" | "history";
 type SearchSource = "news" | "social";
 
 const ITEMS_PER_PAGE = 10;
@@ -512,10 +514,14 @@ const FuentesPage = () => {
 
       {/* Main Tabs */}
       <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-        <TabsList>
+        <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="search" className="gap-2">
             <Newspaper className="h-4 w-4" />
             Medios
+          </TabsTrigger>
+          <TabsTrigger value="google-news" className="gap-2">
+            <Globe className="h-4 w-4" />
+            Google News
           </TabsTrigger>
           <TabsTrigger value="social" className="gap-2">
             <MessageCircle className="h-4 w-4" />
@@ -524,6 +530,10 @@ const FuentesPage = () => {
           <TabsTrigger value="social-history" className="gap-2">
             <Database className="h-4 w-4" />
             Historial Redes
+          </TabsTrigger>
+          <TabsTrigger value="comments" className="gap-2">
+            <MessageCircle className="h-4 w-4" />
+            Comentarios
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-2">
             <History className="h-4 w-4" />
@@ -1245,6 +1255,16 @@ const FuentesPage = () => {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* Google News Tab */}
+        <TabsContent value="google-news" className="space-y-4 mt-4">
+          <GoogleNewsSearch projectId={selectedProject.id} projectName={selectedProject.nombre} />
+        </TabsContent>
+
+        {/* Comments Analysis Tab */}
+        <TabsContent value="comments" className="space-y-4 mt-4">
+          <CommentsAnalysisTab projectId={selectedProject.id} />
         </TabsContent>
       </Tabs>
 

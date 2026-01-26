@@ -118,10 +118,33 @@ export function useSentimentAnalysis(projectId: string | undefined) {
     return results;
   };
 
+  /**
+   * Analyze a single text string and return the sentiment
+   */
+  const analyzeText = async (text: string): Promise<SentimentType | null> => {
+    if (!text?.trim()) return null;
+
+    try {
+      const { data, error } = await supabase.functions.invoke<AnalyzeSentimentResponse>(
+        "analyze-sentiment",
+        { body: { mentions: [{ id: "temp", title: text, description: null }] } }
+      );
+
+      if (error) throw error;
+      if (!data?.success || !data.results?.length) return null;
+
+      return data.results[0].sentiment;
+    } catch (err) {
+      console.error("Text sentiment analysis error:", err);
+      return null;
+    }
+  };
+
   return {
     analyze: analyzeMutation.mutate,
     analyzeAsync: analyzeMutation.mutateAsync,
     analyzeAndSave,
+    analyzeText,
     isAnalyzing: analyzeMutation.isPending,
     updateMentionsSentiment: updateMentionsSentiment.mutate,
     isUpdatingSentiments: updateMentionsSentiment.isPending,
