@@ -9,6 +9,8 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { 
   Search, 
   RefreshCw, 
@@ -23,6 +25,9 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  HelpCircle,
+  ChevronDown,
+  Info,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -96,79 +101,87 @@ const PLATFORM_CONFIG: Record<Platform, {
   icon: React.ComponentType; 
   color: string;
   placeholder: string;
-  searchTypes: { value: string; label: string }[];
+  searchTypes: { value: string; label: string; tooltip: string }[];
+  helpText: string;
 }> = {
   twitter: {
     label: "X (Twitter)",
     icon: TwitterIcon,
     color: "bg-black text-white",
-    placeholder: "Término de búsqueda o @usuario",
+    placeholder: "Ej: Actinver, @actinver, #finanzas",
     searchTypes: [
-      { value: "query", label: "Búsqueda general" },
-      { value: "username", label: "Por usuario (@)" },
-      { value: "hashtag", label: "Por hashtag (#)" },
+      { value: "query", label: "Búsqueda general", tooltip: "Busca tweets que contengan palabras clave, usuarios o hashtags. Puedes combinar múltiples términos separados por comas." },
+      { value: "username", label: "Por usuario (@)", tooltip: "Busca los tweets de un usuario específico. Ingresa solo el nombre de usuario sin @." },
+      { value: "hashtag", label: "Por hashtag (#)", tooltip: "Busca tweets con un hashtag específico. Ingresa sin el símbolo #." },
     ],
+    helpText: "Puedes combinar términos, usuarios (@) y hashtags (#) en una sola búsqueda separándolos por comas. Ejemplo: 'Actinver, @actinver, @actinver_trade'",
   },
   facebook: {
     label: "Facebook",
     icon: FacebookIcon,
     color: "bg-blue-600 text-white",
-    placeholder: "Nombre de página o término",
+    placeholder: "Ej: NombrePagina o término",
     searchTypes: [
-      { value: "query", label: "Búsqueda general" },
-      { value: "username", label: "Por página" },
+      { value: "query", label: "Búsqueda general", tooltip: "Busca publicaciones públicas que contengan los términos especificados." },
+      { value: "username", label: "Por página", tooltip: "Busca las publicaciones de una página específica de Facebook." },
     ],
+    helpText: "Busca en publicaciones públicas de páginas de Facebook. Para páginas específicas, usa el nombre exacto de la página.",
   },
   tiktok: {
     label: "TikTok",
     icon: TikTokIcon,
     color: "bg-black text-white",
-    placeholder: "Usuario, hashtag o término",
+    placeholder: "Ej: usuario, #tendencia o término",
     searchTypes: [
-      { value: "query", label: "Búsqueda general" },
-      { value: "username", label: "Por usuario" },
-      { value: "hashtag", label: "Por hashtag (#)" },
+      { value: "query", label: "Búsqueda general", tooltip: "Busca videos que contengan palabras clave en su descripción o título." },
+      { value: "username", label: "Por usuario", tooltip: "Busca los videos de un creador específico de TikTok." },
+      { value: "hashtag", label: "Por hashtag (#)", tooltip: "Busca videos etiquetados con un hashtag específico." },
     ],
+    helpText: "Puedes buscar por términos generales, por usuario específico, o por hashtag de tendencia.",
   },
   instagram: {
     label: "Instagram",
     icon: InstagramIcon,
     color: "bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white",
-    placeholder: "Usuario o hashtag",
+    placeholder: "Ej: nombredeusuario o #hashtag",
     searchTypes: [
-      { value: "username", label: "Por usuario" },
-      { value: "hashtag", label: "Por hashtag (#)" },
+      { value: "username", label: "Por usuario", tooltip: "Busca las publicaciones de un perfil específico de Instagram." },
+      { value: "hashtag", label: "Por hashtag (#)", tooltip: "Busca publicaciones etiquetadas con un hashtag específico." },
     ],
+    helpText: "Instagram solo permite buscar por usuario específico o por hashtag. No admite búsquedas generales de texto.",
   },
   linkedin: {
     label: "LinkedIn",
     icon: LinkedInIcon,
     color: "bg-blue-700 text-white",
-    placeholder: "URL de empresa o término",
+    placeholder: "Ej: https://linkedin.com/company/nombre",
     searchTypes: [
-      { value: "query", label: "Búsqueda general" },
-      { value: "companyUrl", label: "Por empresa (URL)" },
+      { value: "query", label: "Búsqueda general", tooltip: "Busca publicaciones públicas que contengan los términos especificados." },
+      { value: "companyUrl", label: "Por empresa (URL)", tooltip: "Requiere la URL completa del perfil de la empresa. Ejemplo: https://www.linkedin.com/company/microsoft/" },
     ],
+    helpText: "Para buscar por empresa, necesitas la URL completa del perfil de LinkedIn (ej: https://www.linkedin.com/company/nombre/).",
   },
   youtube: {
     label: "YouTube",
     icon: YouTubeIcon,
     color: "bg-red-600 text-white",
-    placeholder: "Término, canal o video",
+    placeholder: "Ej: término o URL de canal",
     searchTypes: [
-      { value: "query", label: "Búsqueda general" },
-      { value: "channelUrl", label: "Por canal (URL)" },
+      { value: "query", label: "Búsqueda general", tooltip: "Busca videos que contengan las palabras clave en título o descripción." },
+      { value: "channelUrl", label: "Por canal (URL)", tooltip: "Requiere la URL completa del canal. Ejemplo: https://www.youtube.com/@ChannelName" },
     ],
+    helpText: "Busca videos por términos generales o extrae contenido de un canal específico usando su URL.",
   },
   reddit: {
     label: "Reddit",
     icon: RedditIcon,
     color: "bg-orange-600 text-white",
-    placeholder: "Término o subreddit",
+    placeholder: "Ej: término o r/subreddit",
     searchTypes: [
-      { value: "query", label: "Búsqueda general" },
-      { value: "subreddit", label: "Por subreddit" },
+      { value: "query", label: "Búsqueda general", tooltip: "Busca posts en todo Reddit que contengan los términos especificados." },
+      { value: "subreddit", label: "Por subreddit", tooltip: "Busca posts dentro de un subreddit específico. Ingresa sin el prefijo r/." },
     ],
+    helpText: "Busca en todo Reddit o dentro de un subreddit específico (comunidad temática).",
   },
 };
 
@@ -457,6 +470,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
   };
 
   return (
+    <TooltipProvider>
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
@@ -468,6 +482,47 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Help Section */}
+        <Collapsible>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="w-full justify-between text-muted-foreground hover:text-foreground">
+              <span className="flex items-center gap-2">
+                <HelpCircle className="h-4 w-4" />
+                ¿Cómo usar esta herramienta?
+              </span>
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2">
+            <div className="rounded-lg border bg-muted/50 p-4 space-y-3 text-sm">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 mt-0.5 text-primary shrink-0" />
+                <div>
+                  <p className="font-medium mb-1">Tipos de búsqueda</p>
+                  <ul className="list-disc list-inside text-muted-foreground space-y-1">
+                    <li><strong>Búsqueda general:</strong> Permite múltiples términos separados por comas (ej: "Actinver, @actinver, @actinver_trade")</li>
+                    <li><strong>Por usuario/página:</strong> Busca contenido de un perfil específico</li>
+                    <li><strong>Por hashtag:</strong> Busca por etiqueta o tendencia</li>
+                    <li><strong>Por empresa/canal (URL):</strong> Requiere la URL completa del perfil</li>
+                  </ul>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 mt-0.5 text-primary shrink-0" />
+                <div>
+                  <p className="font-medium mb-1">Por plataforma</p>
+                  <ul className="list-disc list-inside text-muted-foreground space-y-1">
+                    <li><strong>X/Twitter, Facebook, TikTok:</strong> Admiten búsqueda general con múltiples términos</li>
+                    <li><strong>Instagram:</strong> Solo permite buscar por usuario o hashtag específico</li>
+                    <li><strong>LinkedIn:</strong> Para empresas, usa la URL completa (ej: linkedin.com/company/nombre/)</li>
+                    <li><strong>YouTube:</strong> Busca videos o extrae de un canal por URL</li>
+                    <li><strong>Reddit:</strong> Busca en todo Reddit o dentro de un subreddit</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
         {/* Platform Selection */}
         <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
           {(Object.keys(PLATFORM_CONFIG) as Platform[]).map((plat) => {
@@ -495,7 +550,17 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         {/* Search Controls */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2">
-            <Label>Tipo de búsqueda</Label>
+            <div className="flex items-center gap-1">
+              <Label>Tipo de búsqueda</Label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[250px]">
+                  <p>{config.searchTypes.find(t => t.value === searchType)?.tooltip}</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
             <Select value={searchType} onValueChange={setSearchType}>
               <SelectTrigger className="bg-background">
                 <SelectValue />
@@ -526,7 +591,17 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           </div>
 
           <div className="space-y-2">
-            <Label>Búsqueda</Label>
+            <div className="flex items-center gap-1">
+              <Label>Búsqueda / URL de empresa o término</Label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[280px]">
+                  <p>{config.helpText}</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
             <Input
               placeholder={config.placeholder}
               value={searchValue}
@@ -695,6 +770,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         )}
       </CardContent>
     </Card>
+    </TooltipProvider>
   );
 };
 
