@@ -140,15 +140,13 @@ export function SourceMentionsDrawer({
                         locale: es,
                       })}
                     </span>
-                    <a
-                      href={mention.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                    <button
+                      onClick={() => window.open(mention.url, "_blank", "noopener,noreferrer")}
+                      className="text-xs text-primary hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       Ver fuente
                       <ExternalLink className="h-3 w-3" />
-                    </a>
+                    </button>
                   </div>
                 </div>
               ))

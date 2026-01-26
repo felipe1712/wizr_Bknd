@@ -223,7 +223,14 @@ function normalizeTikTok(item: Record<string, unknown>, index: number): Normaliz
 }
 
 function normalizeInstagram(item: Record<string, unknown>, index: number): NormalizedResult {
-  const text = String(get(item, "caption") || get(item, "description") || "");
+  // Get caption - this is the actual post content, not sidebar suggestions
+  const caption = String(get(item, "caption") || "");
+  // Some scrapers return 'description' which may include page chrome - only use if caption is empty
+  const description = String(get(item, "description") || "");
+  
+  // Prefer caption as it's the actual post content
+  const text = caption || description;
+  
   const username = String(get(item, "ownerUsername") || get(item, "owner.username") || "");
   
   const metrics = {

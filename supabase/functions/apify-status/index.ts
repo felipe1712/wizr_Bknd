@@ -204,7 +204,14 @@ function normalizeTikTok(item: Record<string, unknown>, index: number): Normaliz
 }
 
 function normalizeInstagram(item: Record<string, unknown>, index: number): NormalizedResult {
-  const text = String(get(item, "caption") || get(item, "description") || "");
+  // Get caption - this is the actual post content, not sidebar suggestions
+  const caption = String(get(item, "caption") || "");
+  // Some scrapers return 'description' which may include page chrome - only use if caption is empty
+  const description = String(get(item, "description") || "");
+  
+  // Prefer caption as it's the actual post content
+  const text = caption || description;
+  
   const username = String(get(item, "ownerUsername") || get(item, "owner.username") || "");
   
   const metrics = {
@@ -442,13 +449,15 @@ serve(async (req) => {
         const rawItems = await datasetResponse.json();
         let normalized = normalizeResults(rawItems, platform as Platform);
 
-        // Filter by keyword if provided (especially for TikTok to reduce false positives)
-        if (keywordLower && platform === "tiktok") {
+        // Filter by keyword if provided (for TikTok and Instagram to reduce false positives)
+        if (keywordLower && (platform === "tiktok" || platform === "instagram")) {
+          const beforeCount = normalized.length;
           normalized = normalized.filter((item) => {
+            // For Instagram, be more strict - only check caption/description, not sidebar content
             const text = `${item.title} ${item.description} ${(item.hashtags || []).join(" ")}`.toLowerCase();
             return text.includes(keywordLower);
           });
-          console.log(`Filtered TikTok results from ${rawItems.length} to ${normalized.length} using keyword: ${keywordLower}`);
+          console.log(`Filtered ${platform} results from ${beforeCount} to ${normalized.length} using keyword: ${keywordLower}`);
         }
 
         items = normalized;
