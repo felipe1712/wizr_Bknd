@@ -258,6 +258,7 @@ export const firecrawlApi = {
       // Combine all results
       const allResults: SearchResult[] = [];
       const seenUrls = new Set<string>();
+      const errors: string[] = [];
 
       for (const result of results) {
         if (result.success && result.data) {
@@ -268,7 +269,20 @@ export const firecrawlApi = {
               allResults.push(item);
             }
           }
+        } else if (!result.success) {
+          errors.push(result.error || 'Search failed');
         }
+      }
+
+      // If *everything* failed, report a real error instead of a misleading "0 results".
+      if (allResults.length === 0 && errors.length === entities.length) {
+        return {
+          success: false,
+          error:
+            errors.find((e) => e.includes('tardó demasiado')) ||
+            errors[0] ||
+            'No se pudo completar la búsqueda. Intenta de nuevo.',
+        };
       }
 
       // Sort by published date if available, otherwise by position

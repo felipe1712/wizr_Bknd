@@ -29,6 +29,9 @@ Deno.serve(async (req) => {
 
     console.log('Searching news:', query);
 
+    // NOTE: Firecrawl search can become slow/unreliable if we always scrape full content
+    // for every result (markdown/html). That often triggers client-side timeouts.
+    // We only request scrapeOptions when the caller explicitly asks for it.
     const response = await fetch('https://api.firecrawl.dev/v1/search', {
       method: 'POST',
       headers: {
@@ -41,10 +44,9 @@ Deno.serve(async (req) => {
         lang: options?.lang || 'es',
         country: options?.country || 'MX',
         tbs: options?.tbs, // Time filter: qdr:h, qdr:d, qdr:w, qdr:m
-        scrapeOptions: {
-          formats: ['markdown', 'html'],
-          onlyMainContent: true,
-        },
+        ...(options?.scrapeOptions
+          ? { scrapeOptions: options.scrapeOptions }
+          : {}),
       }),
     });
 
