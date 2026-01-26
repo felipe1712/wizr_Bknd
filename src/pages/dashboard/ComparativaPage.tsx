@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useProject } from "@/contexts/ProjectContext";
 import { useNavigate } from "react-router-dom";
+import { useDateRangeFilter } from "@/hooks/useDateRangeFilter";
+import { DateRangeSelector } from "@/components/reports/DateRangeSelector";
 import { useComparativeData } from "@/hooks/useComparativeData";
 import { ShareOfVoiceChart } from "@/components/comparativa/ShareOfVoiceChart";
 import { SentimentComparisonChart } from "@/components/comparativa/SentimentComparisonChart";
@@ -40,17 +42,11 @@ const typeIcons: Record<string, React.ElementType> = {
   institucion: Building2,
 };
 
-const timeRangeOptions = [
-  { value: "7", label: "Últimos 7 días" },
-  { value: "30", label: "Últimos 30 días" },
-  { value: "90", label: "Últimos 90 días" },
-];
-
 const ComparativaPage = () => {
   const { selectedProject, loading: projectLoading } = useProject();
   const navigate = useNavigate();
   const [selectedEntityIds, setSelectedEntityIds] = useState<string[]>([]);
-  const [daysRange, setDaysRange] = useState(30);
+  const { dateConfig, setDateConfig, daysRange } = useDateRangeFilter("30d");
 
   const { entities, comparativeData, isLoading } = useComparativeData(
     selectedProject?.id,
@@ -253,25 +249,11 @@ const ComparativaPage = () => {
               </div>
             </PopoverContent>
           </Popover>
-
-          {/* Time Range */}
-          <Select
-            value={String(daysRange)}
-            onValueChange={(v) => setDaysRange(Number(v))}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-popover">
-              {timeRangeOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
       </div>
+
+      {/* Date Range Selector */}
+      <DateRangeSelector value={dateConfig} onChange={setDateConfig} />
 
       {/* Selected Entities Pills */}
       {selectedEntities.length > 0 && (

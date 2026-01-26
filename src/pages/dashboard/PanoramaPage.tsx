@@ -1,5 +1,7 @@
 import { useProject } from "@/contexts/ProjectContext";
 import { usePanoramaData } from "@/hooks/usePanoramaData";
+import { useDateRangeFilter } from "@/hooks/useDateRangeFilter";
+import { DateRangeSelector } from "@/components/reports/DateRangeSelector";
 import { ActivityChart } from "@/components/panorama/ActivityChart";
 import { SentimentOverview } from "@/components/panorama/SentimentOverview";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,7 +42,8 @@ const TEMPORAL_LABELS: Record<string, string> = {
 const PanoramaPage = () => {
   const { selectedProject, loading: projectLoading } = useProject();
   const navigate = useNavigate();
-  const { metrics, isLoading: metricsLoading } = usePanoramaData(selectedProject?.id, 30);
+  const { dateConfig, setDateConfig, daysRange } = useDateRangeFilter("30d");
+  const { metrics, isLoading: metricsLoading } = usePanoramaData(selectedProject?.id, daysRange);
 
   const loading = projectLoading || metricsLoading;
 
@@ -85,15 +88,20 @@ const PanoramaPage = () => {
   return (
     <div className="space-y-6">
       {/* Project Header */}
-      <div>
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold">{selectedProject.nombre}</h1>
-          <Badge variant="outline" className="capitalize">
-            {selectedProject.tipo}
-          </Badge>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold">{selectedProject.nombre}</h1>
+            <Badge variant="outline" className="capitalize">
+              {selectedProject.tipo}
+            </Badge>
+          </div>
+          <p className="mt-1 text-muted-foreground">{selectedProject.objetivo}</p>
         </div>
-        <p className="mt-1 text-muted-foreground">{selectedProject.objetivo}</p>
       </div>
+
+      {/* Date Range Selector */}
+      <DateRangeSelector value={dateConfig} onChange={setDateConfig} />
 
       {/* Metrics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

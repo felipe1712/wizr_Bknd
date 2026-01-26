@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useProject } from "@/contexts/ProjectContext";
 import { useInfluencersData } from "@/hooks/useInfluencersData";
+import { useDateRangeFilter } from "@/hooks/useDateRangeFilter";
+import { DateRangeSelector } from "@/components/reports/DateRangeSelector";
 import { InfluencerCard } from "@/components/influenciadores/InfluencerCard";
 import { InfluencerTrendChart } from "@/components/influenciadores/InfluencerTrendChart";
 import { InfluencerTable } from "@/components/influenciadores/InfluencerTable";
@@ -22,12 +24,6 @@ import {
 
 type ViewMode = "cards" | "table";
 type SourceType = "all" | "social" | "news" | "other";
-
-const TIME_RANGES = [
-  { label: "7 días", value: 7 },
-  { label: "30 días", value: 30 },
-  { label: "90 días", value: 90 },
-];
 
 const SOURCE_TYPE_OPTIONS: { value: SourceType; label: string }[] = [
   { value: "all", label: "Todas" },
@@ -68,7 +64,7 @@ const NEWS_DOMAINS = [
 
 const InfluenciadoresPage = () => {
   const { selectedProject } = useProject();
-  const [timeRange, setTimeRange] = useState(30);
+  const { dateConfig, setDateConfig, daysRange } = useDateRangeFilter("30d");
   const [selectedEntityIds, setSelectedEntityIds] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [sourceTypeFilter, setSourceTypeFilter] = useState<SourceType>("all");
@@ -88,7 +84,7 @@ const InfluenciadoresPage = () => {
     uniqueSources,
     entities,
     isLoading,
-  } = useInfluencersData(selectedProject?.id, timeRange, selectedEntityIds);
+  } = useInfluencersData(selectedProject?.id, daysRange, selectedEntityIds);
 
   // Filter influencers by source type
   const filteredInfluencers = sourceTypeFilter === "all"
@@ -198,20 +194,6 @@ const InfluenciadoresPage = () => {
             ))}
           </div>
 
-          {/* Time range */}
-          <div className="flex rounded-lg border bg-muted p-1">
-            {TIME_RANGES.map((range) => (
-              <Button
-                key={range.value}
-                variant={timeRange === range.value ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setTimeRange(range.value)}
-              >
-                {range.label}
-              </Button>
-            ))}
-          </div>
-
           {/* View toggle */}
           <div className="flex rounded-lg border bg-muted p-1">
             <Button
@@ -232,7 +214,8 @@ const InfluenciadoresPage = () => {
         </div>
       </div>
 
-      {/* Stats cards */}
+      {/* Date Range Selector */}
+      <DateRangeSelector value={dateConfig} onChange={setDateConfig} />
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -246,7 +229,7 @@ const InfluenciadoresPage = () => {
               <div className="text-2xl font-bold">{totalMentions}</div>
             )}
             <p className="text-xs text-muted-foreground">
-              Últimos {timeRange} días
+              Últimos {daysRange} días
             </p>
           </CardContent>
         </Card>

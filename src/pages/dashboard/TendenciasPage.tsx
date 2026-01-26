@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useDateRangeFilter } from "@/hooks/useDateRangeFilter";
+import { DateRangeSelector } from "@/components/reports/DateRangeSelector";
 import { useProject } from "@/contexts/ProjectContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,12 +39,11 @@ import {
   Area,
 } from "recharts";
 
-type TimeRange = "7d" | "30d" | "90d";
-
 const TendenciasPage = () => {
   const { selectedProject, loading: projectLoading } = useProject();
   const navigate = useNavigate();
-  const [timeRange, setTimeRange] = useState<TimeRange>("30d");
+  const { dateConfig, setDateConfig, daysRange } = useDateRangeFilter("30d");
+  const timeRange = dateConfig.type === "7d" ? "7d" : dateConfig.type === "90d" ? "90d" : "30d";
   const [selectedEntityId, setSelectedEntityId] = useState<string>("all");
 
   const { mentions, isLoading: mentionsLoading } = useMentions(
@@ -133,26 +134,11 @@ const TendenciasPage = () => {
               })}
             </SelectContent>
           </Select>
-
-          {/* Time Range */}
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <Select
-              value={timeRange}
-              onValueChange={(v) => setTimeRange(v as TimeRange)}
-            >
-              <SelectTrigger className="w-36 bg-background">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-popover">
-                <SelectItem value="7d">Últimos 7 días</SelectItem>
-                <SelectItem value="30d">Últimos 30 días</SelectItem>
-                <SelectItem value="90d">Últimos 90 días</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </div>
       </div>
+
+      {/* Date Range Selector */}
+      <DateRangeSelector value={dateConfig} onChange={setDateConfig} />
 
       {!hasData ? (
         <Card className="border-dashed">

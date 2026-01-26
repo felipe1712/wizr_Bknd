@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useProject } from "@/contexts/ProjectContext";
 import { useNavigate } from "react-router-dom";
+import { useDateRangeFilter } from "@/hooks/useDateRangeFilter";
+import { DateRangeSelector } from "@/components/reports/DateRangeSelector";
 import { useMentions } from "@/hooks/useMentions";
 import { useSemanticAnalysis } from "@/hooks/useSemanticAnalysis";
 import { AnalysisResults } from "@/components/semantica/AnalysisResults";
@@ -20,10 +22,11 @@ import {
 const SemanticaPage = () => {
   const { selectedProject, loading: projectLoading } = useProject();
   const navigate = useNavigate();
+  const { dateConfig, setDateConfig, startDate, endDate } = useDateRangeFilter("30d");
 
   const { mentions, isLoading: mentionsLoading } = useMentions(
     selectedProject?.id,
-    { isArchived: false }
+    { isArchived: false, startDate, endDate }
   );
 
   const {
@@ -86,6 +89,9 @@ const SemanticaPage = () => {
           <span className="font-medium">{selectedProject.nombre}</span>
         </p>
       </div>
+
+      {/* Date Range Selector */}
+      <DateRangeSelector value={dateConfig} onChange={setDateConfig} />
 
       {/* Stats Bar */}
       <div className="flex items-center gap-4 rounded-lg border bg-card p-4">
