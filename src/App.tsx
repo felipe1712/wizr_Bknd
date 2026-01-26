@@ -9,6 +9,9 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Registro from "./pages/Registro";
+import RecuperarContrasena from "./pages/RecuperarContrasena";
+import RestablecerContrasena from "./pages/RestablecerContrasena";
+import SolicitarAcceso from "./pages/SolicitarAcceso";
 import ProjectSpecBuilder from "./pages/ProjectSpecBuilder";
 import NotFound from "./pages/NotFound";
 
@@ -64,6 +67,26 @@ const AppRoutes = () => {
         element={
           <AuthRoute>
             <Registro />
+          </AuthRoute>
+        }
+      />
+      <Route
+        path="/recuperar-contrasena"
+        element={
+          <AuthRoute>
+            <RecuperarContrasena />
+          </AuthRoute>
+        }
+      />
+      <Route
+        path="/restablecer-contrasena"
+        element={<RestablecerContrasena />}
+      />
+      <Route
+        path="/solicitar-acceso"
+        element={
+          <AuthRoute>
+            <SolicitarAcceso />
           </AuthRoute>
         }
       />
