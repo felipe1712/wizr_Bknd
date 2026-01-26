@@ -13,7 +13,7 @@ import {
   Settings,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import wizrLogoIcon from "@/assets/wizr-logo-icon.png";
+import wizrIcon from "@/assets/wizr-icon-transparent.png";
 
 import {
   Sidebar,
@@ -58,7 +58,7 @@ export function AppSidebar() {
       <SidebarHeader className="border-b border-sidebar-border p-4">
         <div className="flex items-center gap-3">
           <img 
-            src={wizrLogoIcon} 
+            src={wizrIcon} 
             alt="Wizr" 
             className="h-10 w-10 object-contain"
           />
