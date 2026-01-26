@@ -80,15 +80,47 @@ type Platform = "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "
 interface SocialSearchResult {
   id: string;
   platform: Platform;
-  text?: string;
-  author?: string;
-  authorUrl?: string;
-  url?: string;
-  likes?: number;
-  comments?: number;
-  shares?: number;
-  publishedAt?: string;
+  title: string;
+  description: string;
+  author: {
+    name: string;
+    username: string;
+    url: string;
+    avatarUrl?: string;
+    verified?: boolean;
+    followers?: number;
+  };
+  metrics: {
+    likes: number;
+    comments: number;
+    shares: number;
+    views?: number;
+    engagement?: number;
+  };
+  publishedAt: string;
+  url: string;
+  contentType: "post" | "video" | "image" | "article" | "thread";
+  media?: {
+    type: "image" | "video" | "carousel";
+    url?: string;
+    thumbnailUrl?: string;
+  };
+  hashtags?: string[];
+  mentions?: string[];
   raw?: Record<string, unknown>;
+}
+
+interface AggregateMetrics {
+  totals: {
+    likes: number;
+    comments: number;
+    shares: number;
+    views: number;
+  };
+  averageEngagement: number;
+  resultCount: number;
+  verifiedAuthors: number;
+  contentTypes: Record<string, number>;
 }
 
 interface SocialMediaSearchProps {
@@ -200,126 +232,18 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
   const config = PLATFORM_CONFIG[platform];
   const PlatformIcon = config.icon;
 
-  const normalizeResults = (rawItems: unknown[], plat: Platform): SocialSearchResult[] => {
-    return (rawItems || []).map((item: unknown, idx: number) => {
-      const data = item as Record<string, unknown>;
-      let result: SocialSearchResult = {
-        id: `${plat}-${idx}-${Date.now()}`,
-        platform: plat,
-        raw: data,
-      };
-
-      switch (plat) {
-        case "twitter": {
-          const user = data.user as Record<string, unknown> | undefined;
-          const author = data.author as Record<string, unknown> | undefined;
-          const screenName = user?.screen_name as string || author?.userName as string || "";
-          result = {
-            ...result,
-            text: (data.full_text || data.text || "") as string,
-            author: screenName,
-            authorUrl: screenName ? `https://x.com/${screenName}` : undefined,
-            url: data.url as string || (data.id ? `https://x.com/i/status/${data.id}` : undefined),
-            likes: (data.favorite_count || data.likeCount || 0) as number,
-            comments: (data.reply_count || data.replyCount || 0) as number,
-            shares: (data.retweet_count || data.retweetCount || 0) as number,
-            publishedAt: (data.created_at || data.createdAt) as string,
-          };
-          break;
-        }
-        case "facebook": {
-          const fbUser = data.user as Record<string, unknown> | undefined;
-          result = {
-            ...result,
-            text: (data.text || data.message || "") as string,
-            author: (data.pageName || fbUser?.name || "") as string,
-            url: data.url as string,
-            likes: (data.likes || data.likesCount || 0) as number,
-            comments: (data.comments || data.commentsCount || 0) as number,
-            shares: (data.shares || data.sharesCount || 0) as number,
-            publishedAt: (data.time || data.publishedAt) as string,
-          };
-          break;
-        }
-        case "tiktok": {
-          const authorMeta = data.authorMeta as Record<string, unknown> | undefined;
-          const tikTokName = authorMeta?.name as string || data.author as string || "";
-          result = {
-            ...result,
-            text: (data.text || data.desc || "") as string,
-            author: tikTokName,
-            authorUrl: tikTokName ? `https://tiktok.com/@${tikTokName}` : undefined,
-            url: data.webVideoUrl as string || data.url as string,
-            likes: (data.diggCount || data.likes || 0) as number,
-            comments: (data.commentCount || data.comments || 0) as number,
-            shares: (data.shareCount || data.shares || 0) as number,
-            publishedAt: data.createTime ? new Date((data.createTime as number) * 1000).toISOString() : undefined,
-          };
-          break;
-        }
-        case "instagram":
-          result = {
-            ...result,
-            text: (data.caption || "") as string,
-            author: (data.ownerUsername || "") as string,
-            authorUrl: data.ownerUsername ? `https://instagram.com/${data.ownerUsername}` : undefined,
-            url: data.url as string,
-            likes: (data.likesCount || 0) as number,
-            comments: (data.commentsCount || 0) as number,
-            publishedAt: data.timestamp as string,
-          };
-          break;
-        case "linkedin": {
-          const linkedAuthor = data.author as Record<string, unknown> | undefined;
-          result = {
-            ...result,
-            text: (data.text || data.commentary || "") as string,
-            author: (linkedAuthor?.name || data.companyName || "") as string,
-            url: data.url as string,
-            likes: (data.numLikes || 0) as number,
-            comments: (data.numComments || 0) as number,
-            shares: (data.numShares || 0) as number,
-            publishedAt: data.postedAt as string,
-          };
-          break;
-        }
-        case "youtube": {
-          const channel = data.channel as Record<string, unknown> | undefined;
-          result = {
-            ...result,
-            text: (data.title || data.text || "") as string,
-            author: (channel?.name || data.channelName || "") as string,
-            authorUrl: data.channelUrl as string,
-            url: data.url as string,
-            likes: (data.likes || data.likeCount || 0) as number,
-            comments: (data.commentsCount || data.commentCount || 0) as number,
-            publishedAt: data.publishedAt as string || data.date as string,
-          };
-          break;
-        }
-        case "reddit": {
-          result = {
-            ...result,
-            text: (data.title || data.body || "") as string,
-            author: (data.author || data.username || "") as string,
-            authorUrl: data.author ? `https://reddit.com/u/${data.author}` : undefined,
-            url: data.url as string,
-            likes: (data.upvotes || data.score || 0) as number,
-            comments: (data.numComments || data.commentsCount || 0) as number,
-            publishedAt: data.createdAt as string,
-          };
-          break;
-        }
-      }
-
-      return result;
-    });
+  // Results are now normalized by the backend - this is just a pass-through with validation
+  const processBackendResults = (items: SocialSearchResult[]): SocialSearchResult[] => {
+    return (items || []).map((item, idx) => ({
+      ...item,
+      id: item.id || `${platform}-${idx}-${Date.now()}`,
+    }));
   };
 
   const checkJobStatus = useCallback(async (jobRunId: string) => {
     try {
       const { data, error } = await supabase.functions.invoke("apify-status", {
-        body: { runId: jobRunId },
+        body: { runId: jobRunId, platform },
       });
 
       if (error) throw error;
@@ -327,11 +251,12 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       if (data.status === "SUCCEEDED") {
         setJobStatus("completed");
         setProgress(100);
-        const normalized = normalizeResults(data.items || [], platform);
-        setResults(normalized);
+        // Results are now pre-normalized by the backend
+        const processed = processBackendResults(data.items || []);
+        setResults(processed);
         toast({
           title: "Búsqueda completada",
-          description: `Se encontraron ${normalized.length} resultados en ${config.label}`,
+          description: `Se encontraron ${processed.length} resultados en ${config.label}`,
         });
       } else if (data.status === "FAILED" || data.status === "ABORTED" || data.status === "TIMED-OUT") {
         setJobStatus("failed");
@@ -422,22 +347,30 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     if (results.length === 0) return;
 
     try {
-      // Convert results to mentions format
+      // Convert normalized results to mentions format
       const mentions = results.map((result) => ({
         project_id: projectId,
         url: result.url || `https://${platform}.com`,
-        title: result.text?.substring(0, 200) || "Sin título",
-        description: result.text,
+        title: result.title || result.description?.substring(0, 200) || "Sin título",
+        description: result.description,
         source_domain: platform,
         published_at: result.publishedAt,
         matched_keywords: [searchValue],
         raw_metadata: JSON.parse(JSON.stringify({
           platform,
-          author: result.author || null,
-          authorUrl: result.authorUrl || null,
-          likes: result.likes ?? null,
-          comments: result.comments ?? null,
-          shares: result.shares ?? null,
+          author: result.author?.name || null,
+          authorUrl: result.author?.url || null,
+          authorUsername: result.author?.username || null,
+          authorVerified: result.author?.verified || false,
+          authorFollowers: result.author?.followers || null,
+          likes: result.metrics?.likes ?? null,
+          comments: result.metrics?.comments ?? null,
+          shares: result.metrics?.shares ?? null,
+          views: result.metrics?.views ?? null,
+          engagement: result.metrics?.engagement ?? null,
+          contentType: result.contentType,
+          hashtags: result.hashtags || [],
+          mentions: result.mentions || [],
         })),
       }));
 
@@ -698,47 +631,80 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
                         </div>
                         <div className="flex-1 min-w-0 space-y-2">
                           {/* Author */}
-                          {result.author && (
+                          {result.author?.name && (
                             <div className="flex items-center gap-2">
                               <User className="h-3 w-3 text-muted-foreground" />
-                              {result.authorUrl ? (
+                              {result.author.url ? (
                                 <a 
-                                  href={result.authorUrl}
+                                  href={result.author.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-sm font-medium hover:text-primary"
+                                  className="text-sm font-medium hover:text-primary flex items-center gap-1"
                                 >
-                                  @{result.author}
+                                  @{result.author.username || result.author.name}
+                                  {result.author.verified && (
+                                    <CheckCircle2 className="h-3 w-3 text-blue-500" />
+                                  )}
                                 </a>
                               ) : (
-                                <span className="text-sm font-medium">@{result.author}</span>
+                                <span className="text-sm font-medium flex items-center gap-1">
+                                  @{result.author.username || result.author.name}
+                                  {result.author.verified && (
+                                    <CheckCircle2 className="h-3 w-3 text-blue-500" />
+                                  )}
+                                </span>
                               )}
+                              {result.author.followers ? (
+                                <span className="text-xs text-muted-foreground">
+                                  ({result.author.followers.toLocaleString()} seguidores)
+                                </span>
+                              ) : null}
                             </div>
                           )}
 
-                          {/* Text */}
+                          {/* Title/Description */}
                           <p className="text-sm line-clamp-3">
-                            {result.text || "Sin contenido"}
+                            {result.title || result.description || "Sin contenido"}
                           </p>
+
+                          {/* Content type badge */}
+                          {result.contentType && result.contentType !== "post" && (
+                            <Badge variant="outline" className="text-xs">
+                              {result.contentType === "video" ? "📹 Video" : 
+                               result.contentType === "image" ? "📷 Imagen" : 
+                               result.contentType === "article" ? "📰 Artículo" : 
+                               result.contentType === "thread" ? "🧵 Hilo" : result.contentType}
+                            </Badge>
+                          )}
 
                           {/* Metrics */}
                           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                            {result.likes !== undefined && (
+                            {result.metrics?.likes !== undefined && (
                               <span className="flex items-center gap-1">
                                 <Heart className="h-3 w-3" />
-                                {result.likes.toLocaleString()}
+                                {result.metrics.likes.toLocaleString()}
                               </span>
                             )}
-                            {result.comments !== undefined && (
+                            {result.metrics?.comments !== undefined && (
                               <span className="flex items-center gap-1">
                                 <MessageCircle className="h-3 w-3" />
-                                {result.comments.toLocaleString()}
+                                {result.metrics.comments.toLocaleString()}
                               </span>
                             )}
-                            {result.shares !== undefined && (
+                            {result.metrics?.shares !== undefined && result.metrics.shares > 0 && (
                               <span className="flex items-center gap-1">
                                 <Share2 className="h-3 w-3" />
-                                {result.shares.toLocaleString()}
+                                {result.metrics.shares.toLocaleString()}
+                              </span>
+                            )}
+                            {result.metrics?.views !== undefined && result.metrics.views > 0 && (
+                              <span className="flex items-center gap-1">
+                                👁 {result.metrics.views.toLocaleString()}
+                              </span>
+                            )}
+                            {result.metrics?.engagement !== undefined && result.metrics.engagement > 0 && (
+                              <span className="flex items-center gap-1 text-green-600">
+                                📊 {result.metrics.engagement}% eng.
                               </span>
                             )}
                             {result.publishedAt && (
