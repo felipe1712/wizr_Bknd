@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useProject } from "@/contexts/ProjectContext";
-import { useEntities } from "@/hooks/useEntities";
+import { useEntities, EntityType } from "@/hooks/useEntities";
 import { useMentions, useMentionStats } from "@/hooks/useMentions";
 import { firecrawlApi, SearchResult, EntityForSearch } from "@/lib/api/firecrawl";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,8 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { EntityForm } from "@/components/entities/EntityForm";
+import wizrLogoIcon from "@/assets/wizr-logo-icon.png";
 import {
   AlertCircle,
   Plus,
@@ -35,6 +37,7 @@ import {
   TrendingUp,
   Eye,
   Archive,
+  Sparkles,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
@@ -44,7 +47,7 @@ type ViewMode = "search" | "history";
 
 const FuentesPage = () => {
   const { selectedProject, loading: projectLoading } = useProject();
-  const { entities, isLoading: entitiesLoading } = useEntities(selectedProject?.id);
+  const { entities, isLoading: entitiesLoading, createEntity, isCreating } = useEntities(selectedProject?.id);
   const { 
     mentions, 
     isLoading: mentionsLoading, 
@@ -65,6 +68,7 @@ const FuentesPage = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [selectedEntityIds, setSelectedEntityIds] = useState<Set<string>>(new Set());
+  const [showEntityForm, setShowEntityForm] = useState(false);
 
   // Auto-select all entities when they load
   useEffect(() => {
@@ -403,17 +407,25 @@ const FuentesPage = () => {
                       <Skeleton className="h-8 w-28" />
                     </div>
                   ) : entities.length === 0 ? (
-                    <div className="rounded-lg border border-dashed p-4 text-center">
-                      <p className="text-sm text-muted-foreground">
-                        No hay entidades configuradas.{" "}
-                        <Button
-                          variant="link"
-                          className="h-auto p-0"
-                          onClick={() => navigate("/dashboard/configuracion")}
-                        >
-                          Añadir entidades
+                    <div className="rounded-lg border-2 border-dashed border-primary/30 p-6 text-center bg-primary/5">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="relative">
+                          <div className="h-14 w-14 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                            <img src={wizrLogoIcon} alt="Wizr" className="h-8 w-8" />
+                          </div>
+                          <Sparkles className="absolute -top-1 -right-1 h-4 w-4 text-accent" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">¡Configura tu primera entidad!</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Agrega las marcas, personas o instituciones que quieres monitorear
+                          </p>
+                        </div>
+                        <Button onClick={() => setShowEntityForm(true)} className="mt-2">
+                          <Plus className="mr-2 h-4 w-4" />
+                          Crear Entidad Ahora
                         </Button>
-                      </p>
+                      </div>
                     </div>
                   ) : (
                     <ScrollArea className="max-h-32">
@@ -680,6 +692,25 @@ const FuentesPage = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Quick Entity Form */}
+      <EntityForm
+        open={showEntityForm}
+        onOpenChange={setShowEntityForm}
+        onSubmit={(data) => {
+          if (!selectedProject || !data.nombre || !data.tipo) return;
+          createEntity({
+            project_id: selectedProject.id,
+            nombre: data.nombre,
+            tipo: data.tipo,
+            descripcion: data.descripcion,
+            palabras_clave: data.palabras_clave,
+            aliases: data.aliases,
+          });
+          setShowEntityForm(false);
+        }}
+        isLoading={isCreating}
+      />
     </div>
   );
 };
