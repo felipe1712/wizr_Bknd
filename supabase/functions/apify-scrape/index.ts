@@ -7,15 +7,19 @@ const corsHeaders = {
 };
 
 // Apify Actor IDs for different platforms
-// Using well-maintained actors from Apify Store (verified Jan 2026)
+// NOTE: Some actors are paid (require “rental”) and will return 403 after trial.
+// We prefer actors that are likely to work without rental.
 const ACTOR_IDS: Record<string, string> = {
   twitter: "apidojo/tweet-scraper",
   facebook: "apify/facebook-posts-scraper",
   tiktok: "clockworks/tiktok-scraper",
   instagram: "apify/instagram-scraper",
-  linkedin: "scrapier/linkedin-jobs-scraper", // Updated: anchor/linkedin-scraper no longer exists
-  youtube: "ultimate/youtube-scraper", // Updated: streamers/youtube-scraper no longer exists
-  reddit: "trudax/reddit-scraper",
+  // LinkedIn: best-effort keyword search via LinkedIn content search URL.
+  linkedin: "curious_coder/linkedin-post-search-scraper",
+  // YouTube: revert to previously working actor.
+  youtube: "streamers/youtube-scraper",
+  // Reddit: lite variant reduces risk of rental restrictions.
+  reddit: "trudax/reddit-scraper-lite",
 };
 
 interface ScrapeRequest {
@@ -65,12 +69,18 @@ serve(async (req) => {
 
     switch (platform) {
       case "twitter":
+        // Tweet Scraper often validates that startUrls is non-empty.
+        // Provide derived URLs to avoid 400: "input.startUrls must NOT have fewer than 1 items".
         input = {
+          startUrls: [
+            ...(query
+              ? [`https://twitter.com/search?q=${encodeURIComponent(query)}&src=typed_query&f=live`]
+              : []),
+            ...(username ? [`https://twitter.com/${encodeURIComponent(username)}`] : []),
+          ],
           searchTerms: query ? [query] : [],
-          handles: username ? [username] : [],
-          maxTweets: maxResults,
-          addUserInfo: true,
-          scrapeTweetReplies: false,
+          twitterHandles: username ? [username] : [],
+          maxItems: maxResults,
         };
         break;
         
@@ -103,35 +113,38 @@ serve(async (req) => {
         break;
         
       case "linkedin":
-        // LinkedIn Jobs Scraper - requires search terms or job URLs
+        // LinkedIn post search scraper: keyword search is driven by a LinkedIn search URL.
         input = {
-          searchTerms: query ? [query] : [],
-          maxResults: maxResults,
+          urls: [
+            ...(companyUrl ? [companyUrl] : []),
+            ...(query
+              ? [
+                  `https://www.linkedin.com/search/results/content/?keywords=${encodeURIComponent(
+                    query
+                  )}&origin=FACETED_SEARCH`,
+                ]
+              : []),
+          ],
         };
         break;
         
       case "youtube":
-        // YouTube Ultimate Scraper configuration
-        input = {
-          discovery: {
-            searchQueries: query ? [query] : [],
-            urls: channelUrl ? [channelUrl] : [],
-            videoIds: [],
-            channelIds: [],
-            hashtags: [],
-            ignoreIds: [],
-          },
-          crawling: {
-            limits: {
-              maxGlobalSearchResults: maxResults,
-              maxChannelVideos: maxResults,
-              maxChannelShorts: 0,
-              maxChannelStreams: 0,
-              maxVideoComments: 0,
-              maxCommentReplies: 0,
-            },
-          },
-        };
+        // YouTube scraper configuration (streamers/youtube-scraper)
+        if (channelUrl) {
+          input = {
+            startUrls: [{ url: channelUrl }],
+            maxResults: maxResults,
+            maxResultsShorts: 0,
+            maxResultStreams: 0,
+          };
+        } else if (query) {
+          input = {
+            searchKeywords: [query],
+            maxResults: maxResults,
+            maxResultsShorts: 0,
+            maxResultStreams: 0,
+          };
+        }
         break;
         
       case "reddit":
@@ -171,7 +184,16 @@ serve(async (req) => {
     if (!runResponse.ok) {
       const errorText = await runResponse.text();
       console.error("Apify run start error:", errorText);
-      throw new Error(`Failed to start Apify actor: ${runResponse.status}`);
+
+      // Preserve upstream status (400 invalid input, 403 not rented, etc.)
+      // so the frontend can display a meaningful message.
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Apify error ${runResponse.status}: ${errorText}`,
+        }),
+        { status: runResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const runData = await runResponse.json();
