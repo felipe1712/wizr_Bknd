@@ -75,10 +75,13 @@ serve(async (req) => {
         break;
         
       case "facebook":
+        // Facebook scraper REQUIRES startUrls - cannot search without page URLs
+        if (!username) {
+          throw new Error("Facebook requires a page username or URL. Search by keyword alone is not supported.");
+        }
         input = {
-          startUrls: username ? [`https://www.facebook.com/${username}`] : [],
-          searchTerms: query ? [query] : [],
-          maxPosts: maxResults,
+          startUrls: [{ url: `https://www.facebook.com/${username}` }],
+          resultsLimit: maxResults,
         };
         break;
         
