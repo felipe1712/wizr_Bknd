@@ -30,13 +30,13 @@ import {
 } from "@/components/ui/sidebar";
 
 const analysisViews = [
+  { title: "Fuentes", url: "/dashboard/fuentes", icon: Database, tourId: "nav-fuentes" },
   { title: "Panorama", url: "/dashboard/panorama", icon: LayoutDashboard, tourId: "nav-panorama" },
   { title: "Semántica", url: "/dashboard/semantica", icon: MessageSquareText, tourId: "nav-semantica" },
   { title: "Comparativa", url: "/dashboard/comparativa", icon: GitCompare, tourId: "nav-comparativa" },
   { title: "Alertas", url: "/dashboard/alertas", icon: Bell, tourId: "nav-alertas" },
   { title: "Influenciadores", url: "/dashboard/influenciadores", icon: Users, tourId: "nav-influenciadores" },
   { title: "Tendencias", url: "/dashboard/tendencias", icon: TrendingUp, tourId: "nav-tendencias" },
-  { title: "Fuentes", url: "/dashboard/fuentes", icon: Database, tourId: "nav-fuentes" },
   { title: "Reportes", url: "/dashboard/reportes", icon: FileBarChart, tourId: "nav-reportes" },
   { title: "Fichas", url: "/dashboard/fichas", icon: FileText, tourId: "nav-fichas" },
 ];
