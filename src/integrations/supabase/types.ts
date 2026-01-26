@@ -14,6 +14,119 @@ export type Database = {
   }
   public: {
     Tables: {
+      alert_configs: {
+        Row: {
+          alert_type: Database["public"]["Enums"]["alert_type"]
+          created_at: string
+          description: string | null
+          entity_ids: string[] | null
+          id: string
+          is_active: boolean
+          keywords: string[] | null
+          last_triggered_at: string | null
+          name: string
+          project_id: string
+          threshold_percent: number | null
+          trigger_count: number
+          updated_at: string
+        }
+        Insert: {
+          alert_type: Database["public"]["Enums"]["alert_type"]
+          created_at?: string
+          description?: string | null
+          entity_ids?: string[] | null
+          id?: string
+          is_active?: boolean
+          keywords?: string[] | null
+          last_triggered_at?: string | null
+          name: string
+          project_id: string
+          threshold_percent?: number | null
+          trigger_count?: number
+          updated_at?: string
+        }
+        Update: {
+          alert_type?: Database["public"]["Enums"]["alert_type"]
+          created_at?: string
+          description?: string | null
+          entity_ids?: string[] | null
+          id?: string
+          is_active?: boolean
+          keywords?: string[] | null
+          last_triggered_at?: string | null
+          name?: string
+          project_id?: string
+          threshold_percent?: number | null
+          trigger_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alert_configs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      alert_notifications: {
+        Row: {
+          alert_config_id: string
+          id: string
+          is_dismissed: boolean
+          is_read: boolean
+          message: string
+          metadata: Json | null
+          project_id: string
+          read_at: string | null
+          severity: string
+          title: string
+          triggered_at: string
+        }
+        Insert: {
+          alert_config_id: string
+          id?: string
+          is_dismissed?: boolean
+          is_read?: boolean
+          message: string
+          metadata?: Json | null
+          project_id: string
+          read_at?: string | null
+          severity?: string
+          title: string
+          triggered_at?: string
+        }
+        Update: {
+          alert_config_id?: string
+          id?: string
+          is_dismissed?: boolean
+          is_read?: boolean
+          message?: string
+          metadata?: Json | null
+          project_id?: string
+          read_at?: string | null
+          severity?: string
+          title?: string
+          triggered_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alert_notifications_alert_config_id_fkey"
+            columns: ["alert_config_id"]
+            isOneToOne: false
+            referencedRelation: "alert_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alert_notifications_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       entities: {
         Row: {
           activo: boolean
@@ -253,6 +366,8 @@ export type Database = {
       }
     }
     Enums: {
+      alert_status: "active" | "paused" | "triggered"
+      alert_type: "sentiment_negative" | "mention_spike" | "keyword_match"
       app_role: "admin" | "analista" | "director"
       entity_type: "persona" | "marca" | "institucion"
       project_type: "monitoreo" | "investigacion" | "crisis" | "benchmark"
@@ -390,6 +505,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      alert_status: ["active", "paused", "triggered"],
+      alert_type: ["sentiment_negative", "mention_spike", "keyword_match"],
       app_role: ["admin", "analista", "director"],
       entity_type: ["persona", "marca", "institucion"],
       project_type: ["monitoreo", "investigacion", "crisis", "benchmark"],
