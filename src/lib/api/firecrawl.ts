@@ -61,36 +61,12 @@ export interface EntityForSearch {
 
 /**
  * Build a search query from entity data
- * Combines the entity name, aliases, and keywords into an optimized search query
+ * Uses a simple, direct search query to maximize results
  */
 export function buildEntitySearchQuery(entity: EntityForSearch): string {
-  const terms: string[] = [];
-  
-  // Add the main entity name (quoted for exact match)
-  terms.push(`"${entity.nombre}"`);
-  
-  // Add aliases (quoted for exact match)
-  entity.aliases.forEach((alias) => {
-    if (alias.trim()) {
-      terms.push(`"${alias.trim()}"`);
-    }
-  });
-  
-  // Keywords are used as context modifiers, not quoted
-  // Only add first 3 keywords to avoid overly complex queries
-  const keywordContext = entity.palabras_clave
-    .slice(0, 3)
-    .filter((k) => k.trim())
-    .join(' ');
-  
-  // Combine: OR logic for name/aliases, AND for keyword context
-  const nameAliasQuery = terms.join(' OR ');
-  
-  if (keywordContext) {
-    return `(${nameAliasQuery}) ${keywordContext}`;
-  }
-  
-  return nameAliasQuery;
+  // Simple approach: just use the entity name with "noticias" for news context
+  // Complex boolean queries often return fewer or no results
+  return `"${entity.nombre}" noticias`;
 }
 
 /**
