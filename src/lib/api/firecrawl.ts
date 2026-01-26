@@ -243,8 +243,8 @@ export const firecrawlApi = {
   },
 
   /**
-   * Search Google News specifically
-   * Uses site:news.google.com filter for focused news results
+   * Search for news specifically
+   * Uses "noticias" keyword and temporal filtering for focused news results
    */
   async searchGoogleNews(
     query: string,
@@ -258,10 +258,10 @@ export const firecrawlApi = {
       month: 'qdr:m',
     } as const;
 
-    // Build Google News focused query
-    const googleNewsQuery = `site:news.google.com ${query}`;
+    // Build news-focused query without site filter (which returns no results)
+    const newsQuery = `${query} noticias`;
 
-    return this.search(googleNewsQuery, {
+    return this.search(newsQuery, {
       limit,
       tbs: tbsMap[timeRange],
       lang: 'es',
