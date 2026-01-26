@@ -11,3 +11,12 @@ verify_jwt = false
 
 [functions.scheduled-monitoring]
 verify_jwt = false
+
+[functions.apify-scrape]
+verify_jwt = false
+
+[functions.apify-status]
+verify_jwt = false
+
+[functions.apify-results]
+verify_jwt = false
