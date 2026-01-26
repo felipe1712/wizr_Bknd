@@ -2,7 +2,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import wizrLogo from "@/assets/wizr-logo.png";
-import { LogOut, User, LayoutDashboard, FileText, Bell, Settings } from "lucide-react";
+import { LogOut, User, LayoutDashboard, FileText, Bell, Settings, Plus } from "lucide-react";
 
 const Dashboard = () => {
   const { user, roles, signOut } = useAuth();
@@ -60,11 +60,17 @@ const Dashboard = () => {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl p-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold">Bienvenido a Wizr</h1>
-          <p className="text-muted-foreground">
-            Sistema de inteligencia estratégica para análisis de conversación pública
-          </p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Bienvenido a Wizr</h1>
+            <p className="text-muted-foreground">
+              Sistema de inteligencia estratégica para análisis de conversación pública
+            </p>
+          </div>
+          <Button onClick={() => navigate("/nuevo-proyecto")}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo Proyecto
+          </Button>
         </div>
 
         {/* Quick Actions */}

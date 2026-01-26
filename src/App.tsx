@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Registro from "./pages/Registro";
 import Dashboard from "./pages/Dashboard";
+import ProjectSpecBuilder from "./pages/ProjectSpecBuilder";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -58,6 +59,14 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nuevo-proyecto"
+        element={
+          <ProtectedRoute>
+            <ProjectSpecBuilder />
           </ProtectedRoute>
         }
       />
