@@ -16,6 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { EntityForm } from "@/components/entities/EntityForm";
+import { SocialMediaSearch } from "@/components/fuentes/SocialMediaSearch";
 import wizrLogoIcon from "@/assets/wizr-logo-icon.png";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
@@ -47,12 +48,14 @@ import {
   ChevronDown,
   CalendarIcon,
   X,
+  MessageCircle,
 } from "lucide-react";
 import { format, formatDistanceToNow, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 
 type SearchMode = "manual" | "entities";
-type ViewMode = "search" | "history";
+type ViewMode = "search" | "social" | "history";
+type SearchSource = "news" | "social";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -510,8 +513,12 @@ const FuentesPage = () => {
       <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
         <TabsList>
           <TabsTrigger value="search" className="gap-2">
-            <Search className="h-4 w-4" />
-            Buscar
+            <Newspaper className="h-4 w-4" />
+            Medios
+          </TabsTrigger>
+          <TabsTrigger value="social" className="gap-2">
+            <MessageCircle className="h-4 w-4" />
+            Redes Sociales
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-2">
             <History className="h-4 w-4" />
@@ -943,6 +950,19 @@ const FuentesPage = () => {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* Social Media Tab */}
+        <TabsContent value="social" className="mt-4">
+          <SocialMediaSearch 
+            projectId={selectedProject.id} 
+            onResultsSaved={() => {
+              toast({
+                title: "Menciones guardadas",
+                description: "Las menciones de redes sociales se agregaron al historial",
+              });
+            }}
+          />
         </TabsContent>
 
         {/* History Tab */}
