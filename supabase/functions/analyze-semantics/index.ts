@@ -45,6 +45,15 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Minimal request logging to verify requests are reaching the function
+  try {
+    const url = new URL(req.url);
+    console.log("analyze-semantics: request", req.method, url.pathname);
+    console.log("analyze-semantics: content-length", req.headers.get("content-length"));
+  } catch {
+    // ignore
+  }
+
   try {
     const { mentions } = await req.json() as { mentions: MentionInput[] };
 

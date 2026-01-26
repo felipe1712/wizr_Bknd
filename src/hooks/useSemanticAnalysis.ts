@@ -49,8 +49,9 @@ export function useSemanticAnalysis(projectId: string | undefined) {
   const queryClient = useQueryClient();
   const [cachedResult, setCachedResult] = useState<SemanticAnalysisResult | null>(null);
 
-  const MAX_MENTIONS_FOR_ANALYSIS = 120;
-  const MAX_TEXT_CHARS = 900;
+  // Mantener el payload chico para evitar fallos de red ("Failed to fetch") en algunos navegadores.
+  const MAX_MENTIONS_FOR_ANALYSIS = 40;
+  const MAX_TEXT_CHARS = 450;
 
   const truncate = (value: string | null | undefined, max = MAX_TEXT_CHARS) => {
     if (!value) return null;
