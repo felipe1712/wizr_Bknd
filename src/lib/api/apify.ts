@@ -124,11 +124,12 @@ export const apifyApi = {
    */
   async checkStatus(
     runId: string,
-    platform: string
+    platform: string,
+    filterKeyword?: string
   ): Promise<ApifyResponse<ScrapeStatusResponse>> {
     const result = await invokeEdgeFunction<ScrapeStatusResponse>(
       "apify-status",
-      { runId, platform },
+      { runId, platform, filterKeyword },
       30000
     );
 

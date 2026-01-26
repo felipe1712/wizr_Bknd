@@ -166,11 +166,11 @@ const PLATFORM_CONFIG: Record<Platform, {
     color: "bg-black text-white",
     placeholder: "Ej: usuario, #tendencia o término",
     searchTypes: [
-      { value: "query", label: "Búsqueda general", tooltip: "Busca videos que contengan palabras clave en su descripción o título." },
+      { value: "query", label: "Búsqueda general", tooltip: "Busca videos que contengan palabras clave. Los resultados se filtran para mostrar solo coincidencias exactas." },
       { value: "username", label: "Por usuario", tooltip: "Busca los videos de un creador específico de TikTok." },
       { value: "hashtag", label: "Por hashtag (#)", tooltip: "Busca videos etiquetados con un hashtag específico." },
     ],
-    helpText: "Puedes buscar por términos generales, por usuario específico, o por hashtag de tendencia.",
+    helpText: "⚡ Los resultados se filtran automáticamente para mostrar solo contenido que mencione exactamente tu término de búsqueda, reduciendo falsos positivos.",
   },
   instagram: {
     label: "Instagram",
@@ -187,12 +187,12 @@ const PLATFORM_CONFIG: Record<Platform, {
     label: "LinkedIn",
     icon: LinkedInIcon,
     color: "bg-blue-700 text-white",
-    placeholder: "Ej: https://linkedin.com/company/nombre",
+    placeholder: "Ej: Actinver, fintech México",
     searchTypes: [
-      { value: "query", label: "Búsqueda general", tooltip: "Busca publicaciones públicas que contengan los términos especificados." },
+      { value: "query", label: "Búsqueda general", tooltip: "Busca publicaciones públicas que contengan los términos especificados. Genera automáticamente una URL de búsqueda de LinkedIn." },
       { value: "companyUrl", label: "Por empresa (URL)", tooltip: "Requiere la URL completa del perfil de la empresa. Ejemplo: https://www.linkedin.com/company/microsoft/" },
     ],
-    helpText: "Para buscar por empresa, necesitas la URL completa del perfil de LinkedIn (ej: https://www.linkedin.com/company/nombre/).",
+    helpText: "✅ LinkedIn ahora soporta búsqueda por palabras clave. Ingresa términos como 'Actinver' o 'fintech México' para encontrar publicaciones relevantes.",
   },
   youtube: {
     label: "YouTube",
@@ -211,10 +211,10 @@ const PLATFORM_CONFIG: Record<Platform, {
     color: "bg-orange-600 text-white",
     placeholder: "Ej: término o r/subreddit",
     searchTypes: [
-      { value: "query", label: "Búsqueda general", tooltip: "Busca posts en todo Reddit que contengan los términos especificados." },
-      { value: "subreddit", label: "Por subreddit", tooltip: "Busca posts dentro de un subreddit específico. Ingresa sin el prefijo r/." },
+      { value: "query", label: "Búsqueda general", tooltip: "Busca posts y comentarios en todo Reddit que contengan los términos especificados." },
+      { value: "subreddit", label: "Por subreddit", tooltip: "Busca posts y comentarios dentro de un subreddit específico. Ingresa sin el prefijo r/." },
     ],
-    helpText: "Busca en todo Reddit o dentro de un subreddit específico (comunidad temática).",
+    helpText: "💬 Las búsquedas ahora incluyen los 10 comentarios principales de cada publicación para un análisis más completo.",
   },
 };
 
@@ -243,9 +243,10 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     }));
   };
 
-  const checkJobStatus = useCallback(async (jobRunId: string) => {
+  const checkJobStatus = useCallback(async (jobRunId: string, filterKw?: string) => {
     try {
-      const result = await apifyApi.checkStatus(jobRunId, platform);
+      // Pass filterKeyword to backend for TikTok exact-match filtering
+      const result = await apifyApi.checkStatus(jobRunId, platform, filterKw);
 
       if (!result.success || !result.data) {
         throw new Error(result.error || "Error al verificar estado");
@@ -343,8 +344,8 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         const estimatedProgress = Math.min(90, pagesLoaded * 10);
         setProgress(estimatedProgress);
         
-        // Poll again in 3 seconds
-        setTimeout(() => checkJobStatus(jobRunId), 3000);
+        // Poll again in 3 seconds (pass filterKw through)
+        setTimeout(() => checkJobStatus(jobRunId, filterKw), 3000);
       }
     } catch (error) {
       console.error("Error checking job status:", error);
@@ -411,8 +412,9 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           },
         });
         
-        // Start polling for status
-        setTimeout(() => checkJobStatus(data.runId!), 3000);
+        // Start polling for status - pass searchValue as filter keyword for TikTok
+        const filterKw = platform === "tiktok" ? searchValue : undefined;
+        setTimeout(() => checkJobStatus(data.runId!, filterKw), 3000);
       } else {
         throw new Error(data.error || "Error al iniciar la búsqueda");
       }
