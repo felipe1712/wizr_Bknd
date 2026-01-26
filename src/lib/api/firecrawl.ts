@@ -243,8 +243,31 @@ export const firecrawlApi = {
   },
 
   /**
-   * Search for mentions of a specific entity
+   * Search Google News specifically
+   * Uses site:news.google.com filter for focused news results
    */
+  async searchGoogleNews(
+    query: string,
+    timeRange: 'hour' | 'day' | 'week' | 'month' = 'day',
+    limit = 15
+  ): Promise<FirecrawlResponse<SearchResult[]>> {
+    const tbsMap = {
+      hour: 'qdr:h',
+      day: 'qdr:d',
+      week: 'qdr:w',
+      month: 'qdr:m',
+    } as const;
+
+    // Build Google News focused query
+    const googleNewsQuery = `site:news.google.com ${query}`;
+
+    return this.search(googleNewsQuery, {
+      limit,
+      tbs: tbsMap[timeRange],
+      lang: 'es',
+      country: 'MX',
+    });
+  },
   async searchEntity(
     entity: EntityForSearch,
     timeRange: 'hour' | 'day' | 'week' | 'month' = 'day',

@@ -9,8 +9,9 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useSocialScrapeJobs } from "@/hooks/useSocialScrapeJobs";
-import { supabase } from "@/integrations/supabase/client";
+import { apifyApi } from "@/lib/api/apify";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { supabase } from "@/integrations/supabase/client";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { 
   Search, 
@@ -245,17 +246,19 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
 
   const checkJobStatus = useCallback(async (jobRunId: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke("apify-status", {
-        body: { runId: jobRunId, platform },
-      });
+      const result = await apifyApi.checkStatus(jobRunId, platform);
 
-      if (error) throw error;
+      if (!result.success || !result.data) {
+        throw new Error(result.error || "Error al verificar estado");
+      }
+
+      const data = result.data;
 
       if (data.status === "SUCCEEDED") {
         setJobStatus("completed");
         setProgress(100);
         // Results are now pre-normalized by the backend
-        const processed = processBackendResults(data.items || []);
+        const processed = processBackendResults((data.items || []) as SocialSearchResult[]);
         setResults(processed);
         
         // Auto-save job and results to database
@@ -377,32 +380,23 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       });
       
       setCurrentJobId(job.id);
-      
-      const body: Record<string, unknown> = {
+
+      const result = await apifyApi.startScrape({
         platform,
+        query: searchType === "query" ? searchValue : undefined,
+        username: searchType === "username" ? searchValue.replace("@", "") : undefined,
+        hashtag: searchType === "hashtag" ? searchValue.replace("#", "") : undefined,
+        companyUrl: searchType === "companyUrl" ? searchValue : undefined,
+        channelUrl: searchType === "channelUrl" ? searchValue : undefined,
+        subreddit: searchType === "subreddit" ? searchValue.replace("r/", "") : undefined,
         maxResults,
-      };
-
-      // Set the appropriate field based on search type
-      if (searchType === "query") {
-        body.query = searchValue;
-      } else if (searchType === "username") {
-        body.username = searchValue.replace("@", "");
-      } else if (searchType === "hashtag") {
-        body.hashtag = searchValue.replace("#", "");
-      } else if (searchType === "companyUrl") {
-        body.companyUrl = searchValue;
-      } else if (searchType === "channelUrl") {
-        body.channelUrl = searchValue;
-      } else if (searchType === "subreddit") {
-        body.subreddit = searchValue.replace("r/", "");
-      }
-
-      const { data, error } = await supabase.functions.invoke("apify-scrape", {
-        body,
       });
 
-      if (error) throw error;
+      if (!result.success || !result.data) {
+        throw new Error(result.error || "Error al iniciar la búsqueda");
+      }
+
+      const data = result.data;
 
       if (data.success && data.runId) {
         setRunId(data.runId);
@@ -419,7 +413,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         });
         
         // Start polling for status
-        setTimeout(() => checkJobStatus(data.runId), 3000);
+        setTimeout(() => checkJobStatus(data.runId!), 3000);
       } else {
         throw new Error(data.error || "Error al iniciar la búsqueda");
       }

@@ -124,7 +124,8 @@ export function useMentions(projectId: string | undefined, filters?: MentionFilt
   });
 
   const saveManyMentionsMutation = useMutation({
-    mutationFn: async (mentions: CreateMentionData[]) => {
+    mutationFn: async (params: { mentions: CreateMentionData[]; analyzeSentiment?: boolean }) => {
+      const { mentions, analyzeSentiment = true } = params;
       if (mentions.length === 0) return [];
 
       const { data, error } = await supabase
@@ -133,13 +134,58 @@ export function useMentions(projectId: string | undefined, filters?: MentionFilt
         .select();
 
       if (error) throw error;
-      return data as Mention[];
+      const saved = data as Mention[];
+
+      // Auto-analyze sentiment for new mentions from Firecrawl (news)
+      if (analyzeSentiment && saved.length > 0) {
+        try {
+          // Trigger sentiment analysis in background
+          const mentionsForAnalysis = saved
+            .filter((m) => !m.sentiment) // Only analyze those without sentiment
+            .map((m) => ({
+              id: m.id,
+              title: m.title,
+              description: m.description,
+            }));
+
+          if (mentionsForAnalysis.length > 0) {
+            // Fire and forget - don't block save
+            supabase.functions
+              .invoke("analyze-sentiment", {
+                body: { mentions: mentionsForAnalysis },
+              })
+              .then(async (response) => {
+                if (response.data?.success && response.data.results) {
+                  // Update sentiments in DB
+                  const updates = (response.data.results as Array<{ id: string; sentiment: string }>).map((r) =>
+                    supabase
+                      .from("mentions")
+                      .update({ sentiment: r.sentiment })
+                      .eq("id", r.id)
+                  );
+                  await Promise.all(updates);
+                  // Invalidate to refresh UI
+                  queryClient.invalidateQueries({ queryKey: ["mentions", projectId] });
+                  queryClient.invalidateQueries({ queryKey: ["mention-stats", projectId] });
+                }
+              })
+              .catch((err) => {
+                console.error("Background sentiment analysis failed:", err);
+              });
+          }
+        } catch (sentimentError) {
+          console.error("Sentiment analysis error:", sentimentError);
+          // Don't fail the save operation
+        }
+      }
+
+      return saved;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["mentions", projectId] });
       toast({
         title: "Menciones guardadas",
-        description: `Se guardaron ${data.length} menciones nuevas`,
+        description: `Se guardaron ${data.length} menciones nuevas. Analizando sentimiento...`,
       });
     },
     onError: (error) => {
@@ -204,12 +250,17 @@ export function useMentions(projectId: string | undefined, filters?: MentionFilt
     }));
   };
 
+  // Helper to wrap the mutation with the new signature
+  const saveManyMentions = (mentions: CreateMentionData[], analyzeSentiment = true) => {
+    saveManyMentionsMutation.mutate({ mentions, analyzeSentiment });
+  };
+
   return {
     mentions: mentionsQuery.data || [],
     isLoading: mentionsQuery.isLoading,
     error: mentionsQuery.error,
     saveMention: saveMentionMutation.mutate,
-    saveManyMentions: saveManyMentionsMutation.mutate,
+    saveManyMentions,
     updateMention: updateMentionMutation.mutate,
     deleteMention: deleteMentionMutation.mutate,
     isSaving: saveMentionMutation.isPending || saveManyMentionsMutation.isPending,
