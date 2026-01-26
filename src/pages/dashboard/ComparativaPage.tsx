@@ -108,6 +108,44 @@ const ComparativaPage = () => {
     );
   }
 
+  // Show message when only 1 entity
+  if (entities.length === 1) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <GitCompare className="h-7 w-7" />
+            Comparativa
+          </h1>
+          <p className="text-muted-foreground">
+            Benchmark y share of voice —{" "}
+            <span className="font-medium">{selectedProject.nombre}</span>
+          </p>
+        </div>
+
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="rounded-full bg-muted p-4">
+              <BarChart3 className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <h3 className="mt-4 text-lg font-semibold">Una sola entidad</h3>
+            <p className="mt-2 max-w-md text-center text-sm text-muted-foreground">
+              La comparativa requiere al menos dos entidades para visualizar el
+              benchmark y share of voice. Actualmente solo tienes: <strong>{entities[0].nombre}</strong>
+            </p>
+            <Button
+              className="mt-4"
+              onClick={() => navigate("/dashboard/fuentes")}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Agregar más entidades
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (entities.length === 0) {
     return (
       <div className="space-y-6">

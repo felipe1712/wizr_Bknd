@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 type ViewMode = "cards" | "table";
+type SourceType = "all" | "social" | "news" | "other";
 
 const TIME_RANGES = [
   { label: "7 días", value: 7 },
@@ -28,11 +29,56 @@ const TIME_RANGES = [
   { label: "90 días", value: 90 },
 ];
 
+const SOURCE_TYPE_OPTIONS: { value: SourceType; label: string }[] = [
+  { value: "all", label: "Todas" },
+  { value: "social", label: "Redes Sociales" },
+  { value: "news", label: "Medios Digitales" },
+  { value: "other", label: "Otros (Foros, Blogs)" },
+];
+
+const SOCIAL_DOMAINS = [
+  "facebook.com",
+  "twitter.com",
+  "x.com",
+  "instagram.com",
+  "linkedin.com",
+  "tiktok.com",
+  "youtube.com",
+  "threads.net",
+];
+
+const NEWS_DOMAINS = [
+  "msn.com",
+  "elfinanciero.com.mx",
+  "eleconomista.com.mx",
+  "reforma.com",
+  "milenio.com",
+  "jornada.com.mx",
+  "proceso.com.mx",
+  "forbes.com.mx",
+  "expansion.mx",
+  "bloomberglinea.com",
+  "bbc.com",
+  "reuters.com",
+  "cnn.com",
+  "elpais.com",
+  "lanacion.com.ar",
+  "infobae.com",
+];
+
 const InfluenciadoresPage = () => {
   const { selectedProject } = useProject();
   const [timeRange, setTimeRange] = useState(30);
   const [selectedEntityIds, setSelectedEntityIds] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
+  const [sourceTypeFilter, setSourceTypeFilter] = useState<SourceType>("all");
+
+  const classifyDomain = (domain: string): SourceType => {
+    const lowerDomain = domain.toLowerCase();
+    if (SOCIAL_DOMAINS.some((sd) => lowerDomain.includes(sd))) return "social";
+    if (NEWS_DOMAINS.some((nd) => lowerDomain.includes(nd))) return "news";
+    return "other";
+  };
 
   const {
     influencers,
@@ -44,6 +90,11 @@ const InfluenciadoresPage = () => {
     isLoading,
   } = useInfluencersData(selectedProject?.id, timeRange, selectedEntityIds);
 
+  // Filter influencers by source type
+  const filteredInfluencers = sourceTypeFilter === "all"
+    ? influencers
+    : influencers.filter((inf) => classifyDomain(inf.domain) === sourceTypeFilter);
+
   const handleEntityToggle = (entityId: string) => {
     setSelectedEntityIds((prev) =>
       prev.includes(entityId)
@@ -52,8 +103,8 @@ const InfluenciadoresPage = () => {
     );
   };
 
-  const maxMentions = influencers[0]?.totalMentions || 0;
-  const topInfluencers = influencers.slice(0, 6);
+  const maxMentions = filteredInfluencers[0]?.totalMentions || 0;
+  const topInfluencers = filteredInfluencers.slice(0, 6);
 
   if (!selectedProject) {
     return (
@@ -132,6 +183,20 @@ const InfluenciadoresPage = () => {
               </div>
             </PopoverContent>
           </Popover>
+
+          {/* Source type filter */}
+          <div className="flex rounded-lg border bg-muted p-1">
+            {SOURCE_TYPE_OPTIONS.map((opt) => (
+              <Button
+                key={opt.value}
+                variant={sourceTypeFilter === opt.value ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setSourceTypeFilter(opt.value)}
+              >
+                {opt.label}
+              </Button>
+            ))}
+          </div>
 
           {/* Time range */}
           <div className="flex rounded-lg border bg-muted p-1">
@@ -251,14 +316,16 @@ const InfluenciadoresPage = () => {
             </Card>
           ))}
         </div>
-      ) : influencers.length === 0 ? (
+      ) : filteredInfluencers.length === 0 ? (
         <Card className="py-12">
           <CardContent className="text-center">
             <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-2">Sin datos de fuentes</h3>
             <p className="text-muted-foreground max-w-md mx-auto">
-              No se encontraron menciones con fuentes identificadas en el período seleccionado.
-              Ejecuta el monitoreo para recopilar menciones.
+              {sourceTypeFilter !== "all" 
+                ? `No se encontraron fuentes de tipo "${SOURCE_TYPE_OPTIONS.find(o => o.value === sourceTypeFilter)?.label}" en el período seleccionado.`
+                : "No se encontraron menciones con fuentes identificadas en el período seleccionado. Ejecuta el monitoreo para recopilar menciones."
+              }
             </p>
           </CardContent>
         </Card>
@@ -270,7 +337,14 @@ const InfluenciadoresPage = () => {
           {/* Influencers display */}
           {viewMode === "cards" ? (
             <div>
-              <h2 className="text-xl font-semibold mb-4">Top Fuentes</h2>
+              <h2 className="text-xl font-semibold mb-4">
+                Top Fuentes 
+                {sourceTypeFilter !== "all" && (
+                  <span className="text-muted-foreground font-normal ml-2">
+                    ({SOURCE_TYPE_OPTIONS.find(o => o.value === sourceTypeFilter)?.label})
+                  </span>
+                )}
+              </h2>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {topInfluencers.map((influencer, index) => (
                   <InfluencerCard
@@ -281,16 +355,16 @@ const InfluenciadoresPage = () => {
                   />
                 ))}
               </div>
-              {influencers.length > 6 && (
+              {filteredInfluencers.length > 6 && (
                 <div className="mt-4 text-center">
                   <Button variant="outline" onClick={() => setViewMode("table")}>
-                    Ver todas las fuentes ({influencers.length})
+                    Ver todas las fuentes ({filteredInfluencers.length})
                   </Button>
                 </div>
               )}
             </div>
           ) : (
-            <InfluencerTable influencers={influencers} maxMentions={maxMentions} />
+            <InfluencerTable influencers={filteredInfluencers} maxMentions={maxMentions} />
           )}
         </>
       )}

@@ -33,6 +33,62 @@ export interface ChartImages {
   sourcesChart?: string | null;
 }
 
+// Platform classification
+const PLATFORM_CATEGORIES = {
+  "Redes Sociales": ["facebook.com", "twitter.com", "x.com", "instagram.com", "linkedin.com", "tiktok.com", "youtube.com", "threads.net"],
+  "Medios Digitales": ["msn.com", "elfinanciero.com.mx", "eleconomista.com.mx", "reforma.com", "milenio.com", "jornada.com.mx", "proceso.com.mx", "forbes.com.mx", "expansion.mx", "bloomberglinea.com", "bbc.com", "reuters.com", "cnn.com", "elpais.com", "lanacion.com.ar", "infobae.com", "gbm.com"],
+  "Otros": [] as string[],
+};
+
+function classifyPlatform(domain: string): string {
+  const lowerDomain = domain.toLowerCase();
+  for (const [category, domains] of Object.entries(PLATFORM_CATEGORIES)) {
+    if (category === "Otros") continue;
+    if (domains.some((d) => lowerDomain.includes(d))) return category;
+  }
+  return "Otros";
+}
+
+function generateRecommendations(data: ReportData): string[] {
+  const recommendations: string[] = [];
+  const { trends, semanticAnalysis, influencers } = data;
+
+  // Sentiment-based recommendations
+  const negativeRatio = trends.summary.sentimentBreakdown.negativo / Math.max(1, data.mentions.length);
+  if (negativeRatio > 0.3) {
+    recommendations.push("⚠️ Alto porcentaje de menciones negativas detectadas. Se recomienda revisar las fuentes principales y desarrollar estrategia de respuesta.");
+  } else if (negativeRatio < 0.1 && data.mentions.length > 10) {
+    recommendations.push("✅ Sentimiento predominantemente positivo. Oportunidad para amplificar mensajes clave en las plataformas con mayor tracción.");
+  }
+
+  // Trend-based recommendations
+  if (trends.summary.changePercent > 20) {
+    recommendations.push("📈 Incremento significativo en menciones. Revisar causas del aumento y capitalizar momentum positivo.");
+  } else if (trends.summary.changePercent < -20) {
+    recommendations.push("📉 Reducción en menciones. Considerar activación de contenido o campaña para mantener presencia.");
+  }
+
+  // Topic-based recommendations
+  if (semanticAnalysis?.topics && semanticAnalysis.topics.length > 0) {
+    const topTopic = semanticAnalysis.topics[0];
+    recommendations.push(`🎯 Tema principal: "${topTopic.name}" — Se recomienda alinear comunicación con este tema dominante.`);
+  }
+
+  // Source-based recommendations
+  const topInfluencer = influencers[0];
+  if (topInfluencer) {
+    const platform = classifyPlatform(topInfluencer.domain);
+    recommendations.push(`📊 Principal fuente: ${topInfluencer.domain} (${platform}) — Considerar estrategia específica para esta plataforma.`);
+  }
+
+  // Default recommendation if none
+  if (recommendations.length === 0) {
+    recommendations.push("📋 Continuar monitoreo activo y establecer alertas para cambios significativos en sentimiento.");
+  }
+
+  return recommendations;
+}
+
 export async function generatePDFReport(
   data: ReportData,
   chartImages?: ChartImages
@@ -197,12 +253,79 @@ export async function generatePDFReport(
 
   yPos = (doc as any).lastAutoTable.finalY + 15;
 
-  // Section 2: Semantic Analysis (if available)
+  // ===== NEW: Distribution by Platform =====
+  checkPageBreak(80);
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text("2. Distribución por Plataforma", 20, yPos);
+  yPos += 8;
+
+  // Calculate platform distribution
+  const platformCounts: Record<string, { total: number; positivo: number; negativo: number; neutral: number }> = {};
+  
+  data.mentions.forEach((mention) => {
+    const platform = classifyPlatform(mention.source_domain || "desconocido");
+    if (!platformCounts[platform]) {
+      platformCounts[platform] = { total: 0, positivo: 0, negativo: 0, neutral: 0 };
+    }
+    platformCounts[platform].total++;
+    const s = mention.sentiment?.toLowerCase();
+    if (s === "positivo" || s === "positive") platformCounts[platform].positivo++;
+    else if (s === "negativo" || s === "negative") platformCounts[platform].negativo++;
+    else if (s === "neutral") platformCounts[platform].neutral++;
+  });
+
+  const platformData = Object.entries(platformCounts)
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([platform, counts]) => [
+      platform,
+      String(counts.total),
+      `${Math.round((counts.total / data.mentions.length) * 100)}%`,
+      String(counts.positivo),
+      String(counts.neutral),
+      String(counts.negativo),
+    ]);
+
+  if (platformData.length > 0) {
+    autoTable(doc, {
+      startY: yPos,
+      head: [["Plataforma", "Menciones", "% del Total", "Positivas", "Neutrales", "Negativas"]],
+      body: platformData,
+      theme: "striped",
+      headStyles: { fillColor: [16, 185, 129] },
+      margin: { left: 20, right: 20 },
+    });
+
+    yPos = (doc as any).lastAutoTable.finalY + 15;
+  }
+
+  // ===== NEW: Recommendations Section =====
+  checkPageBreak(80);
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text("3. Hallazgos y Recomendaciones", 20, yPos);
+  yPos += 10;
+
+  const recommendations = generateRecommendations(data);
+  
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  
+  recommendations.forEach((rec) => {
+    checkPageBreak(20);
+    const recLines = doc.splitTextToSize(rec, pageWidth - 50);
+    doc.text(recLines, 25, yPos);
+    yPos += recLines.length * 5 + 5;
+  });
+
+  yPos += 10;
+
+  // Section 4: Semantic Analysis (if available)
   if (data.semanticAnalysis) {
     checkPageBreak(60);
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
-    doc.text("2. Análisis Semántico", 20, yPos);
+    doc.text("4. Análisis Semántico", 20, yPos);
     yPos += 8;
 
     doc.setFontSize(10);
@@ -262,11 +385,11 @@ export async function generatePDFReport(
     yPos = (doc as any).lastAutoTable.finalY + 15;
   }
 
-  // Section 3: Top Influencers
+  // Section 5: Top Influencers
   checkPageBreak(60);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  const sectionNum = data.semanticAnalysis ? 3 : 2;
+  const sectionNum = data.semanticAnalysis ? 5 : 4;
   doc.text(`${sectionNum}. Principales Fuentes`, 20, yPos);
   yPos += 8;
 
@@ -289,7 +412,7 @@ export async function generatePDFReport(
 
   yPos = (doc as any).lastAutoTable.finalY + 15;
 
-  // Section 4: Trends Summary
+  // Section 6: Trends Summary
   checkPageBreak(60);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
