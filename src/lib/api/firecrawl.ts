@@ -96,33 +96,69 @@ export function matchResultsToEntity(
   });
 }
 
+/**
+ * Retry wrapper for API calls with exponential backoff
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 2,
+  baseDelay = 1000
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.log(`Attempt ${attempt + 1} failed:`, lastError.message);
+      
+      if (attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        console.log(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
 export const firecrawlApi = {
   /**
-   * Search the web for news and content
+   * Search the web for news and content with automatic retry
    */
   async search(query: string, options?: SearchOptions): Promise<FirecrawlResponse<SearchResult[]>> {
     try {
-      const { data, error } = await supabase.functions.invoke('firecrawl-search', {
-        body: { query, options },
+      const result = await withRetry(async () => {
+        const { data, error } = await supabase.functions.invoke('firecrawl-search', {
+          body: { query, options },
+        });
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        // Handle Firecrawl response structure
+        if (data?.success === false) {
+          throw new Error(data.error || 'Search failed');
+        }
+
+        return data;
       });
-
-      if (error) {
-        return { success: false, error: error.message };
-      }
-
-      // Handle Firecrawl response structure
-      if (data?.success === false) {
-        return { success: false, error: data.error };
-      }
 
       return { 
         success: true, 
-        data: data?.data || [] 
+        data: result?.data || [] 
       };
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Search failed';
+      console.error('Search failed after retries:', errorMessage);
       return { 
         success: false, 
-        error: err instanceof Error ? err.message : 'Search failed' 
+        error: errorMessage.includes('Failed to fetch') 
+          ? 'La búsqueda tardó demasiado. Por favor intenta de nuevo.'
+          : errorMessage
       };
     }
   },

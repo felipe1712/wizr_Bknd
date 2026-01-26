@@ -527,11 +527,19 @@ const FuentesPage = () => {
 
           {/* Search Results */}
           {isSearching ? (
-            <div className="space-y-4">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-32" />
-              ))}
-            </div>
+            <Card className="py-12">
+              <CardContent className="flex flex-col items-center justify-center gap-4">
+                <div className="relative">
+                  <RefreshCw className="h-10 w-10 text-primary animate-spin" />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium text-lg">Buscando menciones...</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Esto puede tomar hasta 30 segundos. Por favor espera.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           ) : results.length > 0 ? (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
