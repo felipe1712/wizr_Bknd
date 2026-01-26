@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { useSocialScrapeJobs } from "@/hooks/useSocialScrapeJobs";
 import { supabase } from "@/integrations/supabase/client";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -219,6 +220,7 @@ const PLATFORM_CONFIG: Record<Platform, {
 
 export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSearchProps) => {
   const { toast } = useToast();
+  const { createJob, updateJob, saveResults, refetchJobs } = useSocialScrapeJobs(projectId);
   const [platform, setPlatform] = useState<Platform>("twitter");
   const [searchType, setSearchType] = useState("query");
   const [searchValue, setSearchValue] = useState("");
@@ -227,6 +229,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
   const [jobStatus, setJobStatus] = useState<"idle" | "running" | "completed" | "failed">("idle");
   const [progress, setProgress] = useState(0);
   const [runId, setRunId] = useState<string | null>(null);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [results, setResults] = useState<SocialSearchResult[]>([]);
 
   const config = PLATFORM_CONFIG[platform];
@@ -254,12 +257,78 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         // Results are now pre-normalized by the backend
         const processed = processBackendResults(data.items || []);
         setResults(processed);
+        
+        // Auto-save job and results to database
+        if (currentJobId && processed.length > 0) {
+          try {
+            // Update job status
+            await updateJob({
+              id: currentJobId,
+              updates: {
+                status: "completed",
+                completed_at: new Date().toISOString(),
+                results_count: processed.length,
+              },
+            });
+            
+            // Save results
+            await saveResults({
+              jobId: currentJobId,
+              results: processed.map((r) => ({
+                platform: r.platform,
+                external_id: r.id,
+                title: r.title || "",
+                description: r.description || "",
+                author_name: r.author?.name || "",
+                author_username: r.author?.username || "",
+                author_url: r.author?.url || "",
+                author_avatar_url: r.author?.avatarUrl,
+                author_verified: r.author?.verified,
+                author_followers: r.author?.followers,
+                likes: r.metrics?.likes || 0,
+                comments: r.metrics?.comments || 0,
+                shares: r.metrics?.shares || 0,
+                views: r.metrics?.views,
+                engagement: r.metrics?.engagement,
+                published_at: r.publishedAt,
+                url: r.url || "",
+                content_type: r.contentType || "post",
+                hashtags: r.hashtags,
+                mentions: r.mentions,
+                raw_data: JSON.parse(JSON.stringify(r.raw || {})),
+              })),
+            });
+            
+            refetchJobs();
+          } catch (saveError) {
+            console.error("Error saving to database:", saveError);
+          }
+        }
+        
         toast({
           title: "Búsqueda completada",
           description: `Se encontraron ${processed.length} resultados en ${config.label}`,
         });
       } else if (data.status === "FAILED" || data.status === "ABORTED" || data.status === "TIMED-OUT") {
         setJobStatus("failed");
+        
+        // Update job status in database
+        if (currentJobId) {
+          try {
+            await updateJob({
+              id: currentJobId,
+              updates: {
+                status: "failed",
+                completed_at: new Date().toISOString(),
+                error_message: `Job ${data.status}`,
+              },
+            });
+            refetchJobs();
+          } catch (updateError) {
+            console.error("Error updating job status:", updateError);
+          }
+        }
+        
         toast({
           title: "Error en la búsqueda",
           description: "El scraping falló o fue cancelado",
@@ -279,7 +348,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       console.error("Error checking job status:", error);
       setJobStatus("failed");
     }
-  }, [platform, config.label, toast]);
+  }, [platform, config.label, toast, currentJobId, updateJob, saveResults, refetchJobs]);
 
   const handleSearch = async () => {
     if (!searchValue.trim()) {
@@ -295,8 +364,20 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     setJobStatus("running");
     setProgress(5);
     setResults([]);
+    setCurrentJobId(null);
 
     try {
+      // Create job in database first
+      const job = await createJob({
+        project_id: projectId,
+        platform,
+        search_type: searchType,
+        search_value: searchValue,
+        max_results: maxResults,
+      });
+      
+      setCurrentJobId(job.id);
+      
       const body: Record<string, unknown> = {
         platform,
         maxResults,
@@ -326,6 +407,17 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       if (data.success && data.runId) {
         setRunId(data.runId);
         setProgress(10);
+        
+        // Update job with runId and datasetId
+        await updateJob({
+          id: job.id,
+          updates: {
+            run_id: data.runId,
+            dataset_id: data.datasetId,
+            status: "running",
+          },
+        });
+        
         // Start polling for status
         setTimeout(() => checkJobStatus(data.runId), 3000);
       } else {
@@ -335,6 +427,23 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       console.error("Search error:", error);
       setJobStatus("failed");
       setIsSearching(false);
+      
+      // Update job status if it was created
+      if (currentJobId) {
+        try {
+          await updateJob({
+            id: currentJobId,
+            updates: {
+              status: "failed",
+              error_message: error instanceof Error ? error.message : "Unknown error",
+              completed_at: new Date().toISOString(),
+            },
+          });
+        } catch (updateError) {
+          console.error("Error updating job:", updateError);
+        }
+      }
+      
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Error al realizar la búsqueda",

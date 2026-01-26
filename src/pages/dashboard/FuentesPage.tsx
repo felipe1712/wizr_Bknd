@@ -17,6 +17,7 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { EntityForm } from "@/components/entities/EntityForm";
 import { SocialMediaSearch } from "@/components/fuentes/SocialMediaSearch";
+import { SocialHistoryTab } from "@/components/fuentes/SocialHistoryTab";
 import wizrLogoIcon from "@/assets/wizr-logo-icon.png";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
@@ -54,7 +55,7 @@ import { format, formatDistanceToNow, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 
 type SearchMode = "manual" | "entities";
-type ViewMode = "search" | "social" | "history";
+type ViewMode = "search" | "social" | "social-history" | "history";
 type SearchSource = "news" | "social";
 
 const ITEMS_PER_PAGE = 10;
@@ -520,6 +521,10 @@ const FuentesPage = () => {
             <MessageCircle className="h-4 w-4" />
             Redes Sociales
           </TabsTrigger>
+          <TabsTrigger value="social-history" className="gap-2">
+            <Database className="h-4 w-4" />
+            Historial Redes
+          </TabsTrigger>
           <TabsTrigger value="history" className="gap-2">
             <History className="h-4 w-4" />
             Historial ({mentions.length})
@@ -963,6 +968,11 @@ const FuentesPage = () => {
               });
             }}
           />
+        </TabsContent>
+
+        {/* Social History Tab */}
+        <TabsContent value="social-history" className="mt-4">
+          <SocialHistoryTab projectId={selectedProject.id} />
         </TabsContent>
 
         {/* History Tab */}

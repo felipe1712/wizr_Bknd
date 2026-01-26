@@ -363,6 +363,170 @@ export type Database = {
         }
         Relationships: []
       }
+      social_results: {
+        Row: {
+          author_avatar_url: string | null
+          author_followers: number | null
+          author_name: string | null
+          author_url: string | null
+          author_username: string | null
+          author_verified: boolean | null
+          comments: number | null
+          content_type: string | null
+          created_at: string
+          description: string | null
+          engagement: number | null
+          external_id: string | null
+          hashtags: string[] | null
+          id: string
+          job_id: string
+          likes: number | null
+          mentions: string[] | null
+          platform: string
+          project_id: string
+          published_at: string | null
+          raw_data: Json | null
+          shares: number | null
+          title: string | null
+          url: string | null
+          views: number | null
+        }
+        Insert: {
+          author_avatar_url?: string | null
+          author_followers?: number | null
+          author_name?: string | null
+          author_url?: string | null
+          author_username?: string | null
+          author_verified?: boolean | null
+          comments?: number | null
+          content_type?: string | null
+          created_at?: string
+          description?: string | null
+          engagement?: number | null
+          external_id?: string | null
+          hashtags?: string[] | null
+          id?: string
+          job_id: string
+          likes?: number | null
+          mentions?: string[] | null
+          platform: string
+          project_id: string
+          published_at?: string | null
+          raw_data?: Json | null
+          shares?: number | null
+          title?: string | null
+          url?: string | null
+          views?: number | null
+        }
+        Update: {
+          author_avatar_url?: string | null
+          author_followers?: number | null
+          author_name?: string | null
+          author_url?: string | null
+          author_username?: string | null
+          author_verified?: boolean | null
+          comments?: number | null
+          content_type?: string | null
+          created_at?: string
+          description?: string | null
+          engagement?: number | null
+          external_id?: string | null
+          hashtags?: string[] | null
+          id?: string
+          job_id?: string
+          likes?: number | null
+          mentions?: string[] | null
+          platform?: string
+          project_id?: string
+          published_at?: string | null
+          raw_data?: Json | null
+          shares?: number | null
+          title?: string | null
+          url?: string | null
+          views?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_results_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "social_scrape_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_results_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_scrape_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          dataset_id: string | null
+          error_message: string | null
+          id: string
+          max_results: number | null
+          metadata: Json | null
+          platform: string
+          project_id: string
+          results_count: number | null
+          run_id: string | null
+          search_type: string
+          search_value: string
+          started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          dataset_id?: string | null
+          error_message?: string | null
+          id?: string
+          max_results?: number | null
+          metadata?: Json | null
+          platform: string
+          project_id: string
+          results_count?: number | null
+          run_id?: string | null
+          search_type: string
+          search_value: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          dataset_id?: string | null
+          error_message?: string | null
+          id?: string
+          max_results?: number | null
+          metadata?: Json | null
+          platform?: string
+          project_id?: string
+          results_count?: number | null
+          run_id?: string | null
+          search_type?: string
+          search_value?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_scrape_jobs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       thematic_cards: {
         Row: {
           card_type: string
