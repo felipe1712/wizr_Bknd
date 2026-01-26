@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import wizrLogoFull from "@/assets/wizr-logo-full.png";
-import wizrHeroLogo from "@/assets/wizr-logo-full-transparent.png";
+import wizrIcon from "@/assets/wizr-icon-transparent.png";
+import wizrLogoFull from "@/assets/wizr-logo-full-transparent.png";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Sparkles, BarChart3, Bell, TrendingUp, Shield, Zap } from "lucide-react";
+import { ArrowRight, BarChart3, Bell, TrendingUp, Shield, Zap } from "lucide-react";
 import { motion } from "framer-motion";
 
 const features = [
@@ -37,8 +37,9 @@ const Index = () => {
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-lg">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link to="/" className="flex items-center">
-            <img src={wizrHeroLogo} alt="Wizr" className="h-10 w-auto" />
+          <Link to="/" className="flex items-center gap-2">
+            <img src={wizrIcon} alt="Wizr" className="h-10 w-auto" />
+            <span className="text-xl font-bold text-foreground">Wizr</span>
           </Link>
           <nav className="flex items-center gap-4">
             {!loading && user ? (
@@ -81,12 +82,11 @@ const Index = () => {
               className="inline-block mb-6"
             >
               <img 
-                src={wizrHeroLogo} 
+                src={wizrLogoFull} 
                 alt="Wizr - Análisis Estratégico" 
                 className="h-40 sm:h-52 lg:h-64 w-auto mx-auto" 
               />
             </motion.div>
-
             {/* Headline */}
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight text-foreground">
               Convierte la conversación pública en{" "}
@@ -234,7 +234,8 @@ const Index = () => {
       <footer className="border-t border-border py-8 px-4">
         <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <img src={wizrHeroLogo} alt="Wizr" className="h-8 w-auto" />
+            <img src={wizrIcon} alt="Wizr" className="h-8 w-auto" />
+            <span className="font-semibold text-foreground">Wizr</span>
           </div>
           <p className="text-sm text-muted-foreground">
             Un producto de{" "}

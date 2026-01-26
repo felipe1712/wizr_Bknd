@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import wizrLogoFull from "@/assets/wizr-logo-full.png";
+import wizrIcon from "@/assets/wizr-icon-transparent.png";
 import { Eye, EyeOff, Loader2, Mail, Lock, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -93,9 +93,9 @@ const Login = () => {
           <div className="flex flex-col items-center gap-4">
             <Link to="/">
               <img
-                src={wizrLogoFull}
+                src={wizrIcon}
                 alt="Wizr"
-                className="h-16 w-auto transition-transform hover:scale-105"
+                className="h-20 w-auto transition-transform hover:scale-105"
               />
             </Link>
             <div className="text-center">
