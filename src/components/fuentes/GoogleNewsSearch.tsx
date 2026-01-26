@@ -76,7 +76,7 @@ export function GoogleNewsSearch({ projectId, projectName }: GoogleNewsSearchPro
         setResults(response.data);
         toast({
           title: "Búsqueda completada",
-          description: `Se encontraron ${response.data.length} noticias en Google News`,
+          description: `Se encontraron ${response.data.length} noticias`,
         });
       } else {
         toast({
@@ -125,10 +125,10 @@ export function GoogleNewsSearch({ projectId, projectName }: GoogleNewsSearchPro
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Newspaper className="h-5 w-5 text-primary" />
-            Búsqueda en Google News
+            Búsqueda de Noticias
           </CardTitle>
           <CardDescription>
-            Busca noticias recientes directamente desde Google News para monitorear menciones en medios
+            Busca noticias recientes en la web para monitorear menciones en medios digitales
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -173,7 +173,7 @@ export function GoogleNewsSearch({ projectId, projectName }: GoogleNewsSearchPro
 
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Sparkles className="h-3 w-3" />
-            <span>Los resultados provienen directamente de Google News para mayor precisión en noticias</span>
+            <span>Los resultados incluyen noticias de múltiples fuentes para mayor cobertura</span>
           </div>
         </CardContent>
       </Card>
@@ -204,7 +204,7 @@ export function GoogleNewsSearch({ projectId, projectName }: GoogleNewsSearchPro
                 {results.length} noticias encontradas
               </Badge>
               <Badge variant="outline" className="font-normal">
-                Google News
+                Noticias Web
               </Badge>
             </div>
             <Button onClick={handleSaveResults} disabled={isSaving} variant="secondary">
