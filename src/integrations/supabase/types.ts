@@ -41,6 +41,57 @@ export type Database = {
         }
         Relationships: []
       }
+      projects: {
+        Row: {
+          activo: boolean
+          alcance_geografico: string[]
+          alcance_temporal: Database["public"]["Enums"]["temporal_scope"]
+          audiencia: string
+          created_at: string
+          descripcion: string | null
+          id: string
+          nombre: string
+          objetivo: string
+          sensibilidad: Database["public"]["Enums"]["sensitivity_level"]
+          tipo: Database["public"]["Enums"]["project_type"]
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          activo?: boolean
+          alcance_geografico?: string[]
+          alcance_temporal?: Database["public"]["Enums"]["temporal_scope"]
+          audiencia: string
+          created_at?: string
+          descripcion?: string | null
+          id?: string
+          nombre: string
+          objetivo: string
+          sensibilidad?: Database["public"]["Enums"]["sensitivity_level"]
+          tipo?: Database["public"]["Enums"]["project_type"]
+          updated_at?: string
+          user_id: string
+          version?: number
+        }
+        Update: {
+          activo?: boolean
+          alcance_geografico?: string[]
+          alcance_temporal?: Database["public"]["Enums"]["temporal_scope"]
+          audiencia?: string
+          created_at?: string
+          descripcion?: string | null
+          id?: string
+          nombre?: string
+          objetivo?: string
+          sensibilidad?: Database["public"]["Enums"]["sensitivity_level"]
+          tipo?: Database["public"]["Enums"]["project_type"]
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -81,6 +132,14 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "analista" | "director"
+      project_type: "monitoreo" | "investigacion" | "crisis" | "benchmark"
+      sensitivity_level: "bajo" | "medio" | "alto" | "critico"
+      temporal_scope:
+        | "tiempo_real"
+        | "diario"
+        | "semanal"
+        | "mensual"
+        | "historico"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -209,6 +268,15 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "analista", "director"],
+      project_type: ["monitoreo", "investigacion", "crisis", "benchmark"],
+      sensitivity_level: ["bajo", "medio", "alto", "critico"],
+      temporal_scope: [
+        "tiempo_real",
+        "diario",
+        "semanal",
+        "mensual",
+        "historico",
+      ],
     },
   },
 } as const
