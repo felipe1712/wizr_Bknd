@@ -38,7 +38,7 @@ const Index = () => {
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-lg">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <Link to="/" className="flex items-center">
-            <img src={wizrLogoFull} alt="Wizr" className="h-8 w-auto" />
+            <img src={wizrHeroLogo} alt="Wizr" className="h-10 w-auto" />
           </Link>
           <nav className="flex items-center gap-4">
             {!loading && user ? (
@@ -78,20 +78,14 @@ const Index = () => {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.8, delay: 0.2 }}
-              className="inline-block"
+              className="inline-block mb-6"
             >
               <img 
                 src={wizrHeroLogo} 
                 alt="Wizr - Análisis Estratégico" 
-                className="h-32 sm:h-40 lg:h-48 w-auto mx-auto" 
+                className="h-40 sm:h-52 lg:h-64 w-auto mx-auto" 
               />
             </motion.div>
-
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm text-primary">
-              <Sparkles size={16} />
-              <span className="font-medium">Inteligencia Estratégica</span>
-            </div>
 
             {/* Headline */}
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight text-foreground">
@@ -240,7 +234,7 @@ const Index = () => {
       <footer className="border-t border-border py-8 px-4">
         <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <img src={wizrLogoFull} alt="Wizr" className="h-6 w-auto opacity-70" />
+            <img src={wizrHeroLogo} alt="Wizr" className="h-8 w-auto" />
           </div>
           <p className="text-sm text-muted-foreground">
             Un producto de{" "}
