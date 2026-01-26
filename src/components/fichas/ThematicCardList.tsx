@@ -3,7 +3,6 @@ import { useThematicCards, ThematicCard, ConversationAnalysisContent, Informativ
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,16 +15,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { cn } from "@/lib/utils";
 import {
   FileText,
   MessageSquare,
   Trash2,
   Eye,
   Download,
-  Edit,
   Calendar,
   MoreVertical,
+  Loader2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -34,6 +32,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThematicCardViewer } from "./ThematicCardViewer";
+import { generateThematicCardPDF } from "@/lib/reports/thematicCardPdfGenerator";
+import { useToast } from "@/hooks/use-toast";
 
 interface ThematicCardListProps {
   projectId: string;
@@ -43,11 +43,32 @@ export function ThematicCardList({ projectId }: ThematicCardListProps) {
   const { cards, isLoading, delete: deleteCard, isDeleting } = useThematicCards(projectId);
   const [selectedCard, setSelectedCard] = useState<ThematicCard | null>(null);
   const [cardToDelete, setCardToDelete] = useState<string | null>(null);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const handleDelete = async () => {
     if (cardToDelete) {
       await deleteCard(cardToDelete);
       setCardToDelete(null);
+    }
+  };
+
+  const handleExportPDF = async (card: ThematicCard) => {
+    setExportingId(card.id);
+    try {
+      await generateThematicCardPDF(card);
+      toast({
+        title: "PDF generado",
+        description: "El archivo se ha descargado correctamente.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error al exportar",
+        description: "No se pudo generar el PDF. Intenta de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportingId(null);
     }
   };
 
@@ -110,8 +131,15 @@ export function ThematicCardList({ projectId }: ThematicCardListProps) {
                         <Eye className="mr-2 h-4 w-4" />
                         Ver
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
-                        <Download className="mr-2 h-4 w-4" />
+                      <DropdownMenuItem 
+                        onClick={() => handleExportPDF(card)}
+                        disabled={exportingId === card.id}
+                      >
+                        {exportingId === card.id ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="mr-2 h-4 w-4" />
+                        )}
                         Exportar PDF
                       </DropdownMenuItem>
                       <DropdownMenuItem
