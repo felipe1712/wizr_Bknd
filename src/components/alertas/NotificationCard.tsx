@@ -16,18 +16,21 @@ interface NotificationCardProps {
 const severityConfig = {
   info: {
     icon: Info,
-    color: "text-blue-500",
-    bg: "bg-blue-500/10 border-blue-500/20",
+    color: "text-blue-600",
+    bg: "bg-blue-50 border-blue-200",
+    badge: "bg-blue-100 text-blue-700",
   },
   warning: {
     icon: AlertTriangle,
-    color: "text-amber-500",
-    bg: "bg-amber-500/10 border-amber-500/20",
+    color: "text-amber-600",
+    bg: "bg-amber-50 border-amber-200",
+    badge: "bg-amber-100 text-amber-700",
   },
   critical: {
     icon: AlertCircle,
-    color: "text-red-500",
-    bg: "bg-red-500/10 border-red-500/20",
+    color: "text-red-600",
+    bg: "bg-red-50 border-red-200",
+    badge: "bg-red-100 text-red-700",
   },
 };
 
@@ -48,8 +51,8 @@ export function NotificationCard({
   return (
     <Card
       className={cn(
-        "transition-colors cursor-pointer hover:bg-muted/50",
-        !notification.is_read && "border-l-4 border-l-primary",
+        "transition-all cursor-pointer hover:shadow-md",
+        !notification.is_read && "border-l-4 border-l-primary shadow-sm",
         severity.bg
       )}
       onClick={handleClick}
@@ -57,12 +60,12 @@ export function NotificationCard({
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
-            <div className={cn("rounded-full p-1.5", severity.color)}>
+            <div className={cn("rounded-full p-2 bg-white shadow-sm", severity.color)}>
               <Icon className="h-4 w-4" />
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <h4 className="font-medium text-sm">{notification.title}</h4>
+                <h4 className="font-semibold text-sm text-foreground">{notification.title}</h4>
                 {!notification.is_read && (
                   <Badge variant="default" className="text-xs h-5">
                     Nueva
@@ -91,13 +94,13 @@ export function NotificationCard({
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 shrink-0"
+            className="h-7 w-7 shrink-0 hover:bg-white/50"
             onClick={(e) => {
               e.stopPropagation();
               onDismiss(notification.id);
             }}
           >
-            <X className="h-3 w-3" />
+            <X className="h-3.5 w-3.5" />
           </Button>
         </div>
       </CardContent>

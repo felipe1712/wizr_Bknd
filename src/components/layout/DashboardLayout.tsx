@@ -34,9 +34,9 @@ const DashboardContent = () => {
         <AppSidebar />
         <SidebarInset className="flex flex-1 flex-col">
           {/* Header */}
-          <header className="flex h-14 items-center justify-between border-b border-border bg-card px-4">
+          <header className="flex h-14 items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-4 sticky top-0 z-10">
             <div className="flex items-center gap-4">
-              <SidebarTrigger />
+              <SidebarTrigger className="text-foreground" />
               <div className="h-6 w-px bg-border" />
               <ProjectSelector />
             </div>

@@ -35,9 +35,15 @@ export function InfluencerTable({ influencers, maxMentions }: InfluencerTablePro
   }
 
   const getSentimentColor = (score: number) => {
-    if (score > 0.2) return "text-green-500";
-    if (score < -0.2) return "text-red-500";
-    return "text-yellow-500";
+    if (score > 0.2) return "text-emerald-600 font-semibold";
+    if (score < -0.2) return "text-red-600 font-semibold";
+    return "text-amber-600 font-semibold";
+  };
+
+  const getSentimentBg = (score: number) => {
+    if (score > 0.2) return "bg-emerald-50";
+    if (score < -0.2) return "bg-red-50";
+    return "bg-amber-50";
   };
 
   return (
@@ -48,7 +54,7 @@ export function InfluencerTable({ influencers, maxMentions }: InfluencerTablePro
           {influencers.length} fuentes identificadas ordenadas por impacto
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-0">
         <Table>
           <TableHeader>
             <TableRow>
@@ -70,10 +76,16 @@ export function InfluencerTable({ influencers, maxMentions }: InfluencerTablePro
                 : Minus;
 
               const trendColor = influencer.trend === "up"
-                ? "text-green-500"
+                ? "text-emerald-600"
                 : influencer.trend === "down"
-                ? "text-red-500"
+                ? "text-red-600"
                 : "text-muted-foreground";
+
+              const trendBg = influencer.trend === "up"
+                ? "bg-emerald-50"
+                : influencer.trend === "down"
+                ? "bg-red-50"
+                : "bg-muted";
 
               const mentionPercentage = maxMentions > 0
                 ? (influencer.totalMentions / maxMentions) * 100
@@ -81,9 +93,9 @@ export function InfluencerTable({ influencers, maxMentions }: InfluencerTablePro
 
               return (
                 <TableRow key={influencer.domain}>
-                  <TableCell className="font-medium">{index + 1}</TableCell>
+                  <TableCell className="font-bold text-primary">{index + 1}</TableCell>
                   <TableCell>
-                    <div className="font-medium">{influencer.domain}</div>
+                    <div className="font-medium text-foreground">{influencer.domain}</div>
                     {influencer.entities.length > 0 && (
                       <div className="flex gap-1 mt-1">
                         {influencer.entities.slice(0, 2).map((e) => (
@@ -102,7 +114,7 @@ export function InfluencerTable({ influencers, maxMentions }: InfluencerTablePro
                   <TableCell>
                     <div className="space-y-1">
                       <div className="flex justify-between text-sm">
-                        <span>{influencer.totalMentions}</span>
+                        <span className="font-semibold">{influencer.totalMentions}</span>
                         <span className="text-muted-foreground text-xs">
                           ({influencer.recentMentions} recientes)
                         </span>
@@ -112,23 +124,23 @@ export function InfluencerTable({ influencers, maxMentions }: InfluencerTablePro
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-center gap-2 text-xs">
-                      <span className="text-green-500">{influencer.sentiment.positivo}</span>
+                      <span className="text-emerald-600 font-medium">{influencer.sentiment.positivo}</span>
                       <span className="text-muted-foreground">/</span>
-                      <span className="text-gray-500">{influencer.sentiment.neutral}</span>
+                      <span className="text-muted-foreground">{influencer.sentiment.neutral}</span>
                       <span className="text-muted-foreground">/</span>
-                      <span className="text-red-500">{influencer.sentiment.negativo}</span>
+                      <span className="text-red-600 font-medium">{influencer.sentiment.negativo}</span>
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
-                    <span className={`font-semibold ${getSentimentColor(influencer.sentimentScore)}`}>
+                    <span className={`px-2 py-1 rounded-full text-xs ${getSentimentColor(influencer.sentimentScore)} ${getSentimentBg(influencer.sentimentScore)}`}>
                       {influencer.sentimentScore > 0 ? "+" : ""}
                       {(influencer.sentimentScore * 100).toFixed(0)}%
                     </span>
                   </TableCell>
                   <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <TrendIcon className={`h-4 w-4 ${trendColor}`} />
-                      <span className="text-xs capitalize">{
+                    <div className={`inline-flex items-center justify-center gap-1 px-2 py-1 rounded-full ${trendBg}`}>
+                      <TrendIcon className={`h-3.5 w-3.5 ${trendColor}`} />
+                      <span className={`text-xs ${trendColor}`}>{
                         influencer.trend === "up" ? "Alza" : 
                         influencer.trend === "down" ? "Baja" : 
                         "Estable"

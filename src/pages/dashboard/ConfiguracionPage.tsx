@@ -135,40 +135,40 @@ const ConfiguracionPage = () => {
                 </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="border-blue-200 bg-blue-50/50">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 bg-blue-500/10 rounded-lg">
-                    <User className="h-4 w-4 text-blue-500" />
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <User className="h-4 w-4 text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{entityCounts.persona}</p>
+                    <p className="text-2xl font-bold text-foreground">{entityCounts.persona}</p>
                     <p className="text-xs text-muted-foreground">Personas</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="border-emerald-200 bg-emerald-50/50">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 bg-green-500/10 rounded-lg">
-                    <Briefcase className="h-4 w-4 text-green-500" />
+                  <div className="p-2 bg-emerald-100 rounded-lg">
+                    <Briefcase className="h-4 w-4 text-emerald-600" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{entityCounts.marca}</p>
+                    <p className="text-2xl font-bold text-foreground">{entityCounts.marca}</p>
                     <p className="text-xs text-muted-foreground">Marcas</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="border-primary/20 bg-primary/5">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 bg-purple-500/10 rounded-lg">
-                    <Building2 className="h-4 w-4 text-purple-500" />
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <Building2 className="h-4 w-4 text-primary" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{entityCounts.institucion}</p>
+                    <p className="text-2xl font-bold text-foreground">{entityCounts.institucion}</p>
                     <p className="text-xs text-muted-foreground">Instituciones</p>
                   </div>
                 </div>
