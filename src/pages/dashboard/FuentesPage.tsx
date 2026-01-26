@@ -171,7 +171,7 @@ const FuentesPage = () => {
       const response = await firecrawlApi.searchMultipleEntities(
         selectedEntities,
         timeRange,
-        20 // Increased limit per entity for better coverage
+        50 // Increased limit per entity for better coverage
       );
 
       if (response.success && response.data) {
