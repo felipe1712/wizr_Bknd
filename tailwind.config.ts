@@ -57,6 +57,14 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        // Wizr Brand Colors
+        wizr: {
+          violet: "hsl(var(--wizr-violet))",
+          mint: "hsl(var(--wizr-mint))",
+          orange: "hsl(var(--wizr-orange))",
+          dark: "hsl(var(--wizr-dark))",
+          darker: "hsl(var(--wizr-darker))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
