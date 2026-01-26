@@ -744,12 +744,12 @@ const FuentesPage = () => {
                             <Globe className="h-3 w-3" />
                             Dominio
                           </Label>
-                          <Select value={searchFilterDomain} onValueChange={setSearchFilterDomain}>
+                          <Select value={searchFilterDomain || "__all__"} onValueChange={(v) => setSearchFilterDomain(v === "__all__" ? "" : v)}>
                             <SelectTrigger className="bg-background">
                               <SelectValue placeholder="Todos los dominios" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">Todos los dominios</SelectItem>
+                              <SelectItem value="__all__">Todos los dominios</SelectItem>
                               {searchDomains.map((domain) => (
                                 <SelectItem key={domain} value={domain}>{domain}</SelectItem>
                               ))}
@@ -993,12 +993,12 @@ const FuentesPage = () => {
                             <Globe className="h-3 w-3" />
                             Dominio
                           </Label>
-                          <Select value={historyFilterDomain} onValueChange={setHistoryFilterDomain}>
+                          <Select value={historyFilterDomain || "__all__"} onValueChange={(v) => setHistoryFilterDomain(v === "__all__" ? "" : v)}>
                             <SelectTrigger className="bg-background">
                               <SelectValue placeholder="Todos" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">Todos los dominios</SelectItem>
+                              <SelectItem value="__all__">Todos los dominios</SelectItem>
                               {historyDomains.map((domain) => (
                                 <SelectItem key={domain} value={domain}>{domain}</SelectItem>
                               ))}
@@ -1012,12 +1012,12 @@ const FuentesPage = () => {
                             <Tag className="h-3 w-3" />
                             Entidad
                           </Label>
-                          <Select value={historyFilterEntityId} onValueChange={setHistoryFilterEntityId}>
+                          <Select value={historyFilterEntityId || "__all__"} onValueChange={(v) => setHistoryFilterEntityId(v === "__all__" ? "" : v)}>
                             <SelectTrigger className="bg-background">
                               <SelectValue placeholder="Todas" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">Todas las entidades</SelectItem>
+                              <SelectItem value="__all__">Todas las entidades</SelectItem>
                               {entities.map((entity) => (
                                 <SelectItem key={entity.id} value={entity.id}>{entity.nombre}</SelectItem>
                               ))}
