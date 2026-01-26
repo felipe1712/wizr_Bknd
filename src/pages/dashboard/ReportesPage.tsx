@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useProject } from "@/contexts/ProjectContext";
 import { useReportData } from "@/hooks/useReportData";
 import { useSemanticAnalysis, SemanticAnalysisResult } from "@/hooks/useSemanticAnalysis";
 import { useMentions } from "@/hooks/useMentions";
-import { generatePDFReport } from "@/lib/reports/pdfGenerator";
+import { generatePDFReport, ChartImages } from "@/lib/reports/pdfGenerator";
 import { generateExcelReport } from "@/lib/reports/excelGenerator";
+import { ChartRenderer, ChartRendererHandle } from "@/components/reports/ChartRenderer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ import {
   Calendar,
   CheckCircle2,
   AlertCircle,
+  BarChart3,
 } from "lucide-react";
 
 type TimeRange = "7d" | "30d" | "90d";
@@ -34,6 +36,9 @@ const ReportesPage = () => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isGeneratingExcel, setIsGeneratingExcel] = useState(false);
   const [semanticResult, setSemanticResult] = useState<SemanticAnalysisResult | null>(null);
+  const [showChartRenderer, setShowChartRenderer] = useState(false);
+
+  const chartRendererRef = useRef<ChartRendererHandle>(null);
 
   const { mentions } = useMentions(selectedProject?.id, { isArchived: false });
   const { analyze, isAnalyzing, result: latestSemanticResult } = useSemanticAnalysis(selectedProject?.id);
@@ -43,18 +48,57 @@ const ReportesPage = () => {
     semanticResult || latestSemanticResult
   );
 
-  const handleGeneratePDF = async () => {
+  // Prepare chart data
+  const sentimentData = reportData ? [
+    { name: "Positivo", value: reportData.trends.summary.sentimentBreakdown.positivo, color: "#22c55e" },
+    { name: "Neutral", value: reportData.trends.summary.sentimentBreakdown.neutral, color: "#3b82f6" },
+    { name: "Negativo", value: reportData.trends.summary.sentimentBreakdown.negativo, color: "#ef4444" },
+  ].filter(d => d.value > 0) : [];
+
+  const trendsData = reportData?.trends.data.slice(-14).map(t => ({
+    date: t.date,
+    menciones: t.menciones,
+    positivo: t.positivo,
+    neutral: t.neutral,
+    negativo: t.negativo,
+  })) || [];
+
+  const sourcesData = reportData?.influencers.slice(0, 8).map(inf => ({
+    domain: inf.domain.length > 20 ? inf.domain.substring(0, 20) + "..." : inf.domain,
+    mentions: inf.totalMentions,
+    sentiment: inf.sentimentScore,
+  })) || [];
+
+  const handleGeneratePDF = useCallback(async () => {
     if (!reportData) return;
 
     setIsGeneratingPDF(true);
+    setShowChartRenderer(true);
+
+    // Wait for charts to render
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
     try {
-      await generatePDFReport(reportData);
+      let chartImages: ChartImages = {};
+
+      if (chartRendererRef.current) {
+        const [sentimentChart, trendsChart, sourcesChart] = await Promise.all([
+          chartRendererRef.current.captureSentimentChart(),
+          chartRendererRef.current.captureTrendsChart(),
+          chartRendererRef.current.captureSourcesChart(),
+        ]);
+
+        chartImages = { sentimentChart, trendsChart, sourcesChart };
+      }
+
+      await generatePDFReport(reportData, chartImages);
     } catch (err) {
       console.error("Error generating PDF:", err);
     } finally {
       setIsGeneratingPDF(false);
+      setShowChartRenderer(false);
     }
-  };
+  }, [reportData]);
 
   const handleGenerateExcel = async () => {
     if (!reportData) return;
@@ -95,6 +139,16 @@ const ReportesPage = () => {
 
   return (
     <div className="space-y-6">
+      {/* Hidden Chart Renderer for PDF generation */}
+      {showChartRenderer && (
+        <ChartRenderer
+          ref={chartRendererRef}
+          sentimentData={sentimentData}
+          trendsData={trendsData}
+          sourcesData={sourcesData}
+        />
+      )}
+
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -269,7 +323,11 @@ const ReportesPage = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    <span>Resumen ejecutivo</span>
+                    <span>Portada con métricas clave</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-green-500" />
+                    <span className="font-medium">Gráficos visuales embebidos</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -303,12 +361,12 @@ const ReportesPage = () => {
                   {isGeneratingPDF ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generando...
+                      Generando gráficos...
                     </>
                   ) : (
                     <>
                       <Download className="mr-2 h-4 w-4" />
-                      Descargar PDF
+                      Descargar PDF con Gráficos
                     </>
                   )}
                 </Button>
