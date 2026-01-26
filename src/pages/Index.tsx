@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import wizrLogoFull from "@/assets/wizr-logo-full.png";
+import wizrHeroLogo from "@/assets/wizr-hero-logo.png";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Sparkles, BarChart3, Bell, TrendingUp, Shield, Zap } from "lucide-react";
 import { motion } from "framer-motion";
@@ -77,14 +78,13 @@ const Index = () => {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.8, delay: 0.2 }}
-              className="relative inline-block"
+              className="inline-block"
             >
               <img 
-                src={wizrLogoFull} 
-                alt="Wizr" 
-                className="h-24 sm:h-32 lg:h-40 w-auto mx-auto drop-shadow-2xl" 
+                src={wizrHeroLogo} 
+                alt="Wizr - Análisis Estratégico" 
+                className="h-32 sm:h-40 lg:h-48 w-auto mx-auto" 
               />
-              <div className="absolute -inset-4 bg-gradient-to-r from-primary/20 via-accent/10 to-primary/20 blur-2xl opacity-50 -z-10 rounded-full" />
             </motion.div>
 
             {/* Badge */}
