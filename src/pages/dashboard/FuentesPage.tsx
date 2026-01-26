@@ -1,12 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
 import { useProject } from "@/contexts/ProjectContext";
-import { firecrawlApi, SearchResult } from "@/lib/api/firecrawl";
+import { useEntities } from "@/hooks/useEntities";
+import { firecrawlApi, SearchResult, EntityForSearch } from "@/lib/api/firecrawl";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -19,30 +24,64 @@ import {
   Clock,
   Newspaper,
   Globe,
+  User,
+  Building2,
+  Briefcase,
+  Tag,
+  Filter,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
+type SearchMode = "manual" | "entities";
+
 const FuentesPage = () => {
   const { selectedProject, loading: projectLoading } = useProject();
+  const { entities, isLoading: entitiesLoading } = useEntities(selectedProject?.id);
   const navigate = useNavigate();
   const { toast } = useToast();
   
+  const [searchMode, setSearchMode] = useState<SearchMode>("entities");
   const [searchQuery, setSearchQuery] = useState("");
   const [timeRange, setTimeRange] = useState<"hour" | "day" | "week" | "month">("day");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [selectedEntityIds, setSelectedEntityIds] = useState<Set<string>>(new Set());
 
-  // Auto-search when project changes
+  // Auto-select all entities when they load
   useEffect(() => {
-    if (selectedProject && !hasSearched) {
-      // Create initial search query from project name
-      setSearchQuery(selectedProject.nombre);
+    if (entities.length > 0 && selectedEntityIds.size === 0) {
+      setSelectedEntityIds(new Set(entities.map((e) => e.id)));
     }
-  }, [selectedProject, hasSearched]);
+  }, [entities, selectedEntityIds.size]);
 
-  const handleSearch = useCallback(async () => {
+  // Reset when project changes
+  useEffect(() => {
+    setResults([]);
+    setHasSearched(false);
+    setSearchQuery(selectedProject?.nombre || "");
+  }, [selectedProject]);
+
+  const handleToggleEntity = (entityId: string) => {
+    const newSelected = new Set(selectedEntityIds);
+    if (newSelected.has(entityId)) {
+      newSelected.delete(entityId);
+    } else {
+      newSelected.add(entityId);
+    }
+    setSelectedEntityIds(newSelected);
+  };
+
+  const handleSelectAllEntities = () => {
+    if (selectedEntityIds.size === entities.length) {
+      setSelectedEntityIds(new Set());
+    } else {
+      setSelectedEntityIds(new Set(entities.map((e) => e.id)));
+    }
+  };
+
+  const handleManualSearch = useCallback(async () => {
     if (!searchQuery.trim()) {
       toast({
         title: "Búsqueda vacía",
@@ -85,9 +124,86 @@ const FuentesPage = () => {
     }
   }, [searchQuery, timeRange, toast]);
 
+  const handleEntitySearch = useCallback(async () => {
+    if (selectedEntityIds.size === 0) {
+      toast({
+        title: "Sin entidades seleccionadas",
+        description: "Selecciona al menos una entidad para buscar",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSearching(true);
+    setHasSearched(true);
+
+    try {
+      const selectedEntities: EntityForSearch[] = entities
+        .filter((e) => selectedEntityIds.has(e.id))
+        .map((e) => ({
+          id: e.id,
+          nombre: e.nombre,
+          palabras_clave: e.palabras_clave,
+          aliases: e.aliases,
+        }));
+
+      const response = await firecrawlApi.searchMultipleEntities(
+        selectedEntities,
+        timeRange,
+        5
+      );
+
+      if (response.success && response.data) {
+        setResults(response.data);
+        toast({
+          title: "Búsqueda completada",
+          description: `Se encontraron ${response.data.length} menciones para ${selectedEntities.length} entidad(es)`,
+        });
+      } else {
+        toast({
+          title: "Error en la búsqueda",
+          description: response.error || "No se pudieron obtener resultados",
+          variant: "destructive",
+        });
+        setResults([]);
+      }
+    } catch (error) {
+      console.error("Entity search error:", error);
+      toast({
+        title: "Error",
+        description: "Ocurrió un error al buscar menciones",
+        variant: "destructive",
+      });
+      setResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [entities, selectedEntityIds, timeRange, toast]);
+
+  const handleSearch = () => {
+    if (searchMode === "manual") {
+      handleManualSearch();
+    } else {
+      handleEntitySearch();
+    }
+  };
+
+  const getEntityIcon = (tipo: string) => {
+    switch (tipo) {
+      case "persona":
+        return User;
+      case "marca":
+        return Briefcase;
+      case "institucion":
+        return Building2;
+      default:
+        return Building2;
+    }
+  };
+
   if (projectLoading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 p-6">
         <div className="h-8 w-48 animate-pulse rounded bg-muted" />
         <div className="h-64 animate-pulse rounded-lg bg-muted" />
       </div>
@@ -96,7 +212,7 @@ const FuentesPage = () => {
 
   if (!selectedProject) {
     return (
-      <div className="flex flex-col items-center justify-center py-16">
+      <div className="flex flex-col items-center justify-center py-16 p-6">
         <div className="rounded-full bg-muted p-4">
           <AlertCircle className="h-10 w-10 text-muted-foreground" />
         </div>
@@ -120,7 +236,7 @@ const FuentesPage = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">Fuentes</h1>
@@ -134,14 +250,103 @@ const FuentesPage = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Search className="h-5 w-5" />
-            Búsqueda de Noticias
+            Búsqueda de Menciones
           </CardTitle>
           <CardDescription>
-            Busca menciones en medios digitales y noticias usando Firecrawl
+            Busca menciones por entidades o con términos personalizados
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4">
+        <CardContent className="space-y-4">
+          {/* Search Mode Tabs */}
+          <Tabs value={searchMode} onValueChange={(v) => setSearchMode(v as SearchMode)}>
+            <TabsList className="grid w-full grid-cols-2 max-w-md">
+              <TabsTrigger value="entities" className="gap-2">
+                <Tag className="h-4 w-4" />
+                Por Entidades
+              </TabsTrigger>
+              <TabsTrigger value="manual" className="gap-2">
+                <Search className="h-4 w-4" />
+                Búsqueda Manual
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {/* Entity Selection (when in entities mode) */}
+          {searchMode === "entities" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2">
+                  <Filter className="h-4 w-4" />
+                  Seleccionar Entidades
+                </Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSelectAllEntities}
+                  disabled={entities.length === 0}
+                >
+                  {selectedEntityIds.size === entities.length ? "Deseleccionar todas" : "Seleccionar todas"}
+                </Button>
+              </div>
+              
+              {entitiesLoading ? (
+                <div className="flex gap-2">
+                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-8 w-32" />
+                  <Skeleton className="h-8 w-28" />
+                </div>
+              ) : entities.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-4 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No hay entidades configuradas.{" "}
+                    <Button
+                      variant="link"
+                      className="h-auto p-0"
+                      onClick={() => navigate("/dashboard/configuracion")}
+                    >
+                      Añadir entidades
+                    </Button>
+                  </p>
+                </div>
+              ) : (
+                <ScrollArea className="max-h-32">
+                  <div className="flex flex-wrap gap-2">
+                    {entities.map((entity) => {
+                      const Icon = getEntityIcon(entity.tipo);
+                      const isSelected = selectedEntityIds.has(entity.id);
+                      
+                      return (
+                        <div
+                          key={entity.id}
+                          className={`flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer transition-colors ${
+                            isSelected
+                              ? "bg-primary/10 border-primary"
+                              : "bg-background hover:bg-muted"
+                          }`}
+                          onClick={() => handleToggleEntity(entity.id)}
+                        >
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => handleToggleEntity(entity.id)}
+                          />
+                          <Icon className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">{entity.nombre}</span>
+                          {entity.palabras_clave.length > 0 && (
+                            <Badge variant="secondary" className="text-xs">
+                              {entity.palabras_clave.length} keywords
+                            </Badge>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              )}
+            </div>
+          )}
+
+          {/* Manual Search Input (when in manual mode) */}
+          {searchMode === "manual" && (
             <div className="flex-1 min-w-[200px]">
               <Input
                 placeholder="Término de búsqueda..."
@@ -151,6 +356,10 @@ const FuentesPage = () => {
                 className="bg-background"
               />
             </div>
+          )}
+
+          {/* Time Range & Search Button */}
+          <div className="flex flex-wrap gap-4">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />
               <Select value={timeRange} onValueChange={(v) => setTimeRange(v as typeof timeRange)}>
@@ -165,7 +374,10 @@ const FuentesPage = () => {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={handleSearch} disabled={isSearching}>
+            <Button 
+              onClick={handleSearch} 
+              disabled={isSearching || (searchMode === "entities" && selectedEntityIds.size === 0)}
+            >
               {isSearching ? (
                 <>
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
@@ -174,7 +386,7 @@ const FuentesPage = () => {
               ) : (
                 <>
                   <Search className="mr-2 h-4 w-4" />
-                  Buscar
+                  Buscar Menciones
                 </>
               )}
             </Button>
@@ -193,7 +405,7 @@ const FuentesPage = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              {results.length} resultados para "{searchQuery}" ({TIME_RANGE_LABELS[timeRange]})
+              {results.length} menciones encontradas ({TIME_RANGE_LABELS[timeRange]})
             </p>
           </div>
 
@@ -222,10 +434,27 @@ const FuentesPage = () => {
                     </p>
 
                     <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {/* Entity match badge */}
+                      {result.matchedEntityName && (
+                        <Badge variant="default" className="gap-1">
+                          <Tag className="h-3 w-3" />
+                          {result.matchedEntityName}
+                        </Badge>
+                      )}
+                      
+                      {/* Matched keywords */}
+                      {result.matchedKeywords && result.matchedKeywords.length > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {result.matchedKeywords.slice(0, 2).join(", ")}
+                          {result.matchedKeywords.length > 2 && ` +${result.matchedKeywords.length - 2}`}
+                        </Badge>
+                      )}
+
                       <Badge variant="outline" className="gap-1">
                         <Globe className="h-3 w-3" />
                         {new URL(result.url).hostname.replace("www.", "")}
                       </Badge>
+                      
                       {result.metadata?.publishedDate && (
                         <Badge variant="secondary">
                           {format(new Date(result.metadata.publishedDate), "d MMM yyyy", { locale: es })}
@@ -246,7 +475,7 @@ const FuentesPage = () => {
             </div>
             <h3 className="mt-4 text-lg font-semibold">Sin resultados</h3>
             <p className="mt-1 text-center text-sm text-muted-foreground">
-              No se encontraron noticias para "{searchQuery}". Intenta con otros términos.
+              No se encontraron menciones. Intenta con otros términos o un rango de tiempo más amplio.
             </p>
           </CardContent>
         </Card>
@@ -259,7 +488,9 @@ const FuentesPage = () => {
             <div>
               <p className="font-medium">Listo para buscar</p>
               <p className="text-sm text-muted-foreground">
-                Ingresa un término de búsqueda y selecciona un rango de tiempo para encontrar noticias relevantes
+                {searchMode === "entities"
+                  ? "Selecciona las entidades y haz clic en buscar para encontrar menciones"
+                  : "Ingresa un término de búsqueda para encontrar noticias relevantes"}
               </p>
             </div>
           </CardContent>

@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 
-export type FirecrawlResponse<T = any> = {
+export type FirecrawlResponse<T = unknown> = {
   success: boolean;
   error?: string;
   data?: T;
@@ -20,6 +20,10 @@ export type SearchResult = {
     statusCode?: number;
     publishedDate?: string;
   };
+  // Added fields for entity matching
+  matchedEntityId?: string;
+  matchedEntityName?: string;
+  matchedKeywords?: string[];
 };
 
 export type ScrapeResult = {
@@ -47,6 +51,74 @@ type ScrapeOptions = {
   onlyMainContent?: boolean;
   waitFor?: number;
 };
+
+export interface EntityForSearch {
+  id: string;
+  nombre: string;
+  palabras_clave: string[];
+  aliases: string[];
+}
+
+/**
+ * Build a search query from entity data
+ * Combines the entity name, aliases, and keywords into an optimized search query
+ */
+export function buildEntitySearchQuery(entity: EntityForSearch): string {
+  const terms: string[] = [];
+  
+  // Add the main entity name (quoted for exact match)
+  terms.push(`"${entity.nombre}"`);
+  
+  // Add aliases (quoted for exact match)
+  entity.aliases.forEach((alias) => {
+    if (alias.trim()) {
+      terms.push(`"${alias.trim()}"`);
+    }
+  });
+  
+  // Keywords are used as context modifiers, not quoted
+  // Only add first 3 keywords to avoid overly complex queries
+  const keywordContext = entity.palabras_clave
+    .slice(0, 3)
+    .filter((k) => k.trim())
+    .join(' ');
+  
+  // Combine: OR logic for name/aliases, AND for keyword context
+  const nameAliasQuery = terms.join(' OR ');
+  
+  if (keywordContext) {
+    return `(${nameAliasQuery}) ${keywordContext}`;
+  }
+  
+  return nameAliasQuery;
+}
+
+/**
+ * Match search results against entity keywords
+ * Returns the matched keywords for each result
+ */
+export function matchResultsToEntity(
+  results: SearchResult[],
+  entity: EntityForSearch
+): SearchResult[] {
+  const searchTerms = [
+    entity.nombre.toLowerCase(),
+    ...entity.aliases.map((a) => a.toLowerCase()),
+    ...entity.palabras_clave.map((k) => k.toLowerCase()),
+  ];
+
+  return results.map((result) => {
+    const content = `${result.title} ${result.description}`.toLowerCase();
+    const matchedKeywords = searchTerms.filter((term) => content.includes(term));
+
+    return {
+      ...result,
+      matchedEntityId: entity.id,
+      matchedEntityName: entity.nombre,
+      matchedKeywords,
+    };
+  });
+}
 
 export const firecrawlApi = {
   /**
@@ -129,5 +201,77 @@ export const firecrawlApi = {
       lang: 'es',
       country: 'MX',
     });
+  },
+
+  /**
+   * Search for mentions of a specific entity
+   */
+  async searchEntity(
+    entity: EntityForSearch,
+    timeRange: 'hour' | 'day' | 'week' | 'month' = 'day',
+    limit = 10
+  ): Promise<FirecrawlResponse<SearchResult[]>> {
+    const query = buildEntitySearchQuery(entity);
+    const response = await this.searchNews(query, timeRange, limit);
+
+    if (response.success && response.data) {
+      // Enrich results with entity matching information
+      const enrichedResults = matchResultsToEntity(response.data, entity);
+      return { success: true, data: enrichedResults };
+    }
+
+    return response;
+  },
+
+  /**
+   * Search for mentions across multiple entities
+   */
+  async searchMultipleEntities(
+    entities: EntityForSearch[],
+    timeRange: 'hour' | 'day' | 'week' | 'month' = 'day',
+    limitPerEntity = 5
+  ): Promise<FirecrawlResponse<SearchResult[]>> {
+    if (entities.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    try {
+      // Search for each entity in parallel
+      const searchPromises = entities.map((entity) =>
+        this.searchEntity(entity, timeRange, limitPerEntity)
+      );
+
+      const results = await Promise.all(searchPromises);
+
+      // Combine all results
+      const allResults: SearchResult[] = [];
+      const seenUrls = new Set<string>();
+
+      for (const result of results) {
+        if (result.success && result.data) {
+          for (const item of result.data) {
+            // Deduplicate by URL
+            if (!seenUrls.has(item.url)) {
+              seenUrls.add(item.url);
+              allResults.push(item);
+            }
+          }
+        }
+      }
+
+      // Sort by published date if available, otherwise by position
+      allResults.sort((a, b) => {
+        const dateA = a.metadata?.publishedDate ? new Date(a.metadata.publishedDate).getTime() : 0;
+        const dateB = b.metadata?.publishedDate ? new Date(b.metadata.publishedDate).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      return { success: true, data: allResults };
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Multi-entity search failed',
+      };
+    }
   },
 };
