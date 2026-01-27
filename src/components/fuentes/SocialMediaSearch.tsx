@@ -916,7 +916,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         )}
 
         {/* Results */}
-        {filteredResults.length > 0 && (
+        {filteredResults.length > 0 ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground flex items-center gap-2">
@@ -1041,7 +1041,27 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
               </div>
             </ScrollArea>
           </div>
-        )}
+        ) : results.length > 0 ? (
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-3 p-4 rounded-lg border bg-muted/20">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">No hay resultados para el rango seleccionado</p>
+                <p className="text-xs text-muted-foreground">
+                  Se obtuvieron {results.length} resultados, pero el filtro por fecha dejó 0.
+                </p>
+              </div>
+              {dateFilterEnabled && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDateFilterEnabled(false)}
+                >
+                  Quitar filtro
+                </Button>
+              )}
+            </div>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
     </TooltipProvider>
