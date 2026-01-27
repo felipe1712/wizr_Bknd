@@ -468,16 +468,16 @@ export function SocialHistoryTab({ projectId }: SocialHistoryTabProps) {
                                                 <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                                                   <span className="flex items-center gap-1">
                                                     <Heart className="h-3 w-3" />
-                                                    {result.likes.toLocaleString()}
+                                                    {(result.likes ?? 0).toLocaleString()}
                                                   </span>
                                                   <span className="flex items-center gap-1">
                                                     <MessageCircle className="h-3 w-3" />
-                                                    {result.comments.toLocaleString()}
+                                                    {(result.comments ?? 0).toLocaleString()}
                                                   </span>
-                                                  {result.shares > 0 && (
+                                                  {(result.shares ?? 0) > 0 && (
                                                     <span className="flex items-center gap-1">
                                                       <Share2 className="h-3 w-3" />
-                                                      {result.shares.toLocaleString()}
+                                                      {(result.shares ?? 0).toLocaleString()}
                                                     </span>
                                                   )}
                                                   {result.published_at && (
