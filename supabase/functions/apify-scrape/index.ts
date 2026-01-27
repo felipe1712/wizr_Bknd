@@ -172,31 +172,42 @@ serve(async (req) => {
         
       case "instagram":
         // Instagram: apify/instagram-hashtag-scraper - uses 'hashtags' array
-        // Extract hashtags from query, username, or hashtag field
+        // The hashtag regex requires NO special characters: ^[^!?.,:;\-+=*&%$#@/\~^|<>()[\]{}"'`\s]+$
         const igSearchTerms: string[] = [];
+        
+        // Helper to clean hashtag: remove ALL special chars, keep only alphanumeric + underscore
+        const cleanHashtagForIG = (term: string): string => {
+          return term
+            .trim()
+            .toLowerCase()
+            .replace(/^[@#]+/, "") // Remove leading @ or # symbols
+            .replace(/[^a-z0-9_]/g, ""); // Keep only letters, numbers, underscores
+        };
         
         // Process query - split by comma and clean each term
         if (query) {
           query.split(",").forEach((term: string) => {
-            const cleaned = term.trim().replace(/^[@#]/, "").toLowerCase();
+            const cleaned = cleanHashtagForIG(term);
             if (cleaned) igSearchTerms.push(cleaned);
           });
         }
         
         // Add username (without @)
         if (username) {
-          const cleanUsername = username.replace(/^@/, "").toLowerCase();
-          if (cleanUsername) igSearchTerms.push(cleanUsername);
+          const cleaned = cleanHashtagForIG(username);
+          if (cleaned) igSearchTerms.push(cleaned);
         }
         
         // Add hashtag (without #)
         if (hashtag) {
-          const cleanHashtag = hashtag.replace(/^#/, "").toLowerCase();
-          if (cleanHashtag) igSearchTerms.push(cleanHashtag);
+          const cleaned = cleanHashtagForIG(hashtag);
+          if (cleaned) igSearchTerms.push(cleaned);
         }
         
         // Remove duplicates
         const uniqueIgTerms = [...new Set(igSearchTerms)];
+        
+        console.log(`Instagram hashtags cleaned: ${JSON.stringify(uniqueIgTerms)}`);
         
         if (uniqueIgTerms.length === 0) {
           throw new Error("Instagram requires at least one search term (hashtag, username, or query).");
