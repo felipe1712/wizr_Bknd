@@ -1259,7 +1259,10 @@ const FuentesPage = () => {
 
         {/* Google News Tab */}
         <TabsContent value="google-news" className="space-y-4 mt-4">
-          <GoogleNewsSearch projectId={selectedProject.id} projectName={selectedProject.nombre} />
+          <GoogleNewsSearch 
+            projectId={selectedProject.id} 
+            defaultKeywords={entities.flatMap(e => [e.nombre, ...e.palabras_clave])} 
+          />
         </TabsContent>
 
         {/* Comments Analysis Tab */}
