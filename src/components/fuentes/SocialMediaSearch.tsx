@@ -247,6 +247,11 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
   const [progressMessage, setProgressMessage] = useState<string>("");
   const [rawResultsCount, setRawResultsCount] = useState<number>(0);
   const [filteredResultsCount, setFilteredResultsCount] = useState<number>(0);
+  const [lastStrictDateDiscard, setLastStrictDateDiscard] = useState<{
+    discarded: number;
+    minDateIso?: string;
+    maxDateIso?: string;
+  } | null>(null);
 
   const config = PLATFORM_CONFIG[platform];
   const PlatformIcon = config.icon;
@@ -308,6 +313,14 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           const fromStart = startOfDay(dateFrom);
           const toEnd = endOfDay(dateTo);
           const beforeFilter = processed.length;
+
+          // Capture incoming date range (for debugging user expectations/timezones)
+          const validDates = processed
+            .map((r) => new Date(r.publishedAt))
+            .filter((d) => !isNaN(d.getTime()))
+            .sort((a, b) => a.getTime() - b.getTime());
+          const minDateIso = validDates[0]?.toISOString();
+          const maxDateIso = validDates[validDates.length - 1]?.toISOString();
           
           processed = processed.filter((r) => {
             if (!r.publishedAt) return false; // Discard items without date in strict mode
@@ -317,9 +330,12 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           });
           
           discardedByDateCount = beforeFilter - processed.length;
+          setLastStrictDateDiscard({ discarded: discardedByDateCount, minDateIso, maxDateIso });
           if (discardedByDateCount > 0) {
             console.log(`Strict date filter: discarded ${discardedByDateCount} results outside range ${format(dateFrom, "yyyy-MM-dd")} to ${format(dateTo, "yyyy-MM-dd")}`);
           }
+        } else {
+          setLastStrictDateDiscard(null);
         }
         
         setFilteredResultsCount(processed.length);
@@ -585,6 +601,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     setResults([]);
     setRunId(null);
     setIsSearching(false);
+    setLastStrictDateDiscard(null);
   };
 
   return (
@@ -895,9 +912,29 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
 
         {/* Status Messages */}
         {jobStatus === "completed" && results.length === 0 && (
-          <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-3 rounded-lg">
-            <XCircle className="h-5 w-5" />
-            <span>No se encontraron resultados para esta búsqueda</span>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-3 rounded-lg">
+              <XCircle className="h-5 w-5" />
+              <span>No se encontraron resultados para esta búsqueda</span>
+            </div>
+            {dateFilterEnabled && lastStrictDateDiscard?.discarded ? (
+              <div className="text-xs text-muted-foreground">
+                Se descartaron <span className="font-medium">{lastStrictDateDiscard.discarded}</span> resultados por fecha.
+                {lastStrictDateDiscard.minDateIso && lastStrictDateDiscard.maxDateIso ? (
+                  <span>
+                    {" "}Fechas encontradas (min–max):{" "}
+                    <span className="font-medium">
+                      {format(new Date(lastStrictDateDiscard.minDateIso), "d MMM yyyy", { locale: es })}
+                    </span>
+                    {" "}–{" "}
+                    <span className="font-medium">
+                      {format(new Date(lastStrictDateDiscard.maxDateIso), "d MMM yyyy", { locale: es })}
+                    </span>
+                    .
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         )}
 
