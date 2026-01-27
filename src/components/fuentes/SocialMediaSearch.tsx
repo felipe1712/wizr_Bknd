@@ -237,12 +237,21 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
   const config = PLATFORM_CONFIG[platform];
   const PlatformIcon = config.icon;
 
-  // Results are now normalized by the backend - this is just a pass-through with validation
+  // Results are now normalized by the backend - sort chronologically
   const processBackendResults = (items: SocialSearchResult[]): SocialSearchResult[] => {
-    return (items || []).map((item, idx) => ({
-      ...item,
-      id: item.id || `${platform}-${idx}-${Date.now()}`,
-    }));
+    return (items || [])
+      .map((item, idx) => ({
+        ...item,
+        id: item.id || `${platform}-${idx}-${Date.now()}`,
+      }))
+      // Sort by publishedAt descending (newest first) - backend should do this too, but ensure consistency
+      .sort((a, b) => {
+        const dateA = new Date(a.publishedAt).getTime();
+        const dateB = new Date(b.publishedAt).getTime();
+        if (isNaN(dateA)) return 1;
+        if (isNaN(dateB)) return -1;
+        return dateB - dateA;
+      });
   };
 
   const checkJobStatus = useCallback(async (jobRunId: string, filterKw?: string) => {
@@ -740,6 +749,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
               <p className="text-sm text-muted-foreground flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
                 {results.length} resultados de {config.label}
+                <span className="text-xs">• Ordenados por fecha (más recientes primero)</span>
               </p>
             </div>
 

@@ -92,22 +92,39 @@ function calculateEngagement(metrics: { likes: number; comments: number; shares:
 }
 
 function normalizeTwitter(item: Record<string, unknown>, index: number): NormalizedResult {
+  // Handle both old format (apidojo) and new format (coder_luffy/free-tweet-scraper)
   const user = item.user as Record<string, unknown> | undefined;
   const author = item.author as Record<string, unknown> | undefined;
   
-  const username = String(get(user, "screen_name") || get(author, "userName") || get(item, "user_screen_name") || "");
-  const authorName = String(get(user, "name") || get(author, "name") || username);
-  const text = String(get(item, "full_text") || get(item, "text") || "");
+  // New scraper uses screen_name directly on item
+  const username = String(
+    get(item, "screen_name") || 
+    get(user, "screen_name") || 
+    get(author, "userName") || 
+    get(item, "user_screen_name") || 
+    ""
+  );
+  const authorName = String(
+    get(item, "name") || 
+    get(user, "name") || 
+    get(author, "name") || 
+    username
+  );
+  // New scraper uses "full_text" or "text"
+  const text = String(get(item, "full_text") || get(item, "text") || get(item, "tweet") || "");
   
   const metrics = {
-    likes: Number(get(item, "favorite_count") || get(item, "likeCount") || 0),
-    comments: Number(get(item, "reply_count") || get(item, "replyCount") || 0),
-    shares: Number(get(item, "retweet_count") || get(item, "retweetCount") || 0),
-    views: Number(get(item, "views") || get(item, "viewCount") || 0),
+    likes: Number(get(item, "favorite_count") || get(item, "favorites") || get(item, "likeCount") || 0),
+    comments: Number(get(item, "reply_count") || get(item, "replies") || get(item, "replyCount") || 0),
+    shares: Number(get(item, "retweet_count") || get(item, "retweets") || get(item, "retweetCount") || 0),
+    views: Number(get(item, "views") || get(item, "viewCount") || get(item, "views_count") || 0),
   };
 
+  // New scraper has different URL/ID format
+  const tweetId = String(get(item, "id") || get(item, "id_str") || get(item, "tweet_id") || "");
+
   return {
-    id: `twitter-${get(item, "id") || index}-${Date.now()}`,
+    id: `twitter-${tweetId || index}-${Date.now()}`,
     platform: "twitter",
     title: text.substring(0, 100) + (text.length > 100 ? "..." : ""),
     description: text,
@@ -115,13 +132,13 @@ function normalizeTwitter(item: Record<string, unknown>, index: number): Normali
       name: authorName,
       username: username,
       url: username ? `https://x.com/${username}` : "",
-      avatarUrl: String(get(user, "profile_image_url_https") || get(author, "profileImageUrl") || ""),
-      verified: Boolean(get(user, "verified") || get(author, "isVerified")),
-      followers: Number(get(user, "followers_count") || get(author, "followers") || 0),
+      avatarUrl: String(get(item, "profile_image_url_https") || get(user, "profile_image_url_https") || get(author, "profileImageUrl") || ""),
+      verified: Boolean(get(item, "verified") || get(user, "verified") || get(author, "isVerified")),
+      followers: Number(get(item, "followers_count") || get(user, "followers_count") || get(author, "followers") || 0),
     },
     metrics: { ...metrics, engagement: calculateEngagement(metrics) },
-    publishedAt: parseDate(get(item, "created_at") || get(item, "createdAt")),
-    url: String(get(item, "url") || (get(item, "id") ? `https://x.com/i/status/${get(item, "id")}` : "")),
+    publishedAt: parseDate(get(item, "created_at") || get(item, "createdAt") || get(item, "timestamp")),
+    url: String(get(item, "url") || get(item, "tweet_url") || (tweetId ? `https://x.com/i/status/${tweetId}` : "")),
     contentType: get(item, "in_reply_to_status_id") ? "thread" : "post",
     hashtags: extractHashtags(text),
     mentions: extractMentions(text),
@@ -285,9 +302,10 @@ function normalizeLinkedIn(item: Record<string, unknown>, index: number): Normal
 }
 
 function normalizeYouTube(item: Record<string, unknown>, index: number): NormalizedResult {
+  // Handle both streamers/youtube-scraper and scrapesmith/free-youtube-search-scraper formats
   const channel = item.channel as Record<string, unknown> | undefined;
   const title = String(get(item, "title") || get(item, "text") || "");
-  const description = String(get(item, "description") || get(item, "text") || title);
+  const description = String(get(item, "description") || get(item, "descriptionSnippet") || get(item, "text") || title);
   
   const metrics = {
     likes: Number(get(item, "likes") || get(item, "likeCount") || 0),
@@ -296,11 +314,24 @@ function normalizeYouTube(item: Record<string, unknown>, index: number): Normali
     views: Number(get(item, "viewCount") || get(item, "views") || 0),
   };
 
-  const channelName = String(get(channel, "name") || get(item, "channelName") || get(item, "uploader") || "");
+  // Handle different channel name fields from different scrapers
+  const channelName = String(
+    get(channel, "name") || 
+    get(item, "channelName") || 
+    get(item, "uploader") || 
+    get(item, "ownerText") ||
+    ""
+  );
   const channelId = String(get(channel, "id") || get(item, "channelId") || "");
+  const videoId = String(get(item, "id") || get(item, "videoId") || "");
+
+  // Handle interpolatedTimestamp from free-youtube-search-scraper
+  const publishedAt = get(item, "interpolatedTimestamp") 
+    ? parseDate(get(item, "interpolatedTimestamp"))
+    : parseDate(get(item, "publishedAt") || get(item, "publishedTimeText") || get(item, "date") || get(item, "uploadDate"));
 
   return {
-    id: `youtube-${get(item, "id") || get(item, "videoId") || index}-${Date.now()}`,
+    id: `youtube-${videoId || index}-${Date.now()}`,
     platform: "youtube",
     title: title,
     description: description,
@@ -313,8 +344,8 @@ function normalizeYouTube(item: Record<string, unknown>, index: number): Normali
       followers: Number(get(channel, "subscriberCount") || get(item, "channelSubscribers") || 0),
     },
     metrics: { ...metrics, engagement: calculateEngagement(metrics) },
-    publishedAt: parseDate(get(item, "publishedAt") || get(item, "date") || get(item, "uploadDate")),
-    url: String(get(item, "url") || (get(item, "id") ? `https://youtube.com/watch?v=${get(item, "id")}` : "")),
+    publishedAt: publishedAt,
+    url: String(get(item, "url") || (videoId ? `https://youtube.com/watch?v=${videoId}` : "")),
     contentType: "video",
     media: {
       type: "video",
@@ -460,8 +491,18 @@ serve(async (req) => {
           console.log(`Filtered ${platform} results from ${beforeCount} to ${normalized.length} using keyword: ${keywordLower}`);
         }
 
+        // Sort all results chronologically (newest first)
+        normalized.sort((a, b) => {
+          const dateA = new Date(a.publishedAt).getTime();
+          const dateB = new Date(b.publishedAt).getTime();
+          // Handle invalid dates by putting them at the end
+          if (isNaN(dateA)) return 1;
+          if (isNaN(dateB)) return -1;
+          return dateB - dateA; // Descending (newest first)
+        });
+
         items = normalized;
-        console.log(`Retrieved and normalized ${items.length} items from dataset`);
+        console.log(`Retrieved and normalized ${items.length} items from dataset (sorted chronologically)`);
       }
     }
 

@@ -8,15 +8,19 @@ const corsHeaders = {
 
 // Apify Actor IDs for different platforms
 // NOTE: Some actors are paid (require "rental") and will return 403 after trial.
-// We prefer actors that are likely to work without rental.
+// We use free/community actors that don't require paid subscriptions.
 const ACTOR_IDS: Record<string, string> = {
-  twitter: "apidojo/tweet-scraper",
+  // Twitter: using free tweet scraper - works without subscription
+  twitter: "coder_luffy/free-tweet-scraper",
+  // Facebook: still using apify's scraper (only option for pages)
   facebook: "apify/facebook-posts-scraper",
+  // TikTok: clockworks scraper (free tier available)
   tiktok: "clockworks/tiktok-scraper",
+  // Instagram: apify's scraper
   instagram: "apify/instagram-scraper",
-  // YouTube: revert to previously working actor.
-  youtube: "streamers/youtube-scraper",
-  // Reddit: lite variant reduces risk of rental restrictions.
+  // YouTube: using free youtube search scraper
+  youtube: "scrapesmith/free-youtube-search-scraper",
+  // Reddit: lite variant for less restrictions
   reddit: "trudax/reddit-scraper-lite",
 };
 
@@ -84,18 +88,13 @@ serve(async (req) => {
 
     switch (platform) {
       case "twitter":
-        // Tweet Scraper often validates that startUrls is non-empty.
-        // Provide derived URLs to avoid 400: "input.startUrls must NOT have fewer than 1 items".
+        // Free Tweet Scraper - uses searchTerms and handles
         input = {
-          startUrls: [
-            ...(query
-              ? [`https://twitter.com/search?q=${encodeURIComponent(query)}&src=typed_query&f=live`]
-              : []),
-            ...(username ? [`https://twitter.com/${encodeURIComponent(username)}`] : []),
-          ],
-          searchTerms: query ? [query] : [],
-          twitterHandles: username ? [username] : [],
-          maxItems: maxResults,
+          searchTerms: query ? query.split(",").map((t: string) => t.trim()).filter(Boolean) : [],
+          handles: username ? [username.replace("@", "")] : [],
+          maxTweets: maxResults,
+          // Get latest tweets first
+          sortBy: "Latest",
         };
         break;
         
@@ -134,33 +133,30 @@ serve(async (req) => {
         break;
         
       case "youtube":
-        // YouTube scraper configuration (streamers/youtube-scraper)
+        // Free YouTube Search Scraper (scrapesmith/free-youtube-search-scraper)
         if (channelUrl) {
+          // For channel URLs, use search URLs format
           input = {
-            startUrls: [{ url: channelUrl }],
+            searchUrls: [channelUrl],
             maxResults: maxResults,
-            maxResultsShorts: 0,
-            maxResultStreams: 0,
           };
         } else if (query) {
           input = {
-            searchKeywords: [query],
+            searchQueries: [query],
             maxResults: maxResults,
-            maxResultsShorts: 0,
-            maxResultStreams: 0,
           };
         }
         break;
         
       case "reddit":
-        // Reddit scraper configuration - now includes comments
+        // Reddit scraper configuration - includes comments, sorted by NEW for chronological order
         if (subreddit) {
           input = {
-            startUrls: [{ url: `https://www.reddit.com/r/${subreddit}/` }],
+            startUrls: [{ url: `https://www.reddit.com/r/${subreddit}/new/` }],
             maxItems: maxResults,
             maxPostCount: maxResults,
             maxComments: 10, // Include top 10 comments per post
-            sort: "hot",
+            sort: "new", // Changed to new for chronological order
           };
         } else if (query) {
           input = {
@@ -168,7 +164,7 @@ serve(async (req) => {
             maxItems: maxResults,
             maxPostCount: maxResults,
             maxComments: 10, // Include top 10 comments per post
-            sort: "relevance",
+            sort: "new", // Changed to new for chronological order
           };
         }
         break;
