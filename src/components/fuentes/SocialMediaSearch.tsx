@@ -261,6 +261,9 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     const toEnd = endOfDay(dateTo);
     
     return results.filter((r) => {
+      // Some platforms return null/empty publishedAt; Date(null) becomes 1970 and would wrongly filter out everything.
+      if (!r.publishedAt) return true;
+
       const pubDate = new Date(r.publishedAt);
       if (isNaN(pubDate.getTime())) return true; // Keep items without valid date
       return !isBefore(pubDate, fromStart) && !isAfter(pubDate, toEnd);
