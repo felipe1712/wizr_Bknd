@@ -14,8 +14,8 @@ const ACTOR_IDS: Record<string, string> = {
   facebook: "powerai/facebook-post-search-scraper",
   // Facebook page-specific scraper (fallback for username searches)
   facebook_page: "apify/facebook-posts-scraper",
-  // TikTok: clockworks/tiktok-scraper (uses searchQuery for keyword-based search)
-  tiktok: "powerai/tiktok-videos-search-scraper",
+  // TikTok: sociavault/tiktok-keyword-search-scraper ($1.50/1000 results, keyword filtering)
+  tiktok: "sociavault/tiktok-keyword-search-scraper",
   // Instagram: apify/instagram-hashtag-scraper ($2.30/1000 results, maintained by Apify)
   instagram: "apify/instagram-hashtag-scraper",
   // YouTube: scraper_one/youtube-search-scraper (reliable, well-maintained)
@@ -136,8 +136,7 @@ serve(async (req) => {
         break;
         
       case "tiktok":
-        // TikTok: powerai/tiktok-videos-search-scraper
-        // Note: This actor doesn't filter by keyword server-side, so we filter in apify-status
+        // TikTok: sociavault/tiktok-keyword-search-scraper - filters by keyword server-side
         const tiktokTerms: string[] = [];
         if (query) {
           query.split(",").forEach((term: string) => {
@@ -147,18 +146,21 @@ serve(async (req) => {
         }
         if (hashtag) {
           const cleanHashtag = hashtag.replace(/^#/, "");
-          if (cleanHashtag) tiktokTerms.push(`#${cleanHashtag}`);
+          if (cleanHashtag) tiktokTerms.push(cleanHashtag);
         }
         if (username) {
           const cleanUsername = username.replace(/^@/, "");
-          if (cleanUsername) tiktokTerms.push(`@${cleanUsername}`);
+          if (cleanUsername) tiktokTerms.push(cleanUsername);
         }
         
-        const tiktokQuery = tiktokTerms.join(" OR ") || "Actinver";
+        // sociavault uses single 'query' string
+        const tiktokQuery = tiktokTerms.join(" ") || "Actinver";
         
         input = {
-          searchQueries: [tiktokQuery],
-          maxVideos: maxResults,
+          query: tiktokQuery,
+          max_results: maxResults,
+          date_posted: "this-month",
+          sort_by: "date",
         };
         break;
         
