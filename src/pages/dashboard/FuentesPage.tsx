@@ -1134,7 +1134,7 @@ const FuentesPage = () => {
                 </CollapsibleContent>
               </Collapsible>
 
-              {paginatedMentions.map((mention) => (
+              {paginatedMentions.map((mention, index) => (
                 <Card 
                   key={mention.id} 
                   className={`overflow-hidden transition-shadow hover:shadow-md ${
@@ -1143,8 +1143,13 @@ const FuentesPage = () => {
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start gap-4">
-                      <div className="rounded-lg bg-primary/10 p-2">
-                        <Newspaper className="h-5 w-5 text-primary" />
+                      <div className="flex flex-col items-center gap-2">
+                        <span className="flex items-center justify-center h-6 w-6 rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                          {(historyPage - 1) * ITEMS_PER_PAGE + index + 1}
+                        </span>
+                        <div className="rounded-lg bg-primary/10 p-2">
+                          <Newspaper className="h-5 w-5 text-primary" />
+                        </div>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">

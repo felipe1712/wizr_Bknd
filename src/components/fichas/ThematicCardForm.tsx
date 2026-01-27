@@ -238,7 +238,7 @@ export function ThematicCardForm({ projectId, onSuccess, onCancel }: ThematicCar
                   No hay menciones guardadas en este proyecto
                 </p>
               ) : (
-                mentions.map((mention) => (
+                mentions.map((mention, index) => (
                   <div
                     key={mention.id}
                     className={cn(
@@ -249,6 +249,9 @@ export function ThematicCardForm({ projectId, onSuccess, onCancel }: ThematicCar
                     )}
                     onClick={() => toggleMention(mention.id)}
                   >
+                    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-muted text-xs font-medium text-muted-foreground shrink-0">
+                      {index + 1}
+                    </span>
                     <Checkbox
                       checked={selectedMentionIds.has(mention.id)}
                       onCheckedChange={() => toggleMention(mention.id)}

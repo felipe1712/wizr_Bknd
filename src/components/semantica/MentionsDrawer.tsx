@@ -112,12 +112,15 @@ export function MentionsDrawer({
                 No se encontraron menciones para este filtro
               </p>
             ) : (
-              filteredMentions.map((mention) => (
+              filteredMentions.map((mention, index) => (
                 <div
                   key={mention.id}
-                  className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                  className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors relative"
                 >
                   <div className="flex items-start justify-between gap-2">
+                    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-muted text-xs font-medium text-muted-foreground shrink-0">
+                      {index + 1}
+                    </span>
                     <div className="flex-1 min-w-0">
                       <h4 className="font-medium text-sm line-clamp-2">
                         {mention.title || "Sin título"}
