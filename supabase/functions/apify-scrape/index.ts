@@ -18,8 +18,8 @@ const ACTOR_IDS: Record<string, string> = {
   tiktok: "clockworks/tiktok-scraper",
   // Instagram: apify's scraper
   instagram: "apify/instagram-scraper",
-  // YouTube: using free youtube search scraper
-  youtube: "scrapesmith/free-youtube-search-scraper",
+  // YouTube: scraper_one/youtube-search-scraper (reliable, well-maintained)
+  youtube: "scraper_one/youtube-search-scraper",
   // Reddit: lite variant for less restrictions
   reddit: "trudax/reddit-scraper-lite",
   // LinkedIn: harvestapi/linkedin-post-search (no cookies required, $2/1000 results)
@@ -149,17 +149,18 @@ serve(async (req) => {
         break;
         
       case "youtube":
-        // Free YouTube Search Scraper (scrapesmith/free-youtube-search-scraper)
+        // scraper_one/youtube-search-scraper - uses 'query' and 'resultsCount' parameters
         if (channelUrl) {
-          // For channel URLs, use search URLs format
+          // For channel URLs, search by channel name extracted from URL
+          const channelName = channelUrl.replace(/.*@/, "").replace(/.*\/channel\//, "").replace(/.*\/c\//, "");
           input = {
-            searchUrls: [channelUrl],
-            maxResults: maxResults,
+            query: channelName,
+            resultsCount: maxResults,
           };
         } else if (query) {
           input = {
-            searchQueries: [query],
-            maxResults: maxResults,
+            query: query,
+            resultsCount: maxResults,
           };
         }
         break;

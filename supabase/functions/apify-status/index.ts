@@ -438,19 +438,30 @@ function normalizeYouTube(item: Record<string, unknown>, index: number): Normali
 function normalizeReddit(item: Record<string, unknown>, index: number): NormalizedResult {
   const title = String(get(item, "title") || "");
   const body = String(get(item, "body") || get(item, "selftext") || get(item, "text") || "");
-  const author = String(get(item, "author") || get(item, "username") || "");
-  const subreddit = String(get(item, "subreddit") || get(item, "communityName") || "");
+  // trudax/reddit-scraper-lite uses 'username' for author
+  const author = String(get(item, "username") || get(item, "author") || "");
+  // trudax uses 'communityName' or 'parsedCommunityName'
+  const subreddit = String(get(item, "communityName") || get(item, "parsedCommunityName") || get(item, "subreddit") || "");
   
   const metrics = {
-    likes: Number(get(item, "upvotes") || get(item, "score") || get(item, "ups") || 0),
-    comments: Number(get(item, "numComments") || get(item, "commentsCount") || get(item, "num_comments") || 0),
+    // trudax uses 'upVotes' (camelCase)
+    likes: Number(get(item, "upVotes") || get(item, "upvotes") || get(item, "score") || get(item, "ups") || 0),
+    // trudax uses 'numberOfComments'
+    comments: Number(get(item, "numberOfComments") || get(item, "numComments") || get(item, "commentsCount") || get(item, "num_comments") || 0),
     shares: 0,
   };
 
   const postType = get(item, "postType") as string || "text";
+  
+  // trudax uses 'scrapedAt' or 'dataPostedAt' - try multiple fields
+  // Also handle unix timestamps
+  const rawDate = get(item, "dataPostedAt") || get(item, "scrapedAt") || get(item, "createdAt") || get(item, "created_utc") || get(item, "created");
+  
+  // Build URL - trudax provides 'url' directly
+  const postUrl = String(get(item, "url") || get(item, "permalink") || "");
 
   return {
-    id: `reddit-${get(item, "id") || index}-${Date.now()}`,
+    id: `reddit-${get(item, "parsedId") || get(item, "id") || index}-${Date.now()}`,
     platform: "reddit",
     title: title || body.substring(0, 100) + (body.length > 100 ? "..." : ""),
     description: body || title,
@@ -460,8 +471,8 @@ function normalizeReddit(item: Record<string, unknown>, index: number): Normaliz
       url: author ? `https://reddit.com/u/${author}` : "",
     },
     metrics: { ...metrics, engagement: calculateEngagement(metrics) },
-    publishedAt: parseDate(get(item, "createdAt") || get(item, "created_utc") || get(item, "created")),
-    url: String(get(item, "url") || get(item, "permalink") || ""),
+    publishedAt: parseDate(rawDate),
+    url: postUrl,
     contentType: postType === "video" ? "video" : postType === "image" ? "image" : "post",
     media: get(item, "media") || get(item, "thumbnail") ? {
       type: postType === "video" ? "video" : "image",
