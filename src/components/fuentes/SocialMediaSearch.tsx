@@ -299,6 +299,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         setJobStatus("completed");
         setProgress(100);
         setProgressMessage("¡Completado!");
+        setIsSearching(false); // Stop the spinner
         // Results are now pre-normalized by the backend
         const processed = processBackendResults((data.items || []) as SocialSearchResult[]);
         
@@ -362,7 +363,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         });
       } else if (data.status === "FAILED" || data.status === "ABORTED" || data.status === "TIMED-OUT") {
         setJobStatus("failed");
-        
+        setIsSearching(false); // Stop the spinner on failure
         // Update job status in database
         if (currentJobId) {
           try {
@@ -408,6 +409,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     } catch (error) {
       console.error("Error checking job status:", error);
       setJobStatus("failed");
+      setIsSearching(false); // Stop the spinner on error
     }
   }, [platform, config.label, toast, currentJobId, updateJob, saveResults, refetchJobs]);
 
