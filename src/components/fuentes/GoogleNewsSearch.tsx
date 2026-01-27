@@ -26,7 +26,8 @@ import {
 
 interface GoogleNewsSearchProps {
   projectId: string;
-  projectName: string;
+  /** Keywords to use as default search query (from entities) */
+  defaultKeywords?: string[];
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -38,11 +39,13 @@ const TIME_RANGE_OPTIONS = [
   { value: "month", label: "Último mes" },
 ];
 
-export function GoogleNewsSearch({ projectId, projectName }: GoogleNewsSearchProps) {
+export function GoogleNewsSearch({ projectId, defaultKeywords = [] }: GoogleNewsSearchProps) {
   const { toast } = useToast();
   const { saveManyMentions, searchResultsToMentions, isSaving } = useMentions(projectId);
 
-  const [searchQuery, setSearchQuery] = useState(projectName || "");
+  // Use the first keyword from entities, or empty string
+  const initialQuery = defaultKeywords.length > 0 ? defaultKeywords[0] : "";
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [timeRange, setTimeRange] = useState<"hour" | "day" | "week" | "month">("day");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
