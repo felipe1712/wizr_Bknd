@@ -194,13 +194,11 @@ const PLATFORM_CONFIG: Record<Platform, {
     label: "LinkedIn",
     icon: LinkedInIcon,
     color: "bg-blue-700 text-white",
-    placeholder: "⚠️ Plataforma temporalmente deshabilitada",
+    placeholder: "Ej: Actinver, finanzas, inversiones",
     searchTypes: [
-      { value: "query", label: "Búsqueda general", tooltip: "Busca publicaciones públicas que contengan los términos especificados." },
-      { value: "companyUrl", label: "Por empresa (URL)", tooltip: "Requiere la URL completa del perfil de la empresa." },
+      { value: "query", label: "Búsqueda general", tooltip: "Busca publicaciones públicas que contengan los términos especificados. No requiere cookies ni login." },
     ],
-    helpText: "⚠️ LinkedIn está temporalmente deshabilitado debido a restricciones de la API. Por favor utiliza otra plataforma.",
-    disabled: true,
+    helpText: "✅ LinkedIn ahora está habilitado. Busca publicaciones públicas por palabras clave.",
   },
   youtube: {
     label: "YouTube",
