@@ -696,7 +696,35 @@ serve(async (req) => {
     const status = statusData.data.status;
     const datasetId = statusData.data.defaultDatasetId;
 
-    console.log(`Run ${runId} status: ${status}`);
+    // Surface upstream diagnostics to the client so the UI can show actionable errors.
+    const statusMessage = statusData.data.statusMessage || statusData.data.message || null;
+    const errorMessage = statusData.data.errorMessage || statusData.data.error || null;
+    const exitCode = statusData.data.exitCode ?? null;
+
+    // Fetch a small tail of the run log to surface the real root-cause (actors often fail with null statusMessage).
+    let logTail: string | null = null;
+    if (status === "FAILED" || status === "ABORTED" || status === "TIMED-OUT") {
+      try {
+        const logResp = await fetch(
+          `https://api.apify.com/v2/actor-runs/${runId}/log?token=${APIFY_API_TOKEN}`
+        );
+        if (logResp.ok) {
+          const fullLog = await logResp.text();
+          // Keep response small to avoid blowing up payload size.
+          logTail = fullLog.length > 4000 ? fullLog.slice(-4000) : fullLog;
+        }
+      } catch (e) {
+        // Non-fatal: keep diagnostics best-effort.
+        console.error("Failed to fetch Apify log tail:", e);
+      }
+    }
+
+    console.log(
+      `Run ${runId} status: ${status}` +
+        (statusMessage ? ` | statusMessage: ${statusMessage}` : "") +
+        (errorMessage ? ` | errorMessage: ${errorMessage}` : "") +
+        (exitCode !== null ? ` | exitCode: ${exitCode}` : "")
+    );
 
     let items: NormalizedResult[] = [];
     let rawCount = 0;
@@ -757,6 +785,14 @@ serve(async (req) => {
         status,
         platform,
         isFinished: ["SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"].includes(status),
+        error:
+          status === "FAILED" || status === "ABORTED" || status === "TIMED-OUT"
+            ? (errorMessage || statusMessage || `Job ${status}`)
+            : undefined,
+        runDiagnostics:
+          status === "FAILED" || status === "ABORTED" || status === "TIMED-OUT"
+            ? { statusMessage, errorMessage, exitCode, logTail }
+            : undefined,
         items: status === "SUCCEEDED" ? items : [],
         rawCount: rawCount, // Include raw count before filtering
         stats: statusData.data.stats,

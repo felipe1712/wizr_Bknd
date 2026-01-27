@@ -15,7 +15,8 @@ const ACTOR_IDS: Record<string, string> = {
   // Facebook page-specific scraper (fallback for username searches)
   facebook_page: "apify/facebook-posts-scraper",
   // TikTok: sociavault/tiktok-keyword-search-scraper ($1.50/1000 results, keyword filtering)
-  tiktok: "sociavault/tiktok-keyword-search-scraper",
+  // NOTE: sociavault actor failed with upstream 402 (external credits). Use Apify-billed actor instead.
+  tiktok: "powerai/tiktok-videos-search-scraper",
   // Instagram: apify/instagram-hashtag-scraper ($2.30/1000 results, maintained by Apify)
   instagram: "apify/instagram-hashtag-scraper",
   // YouTube: scraper_one/youtube-search-scraper (reliable, well-maintained)
@@ -136,7 +137,8 @@ serve(async (req) => {
         break;
         
       case "tiktok":
-        // TikTok: sociavault/tiktok-keyword-search-scraper - filters by keyword server-side
+        // TikTok: powerai/tiktok-videos-search-scraper
+        // Input schema (OpenAPI): { keywords: string (required), maxResults?: number, region?: string, publish_time?: number, sort_type?: number }
         const tiktokTerms: string[] = [];
         if (query) {
           query.split(",").forEach((term: string) => {
@@ -153,12 +155,17 @@ serve(async (req) => {
           if (cleanUsername) tiktokTerms.push(cleanUsername);
         }
         
-        // sociavault uses single 'query' string - minimal required params
-        const tiktokQuery = tiktokTerms.join(" ") || "Actinver";
-        
+        // powerai requires a single keywords string.
+        const keywords = (tiktokTerms.join(" ") || "Actinver").trim();
+
         input = {
-          query: tiktokQuery,
-          // Only use documented parameters
+          keywords,
+          maxResults: Math.min(Math.max(maxResults, 30), 1000),
+          // 30 = last month (more relevant for monitoring)
+          publish_time: 30,
+          // 3 = publish time (newest first)
+          sort_type: 3,
+          region: "", // actor default (US) when empty
         };
         break;
         

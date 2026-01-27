@@ -398,6 +398,11 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       } else if (data.status === "FAILED" || data.status === "ABORTED" || data.status === "TIMED-OUT") {
         setJobStatus("failed");
         setIsSearching(false); // Stop the spinner on failure
+
+        const failureDetail = (data as any)?.error
+          ? `${data.status}: ${(data as any).error}`
+          : `Job ${data.status}`;
+
         // Update job status in database
         if (currentJobId) {
           try {
@@ -406,7 +411,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
               updates: {
                 status: "failed",
                 completed_at: new Date().toISOString(),
-                error_message: `Job ${data.status}`,
+                error_message: failureDetail,
               },
             });
             refetchJobs();
@@ -417,7 +422,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         
         toast({
           title: "Error en la búsqueda",
-          description: "El scraping falló o fue cancelado",
+          description: failureDetail,
           variant: "destructive",
         });
       } else {
