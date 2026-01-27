@@ -90,11 +90,15 @@ serve(async (req) => {
 
     switch (platform) {
       case "twitter":
-        // powerai/twitter-search-scraper - search by keywords
+        // powerai/twitter-search-scraper - uses 'query' parameter (NOT searchTerms)
+        // Combine all search terms into a single OR query for Twitter search
+        const searchTerms = query ? query.split(",").map((t: string) => t.trim()).filter(Boolean) : [];
+        // Format: "term1 OR term2 OR term3" for Twitter's search syntax
+        const twitterQuery = searchTerms.join(" OR ");
         input = {
-          searchTerms: query ? query.split(",").map((t: string) => t.trim()).filter(Boolean) : [],
+          query: twitterQuery || "Actinver", // Required parameter
+          searchType: "Latest", // Top, Latest, Media, People, Lists
           maxTweets: maxResults,
-          tweetType: "Latest", // Get latest tweets
         };
         break;
         
