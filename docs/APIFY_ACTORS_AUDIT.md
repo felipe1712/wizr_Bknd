@@ -79,22 +79,23 @@
 **Parámetros configurados:**
 ```json
 {
-  "keyword": "término de búsqueda",
-  "maxItems": 50,
-  "sortBy": "date"
+  "query": "Actinver",
+  "max_results": 50,
+  "date_posted": "this-month",
+  "sort_by": "date"
 }
 ```
 
 **Campos de salida mapeados:**
-- `id` → ID del video
-- `text` / `desc` → Descripción
-- `author.nickname` / `authorMeta.name` → Username
-- `diggCount` / `likes`, `commentCount`, `shareCount`, `playCount` → Métricas
-- `createTime` / `createTimeISO` → Timestamp
+- `video_id` / `id` → ID del video
+- `description` → Descripción del video
+- `author.nickname` → Username
+- `likes`, `comments`, `shares`, `views` → Métricas
+- `created_at` → Timestamp ISO
 
-**Estado:** ✅ Funcional - Especializado en búsquedas por keyword con soporte de filtros de fecha ($1.50/1000 resultados)
+**Estado:** ✅ Funcional - Especializado en búsquedas por keyword ($1.50/1000 resultados)
 
-**Cambio 2026-01-27:** Migrado desde `clockworks/tiktok-scraper` que tenía alta tasa de falsos positivos
+**Cambio 2026-01-27:** Migrado desde `powerai/tiktok-videos-search-scraper` que no filtraba por keyword correctamente
 
 ---
 

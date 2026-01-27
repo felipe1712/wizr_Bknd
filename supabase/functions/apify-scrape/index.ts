@@ -14,7 +14,7 @@ const ACTOR_IDS: Record<string, string> = {
   facebook: "powerai/facebook-post-search-scraper",
   // Facebook page-specific scraper (fallback for username searches)
   facebook_page: "apify/facebook-posts-scraper",
-  // TikTok: powerai/tiktok-videos-search-scraper ($4.99/1000 results, same publisher as Twitter)
+  // TikTok: clockworks/tiktok-scraper (uses searchQuery for keyword-based search)
   tiktok: "powerai/tiktok-videos-search-scraper",
   // Instagram: apify/instagram-hashtag-scraper ($2.30/1000 results, maintained by Apify)
   instagram: "apify/instagram-hashtag-scraper",
@@ -136,8 +136,8 @@ serve(async (req) => {
         break;
         
       case "tiktok":
-        // TikTok: powerai/tiktok-videos-search-scraper - same publisher as Twitter
-        // Combine terms into a single search query
+        // TikTok: powerai/tiktok-videos-search-scraper
+        // Note: This actor doesn't filter by keyword server-side, so we filter in apify-status
         const tiktokTerms: string[] = [];
         if (query) {
           query.split(",").forEach((term: string) => {
@@ -154,11 +154,10 @@ serve(async (req) => {
           if (cleanUsername) tiktokTerms.push(`@${cleanUsername}`);
         }
         
-        // Join with OR for broader search like Twitter
         const tiktokQuery = tiktokTerms.join(" OR ") || "Actinver";
         
         input = {
-          searchQueries: [tiktokQuery], // powerai actor uses searchQueries array
+          searchQueries: [tiktokQuery],
           maxVideos: maxResults,
         };
         break;
