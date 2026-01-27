@@ -157,7 +157,7 @@ serve(async (req) => {
         const tiktokQuery = tiktokTerms.join(" ") || "Actinver";
         
         input = {
-          keyword: tiktokQuery, // This actor uses 'keyword' parameter
+          query: tiktokQuery, // This actor uses 'query' parameter (not 'keyword')
           maxItems: maxResults,
           sortBy: "date", // Sort by newest first
         };
