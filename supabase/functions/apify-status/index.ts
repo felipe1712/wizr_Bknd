@@ -565,12 +565,12 @@ serve(async (req) => {
         
         let normalized = normalizeResults(rawItems, platform as Platform);
 
-        // Filter by keyword if provided (for TikTok and Instagram to reduce false positives)
-        if (keywordLower && (platform === "tiktok" || platform === "instagram")) {
+        // Filter by keyword if provided (for TikTok, Instagram, and Facebook to reduce false positives)
+        if (keywordLower && (platform === "tiktok" || platform === "instagram" || platform === "facebook")) {
           const beforeCount = normalized.length;
           normalized = normalized.filter((item) => {
-            // For Instagram, be more strict - only check caption/description, not sidebar content
-            const text = `${item.title} ${item.description} ${(item.hashtags || []).join(" ")}`.toLowerCase();
+            // Check title, description/content, hashtags, and author name
+            const text = `${item.title} ${item.description} ${(item.hashtags || []).join(" ")} ${item.author?.name || ""}`.toLowerCase();
             return text.includes(keywordLower);
           });
           console.log(`Filtered ${platform} results from ${beforeCount} to ${normalized.length} using keyword: ${keywordLower}`);

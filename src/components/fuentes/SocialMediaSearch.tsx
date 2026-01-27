@@ -448,8 +448,9 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           },
         });
         
-        // Start polling for status - pass searchValue as filter keyword for TikTok
-        const filterKw = platform === "tiktok" ? searchValue : undefined;
+        // Start polling for status - pass searchValue as filter keyword for platforms that need post-filtering
+        const needsFiltering = ["tiktok", "instagram", "facebook"].includes(platform);
+        const filterKw = needsFiltering ? searchValue : undefined;
         setTimeout(() => checkJobStatus(data.runId!, filterKw), 3000);
       } else {
         throw new Error(data.error || "Error al iniciar la búsqueda");
