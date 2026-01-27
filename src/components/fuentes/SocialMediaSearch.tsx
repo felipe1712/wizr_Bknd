@@ -133,7 +133,6 @@ interface AggregateMetrics {
 interface SocialMediaSearchProps {
   projectId: string;
   onResultsSaved?: () => void;
-  onPlatformChange?: (platform: string) => void;
 }
 
 const PLATFORM_CONFIG: Record<Platform, { 
@@ -225,16 +224,10 @@ const PLATFORM_CONFIG: Record<Platform, {
   },
 };
 
-export const SocialMediaSearch = ({ projectId, onResultsSaved, onPlatformChange }: SocialMediaSearchProps) => {
+export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSearchProps) => {
   const { toast } = useToast();
   const { createJob, updateJob, saveResults, refetchJobs } = useSocialScrapeJobs(projectId);
   const [platform, setPlatform] = useState<Platform>("twitter");
-
-  // Notify parent when platform changes
-  const handlePlatformChange = (newPlatform: Platform) => {
-    setPlatform(newPlatform);
-    onPlatformChange?.(newPlatform);
-  };
   const [searchType, setSearchType] = useState("query");
   const [searchValue, setSearchValue] = useState("");
   const [maxResults, setMaxResults] = useState(25);
@@ -643,7 +636,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved, onPlatformChange 
                     variant={platform === plat ? "default" : "outline"}
                     size="sm"
                     onClick={() => {
-                      handlePlatformChange(plat);
+                      setPlatform(plat);
                       setSearchType(cfg.searchTypes[0].value);
                       resetSearch();
                     }}

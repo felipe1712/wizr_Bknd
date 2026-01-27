@@ -20,7 +20,7 @@ import { SocialMediaSearch } from "@/components/fuentes/SocialMediaSearch";
 import { SocialHistoryTab } from "@/components/fuentes/SocialHistoryTab";
 import { GoogleNewsSearch } from "@/components/fuentes/GoogleNewsSearch";
 import { CommentsAnalysisTab } from "@/components/fuentes/CommentsAnalysisTab";
-import { FanpageKarmaSearch } from "@/components/fuentes/FanpageKarmaSearch";
+
 import wizrLogoIcon from "@/assets/wizr-logo-icon.png";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
@@ -60,7 +60,7 @@ import { es } from "date-fns/locale";
 type SearchMode = "manual" | "entities";
 type ViewMode = "search" | "google-news" | "social" | "social-history" | "comments" | "history";
 type SearchSource = "news" | "social";
-type SocialPlatform = "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "reddit";
+
 const ITEMS_PER_PAGE = 10;
 
 // Extract unique domains from results or mentions
@@ -109,7 +109,7 @@ const FuentesPage = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [selectedEntityIds, setSelectedEntityIds] = useState<Set<string>>(new Set());
   const [showEntityForm, setShowEntityForm] = useState(false);
-  const [selectedSocialPlatform, setSelectedSocialPlatform] = useState<SocialPlatform>("twitter");
+  
   
   // Pagination state
   const [searchPage, setSearchPage] = useState(1);
@@ -971,30 +971,15 @@ const FuentesPage = () => {
 
         {/* Social Media Tab */}
         <TabsContent value="social" className="mt-4 space-y-6">
-          {/* Apify-based search for all platforms - moved to top */}
           <SocialMediaSearch 
             projectId={selectedProject.id} 
-            onPlatformChange={(platform) => setSelectedSocialPlatform(platform as SocialPlatform)}
             onResultsSaved={() => {
               toast({
                 title: "Menciones guardadas",
-                description: "Las menciones de redes sociales se agregaron al historial",
+                description: "Los resultados se agregaron al historial",
               });
             }}
           />
-
-          {/* Fanpage Karma - Only show for Facebook/Instagram */}
-          {(selectedSocialPlatform === "facebook" || selectedSocialPlatform === "instagram") && (
-            <FanpageKarmaSearch 
-              projectId={selectedProject.id} 
-              onResultsSaved={() => {
-                toast({
-                  title: "Menciones guardadas",
-                  description: "Los posts de Fanpage Karma se agregaron al historial",
-                });
-              }}
-            />
-          )}
         </TabsContent>
 
         {/* Social History Tab */}
