@@ -20,6 +20,7 @@ import { SocialMediaSearch } from "@/components/fuentes/SocialMediaSearch";
 import { SocialHistoryTab } from "@/components/fuentes/SocialHistoryTab";
 import { GoogleNewsSearch } from "@/components/fuentes/GoogleNewsSearch";
 import { CommentsAnalysisTab } from "@/components/fuentes/CommentsAnalysisTab";
+import { FanpageKarmaSearch } from "@/components/fuentes/FanpageKarmaSearch";
 import wizrLogoIcon from "@/assets/wizr-logo-icon.png";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
@@ -968,7 +969,19 @@ const FuentesPage = () => {
         </TabsContent>
 
         {/* Social Media Tab */}
-        <TabsContent value="social" className="mt-4">
+        <TabsContent value="social" className="mt-4 space-y-6">
+          {/* Fanpage Karma - Premium Integration for FB/IG */}
+          <FanpageKarmaSearch 
+            projectId={selectedProject.id} 
+            onResultsSaved={() => {
+              toast({
+                title: "Menciones guardadas",
+                description: "Los posts de Fanpage Karma se agregaron al historial",
+              });
+            }}
+          />
+          
+          {/* Apify-based search for all platforms */}
           <SocialMediaSearch 
             projectId={selectedProject.id} 
             onResultsSaved={() => {

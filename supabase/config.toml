@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.analyze-sentiment]
 verify_jwt = false
+
+[functions.fanpage-karma]
+verify_jwt = false
