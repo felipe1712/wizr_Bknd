@@ -19,6 +19,8 @@ const ACTOR_IDS: Record<string, string> = {
   tiktok: "powerai/tiktok-videos-search-scraper",
   // Instagram: apify/instagram-hashtag-scraper ($2.30/1000 results, maintained by Apify)
   instagram: "apify/instagram-hashtag-scraper",
+  // Instagram profile scraper for username-based searches (scrapes posts from specific profiles)
+  instagram_profile: "apify/instagram-profile-scraper",
   // YouTube: scraper_one/youtube-search-scraper (reliable, well-maintained)
   youtube: "scraper_one/youtube-search-scraper",
   // Reddit: lite variant for less restrictions
@@ -171,52 +173,78 @@ serve(async (req) => {
         break;
         
       case "instagram":
-        // Instagram: apify/instagram-hashtag-scraper - uses 'hashtags' array
-        // The hashtag regex requires NO special characters: ^[^!?.,:;\-+=*&%$#@/\~^|<>()[\]{}"'`\s]+$
-        const igSearchTerms: string[] = [];
-        
-        // Helper to clean hashtag: remove ALL special chars, keep only alphanumeric + underscore
-        const cleanHashtagForIG = (term: string): string => {
+        // Helper to clean IG terms: remove ALL special chars, keep only alphanumeric + underscore
+        const cleanIGTerm = (term: string): string => {
           return term
             .trim()
             .toLowerCase()
             .replace(/^[@#]+/, "") // Remove leading @ or # symbols
-            .replace(/[^a-z0-9_]/g, ""); // Keep only letters, numbers, underscores
+            .replace(/[^a-z0-9_.]/g, ""); // Keep only letters, numbers, underscores, dots
         };
         
-        // Process query - split by comma and clean each term
-        if (query) {
-          query.split(",").forEach((term: string) => {
-            const cleaned = cleanHashtagForIG(term);
-            if (cleaned) igSearchTerms.push(cleaned);
-          });
-        }
-        
-        // Add username (without @)
+        // CASE 1: Username-based search - scrape specific profiles
         if (username) {
-          const cleaned = cleanHashtagForIG(username);
-          if (cleaned) igSearchTerms.push(cleaned);
+          // Use Instagram Profile Scraper for username searches
+          actorId = ACTOR_IDS.instagram_profile;
+          
+          // Split usernames by comma for multiple profiles
+          const usernames = username.split(",").map(u => cleanIGTerm(u)).filter(Boolean);
+          
+          if (usernames.length === 0) {
+            throw new Error("Instagram requires at least one valid username.");
+          }
+          
+          console.log(`Instagram profile search for usernames: ${JSON.stringify(usernames)}`);
+          
+          // Build URLs for each profile
+          const directUrls = usernames.map(u => `https://www.instagram.com/${u}/`);
+          
+          input = {
+            directUrls: directUrls,
+            resultsLimit: Math.min(maxResults, 50),
+            resultsType: "posts", // Get posts from profiles
+          };
         }
-        
-        // Add hashtag (without #)
-        if (hashtag) {
-          const cleaned = cleanHashtagForIG(hashtag);
-          if (cleaned) igSearchTerms.push(cleaned);
+        // CASE 2: Hashtag-based search
+        else if (hashtag || query) {
+          // Use Instagram Hashtag Scraper
+          actorId = ACTOR_IDS.instagram; // apify/instagram-hashtag-scraper
+          
+          const igHashtags: string[] = [];
+          
+          // Process hashtag field
+          if (hashtag) {
+            hashtag.split(",").forEach((term: string) => {
+              const cleaned = cleanIGTerm(term);
+              if (cleaned) igHashtags.push(cleaned);
+            });
+          }
+          
+          // Process query as hashtags
+          if (query) {
+            query.split(",").forEach((term: string) => {
+              const cleaned = cleanIGTerm(term);
+              if (cleaned) igHashtags.push(cleaned);
+            });
+          }
+          
+          // Remove duplicates
+          const uniqueHashtags = [...new Set(igHashtags)];
+          
+          console.log(`Instagram hashtag search: ${JSON.stringify(uniqueHashtags)}`);
+          
+          if (uniqueHashtags.length === 0) {
+            throw new Error("Instagram requires at least one valid hashtag.");
+          }
+          
+          input = {
+            hashtags: uniqueHashtags,
+            resultsLimit: Math.min(maxResults, 50),
+          };
         }
-        
-        // Remove duplicates
-        const uniqueIgTerms = [...new Set(igSearchTerms)];
-        
-        console.log(`Instagram hashtags cleaned: ${JSON.stringify(uniqueIgTerms)}`);
-        
-        if (uniqueIgTerms.length === 0) {
-          throw new Error("Instagram requires at least one search term (hashtag, username, or query).");
+        else {
+          throw new Error("Instagram requires a username or hashtag to search.");
         }
-        
-        input = {
-          hashtags: uniqueIgTerms, // Array of hashtags to search
-          resultsLimit: Math.min(maxResults, 50), // Results per hashtag
-        };
         break;
         
       case "youtube":

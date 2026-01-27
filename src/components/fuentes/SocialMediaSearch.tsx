@@ -187,12 +187,12 @@ const PLATFORM_CONFIG: Record<Platform, {
     label: "Instagram",
     icon: InstagramIcon,
     color: "bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white",
-    placeholder: "Ej: nombredeusuario o #hashtag",
+    placeholder: "Ej: @elisaqueijeiro, @actinver o #actinver",
     searchTypes: [
-      { value: "username", label: "Por usuario", tooltip: "Busca las publicaciones de un perfil específico de Instagram." },
-      { value: "hashtag", label: "Por hashtag (#)", tooltip: "Busca publicaciones etiquetadas con un hashtag específico." },
+      { value: "username", label: "Por usuario(s)", tooltip: "Busca publicaciones de perfiles específicos. Puedes ingresar múltiples usuarios separados por comas: @elisaqueijeiro, @actinver" },
+      { value: "hashtag", label: "Por hashtag (#)", tooltip: "Busca publicaciones etiquetadas con un hashtag específico como #actinver." },
     ],
-    helpText: "Instagram solo permite buscar por usuario específico o por hashtag. No admite búsquedas generales de texto.",
+    helpText: "📌 Para encontrar menciones de tu marca, combina ambas búsquedas: 1) Por hashtag para posts con #actinver, 2) Por usuario para perfiles conocidos que mencionen tu marca en el texto.",
   },
   linkedin: {
     label: "LinkedIn",
