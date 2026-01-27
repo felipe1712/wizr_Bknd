@@ -258,23 +258,28 @@ function normalizeFacebook(item: Record<string, unknown>, index: number): Normal
 
 function normalizeTikTok(item: Record<string, unknown>, index: number): NormalizedResult {
   // Supports multiple TikTok actor output formats:
-  // - clockworks/tiktok-scraper: text/desc, authorMeta, diggCount/playCount/createTime
-  // - powerai/tiktok-videos-search-scraper: title/content_desc, aweme_id/video_id, play/like/comment/share
+  // - sociavault/tiktok-keyword-search-scraper: description, author.nickname, likes/comments/shares/views, created_at
+  // - clockworks/tiktok-scraper (legacy): text/desc, authorMeta, diggCount/playCount/createTime
+  // - powerai (legacy): title/content_desc, aweme_id/video_id
 
   const authorMeta = item.authorMeta as Record<string, unknown> | undefined;
   const authorObj = (get(item, "author") as Record<string, unknown>) || undefined;
   const authorInfoObj = (get(item, "author_info") as Record<string, unknown>) || undefined;
 
+  // sociavault uses 'description' as primary field
+  const description = String(get(item, "description") || "");
   const title = String(get(item, "title") || "");
   const desc = String(get(item, "content_desc") || "");
-  const legacyText = String(get(item, "text") || get(item, "desc") || get(item, "description") || "");
-  const text = (title || desc || legacyText).trim();
+  const legacyText = String(get(item, "text") || get(item, "desc") || "");
+  const text = (description || title || desc || legacyText).trim();
 
+  // sociavault uses author.nickname/author.unique_id
   const username = String(
-    get(authorMeta, "name") ||
+    get(authorObj, "nickname") ||
       get(authorObj, "unique_id") ||
       get(authorObj, "uniqueId") ||
       get(authorObj, "username") ||
+      get(authorMeta, "name") ||
       get(authorInfoObj, "unique_id") ||
       get(authorInfoObj, "uniqueId") ||
       get(authorInfoObj, "username") ||
@@ -284,35 +289,36 @@ function normalizeTikTok(item: Record<string, unknown>, index: number): Normaliz
   );
 
   const displayName = String(
-    get(authorMeta, "nickName") ||
+    get(authorObj, "nickname") ||
+      get(authorMeta, "nickName") ||
       get(authorMeta, "nickname") ||
-      get(authorObj, "nickname") ||
       get(authorInfoObj, "nickname") ||
       username
   );
 
+  // sociavault uses likes/comments/shares/views directly
   const metrics = {
     likes: Number(
-      get(item, "diggCount") ||
+      get(item, "likes") ||
+        get(item, "diggCount") ||
         get(item, "likeCount") ||
-        get(item, "likes") ||
         get(item, "likesCount") ||
         get(item, "like") ||
         get(item, "stats.diggCount") ||
         0
     ),
     comments: Number(
-      get(item, "commentCount") ||
-        get(item, "comments") ||
+      get(item, "comments") ||
+        get(item, "commentCount") ||
         get(item, "commentsCount") ||
         get(item, "comment") ||
         get(item, "stats.commentCount") ||
         0
     ),
-    shares: Number(get(item, "shareCount") || get(item, "shares") || get(item, "share") || get(item, "stats.shareCount") || 0),
+    shares: Number(get(item, "shares") || get(item, "shareCount") || get(item, "share") || get(item, "stats.shareCount") || 0),
     views: Number(
-      get(item, "playCount") ||
-        get(item, "views") ||
+      get(item, "views") ||
+        get(item, "playCount") ||
         get(item, "viewCount") ||
         get(item, "play") ||
         get(item, "stats.playCount") ||
@@ -320,7 +326,8 @@ function normalizeTikTok(item: Record<string, unknown>, index: number): Normaliz
     ),
   };
 
-  const videoId = String(get(item, "video_id") || get(item, "aweme_id") || get(item, "id") || "");
+  // sociavault uses video_id or id
+  const videoId = String(get(item, "video_id") || get(item, "id") || get(item, "aweme_id") || "");
 
   const url = String(
     get(item, "webVideoUrl") ||
@@ -360,14 +367,14 @@ function normalizeTikTok(item: Record<string, unknown>, index: number): Normaliz
       ),
     },
     metrics: { ...metrics, engagement: calculateEngagement(metrics) },
-    // powerai often includes create time under different keys; keep wide mapping
+    // sociavault uses 'created_at' ISO format; keep wide mapping for legacy actors
     publishedAt: parseDate(
-      get(item, "createTime") ||
+      get(item, "created_at") ||
+        get(item, "createTime") ||
         get(item, "createTimeISO") ||
         get(item, "createdAt") ||
         get(item, "create_time") ||
-        get(item, "create_time_iso") ||
-        get(item, "created_at")
+        get(item, "create_time_iso")
     ),
     url,
     contentType: "video",
@@ -712,9 +719,8 @@ serve(async (req) => {
         let normalized = normalizeResults(rawItems, platform as Platform);
         rawCount = normalized.length;
 
-        // Filter by keyword for platforms that need it (skip TikTok to show all results)
-        // TikTok actor already filters by keyword server-side; additional filter removes valid results
-        if (keywordLower && platform !== "tiktok") {
+        // Filter by keyword for ALL platforms - TikTok actor does NOT filter server-side
+        if (keywordLower) {
           const beforeCount = normalized.length;
           
           // Handle multiple search terms separated by commas (e.g., "Actinver, @actinver, @actinver_trade")
