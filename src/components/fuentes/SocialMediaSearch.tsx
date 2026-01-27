@@ -304,16 +304,38 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         setProgressMessage("¡Completado!");
         setIsSearching(false); // Stop the spinner
         // Results are now pre-normalized by the backend
-        const processed = processBackendResults((data.items || []) as SocialSearchResult[]);
+        let processed = processBackendResults((data.items || []) as SocialSearchResult[]);
         
         // Capture filter stats from backend response if available
         if (data.rawCount !== undefined) {
           setRawResultsCount(data.rawCount);
-          setFilteredResultsCount(processed.length);
         }
+        
+        // STRICT DATE FILTERING: When date filter is enabled, discard results outside the range
+        // This applies especially to platforms without native date filtering (TikTok, Instagram, etc.)
+        let discardedByDateCount = 0;
+        if (dateFilterEnabled && dateFrom && dateTo) {
+          const fromStart = startOfDay(dateFrom);
+          const toEnd = endOfDay(dateTo);
+          const beforeFilter = processed.length;
+          
+          processed = processed.filter((r) => {
+            if (!r.publishedAt) return false; // Discard items without date in strict mode
+            const pubDate = new Date(r.publishedAt);
+            if (isNaN(pubDate.getTime())) return false; // Discard invalid dates
+            return !isBefore(pubDate, fromStart) && !isAfter(pubDate, toEnd);
+          });
+          
+          discardedByDateCount = beforeFilter - processed.length;
+          if (discardedByDateCount > 0) {
+            console.log(`Strict date filter: discarded ${discardedByDateCount} results outside range ${format(dateFrom, "yyyy-MM-dd")} to ${format(dateTo, "yyyy-MM-dd")}`);
+          }
+        }
+        
+        setFilteredResultsCount(processed.length);
         setResults(processed);
         
-        // Auto-save job and results to database
+        // Auto-save job and results to database (only the filtered ones in strict mode)
         if (currentJobId && processed.length > 0) {
           try {
             // Update job status
@@ -360,9 +382,12 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           }
         }
         
+        const dateFilterNote = discardedByDateCount > 0 
+          ? ` (${discardedByDateCount} descartados por fecha)` 
+          : "";
         toast({
           title: "Búsqueda completada",
-          description: `Se encontraron ${processed.length} resultados en ${config.label}`,
+          description: `Se encontraron ${processed.length} resultados en ${config.label}${dateFilterNote}`,
         });
       } else if (data.status === "FAILED" || data.status === "ABORTED" || data.status === "TIMED-OUT") {
         setJobStatus("failed");
