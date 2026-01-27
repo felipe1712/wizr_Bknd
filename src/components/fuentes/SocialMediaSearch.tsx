@@ -251,24 +251,14 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
   const config = PLATFORM_CONFIG[platform];
   const PlatformIcon = config.icon;
 
-  // Filter results by date range (client-side post-processing)
+  // With strict date filtering applied during fetch, filteredResults = results
+  // This memo now only exists for backward compatibility and any edge cases
+  // where the date filter is toggled after fetch (which won't re-filter saved data)
   const filteredResults = useMemo(() => {
-    if (!dateFilterEnabled || !dateFrom || !dateTo) {
-      return results;
-    }
-    
-    const fromStart = startOfDay(dateFrom);
-    const toEnd = endOfDay(dateTo);
-    
-    return results.filter((r) => {
-      // Some platforms return null/empty publishedAt; Date(null) becomes 1970 and would wrongly filter out everything.
-      if (!r.publishedAt) return true;
-
-      const pubDate = new Date(r.publishedAt);
-      if (isNaN(pubDate.getTime())) return true; // Keep items without valid date
-      return !isBefore(pubDate, fromStart) && !isAfter(pubDate, toEnd);
-    });
-  }, [results, dateFilterEnabled, dateFrom, dateTo]);
+    // Since strict filtering is applied at fetch time, we just return results as-is
+    // The date filter was already applied before saving to `results` state
+    return results;
+  }, [results]);
 
   // Results are now normalized by the backend - sort chronologically
   const processBackendResults = (items: SocialSearchResult[]): SocialSearchResult[] => {
@@ -439,7 +429,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       setJobStatus("failed");
       setIsSearching(false); // Stop the spinner on error
     }
-  }, [platform, config.label, toast, currentJobId, updateJob, saveResults, refetchJobs]);
+  }, [platform, config.label, toast, currentJobId, updateJob, saveResults, refetchJobs, dateFilterEnabled, dateFrom, dateTo]);
 
   const handleSearch = async () => {
     if (!searchValue.trim()) {
@@ -828,11 +818,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
                 </Popover>
               </div>
               
-              {results.length > 0 && filteredResults.length !== results.length && (
-                <Badge variant="secondary" className="text-xs">
-                  Mostrando {filteredResults.length} de {results.length}
-                </Badge>
-              )}
+              {/* Badge removed: strict filtering is now applied at fetch time */}
             </>
           )}
         </div>
@@ -945,10 +931,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground flex items-center gap-2">
-                {dateFilterEnabled && filteredResults.length !== results.length 
-                  ? `Mostrando ${filteredResults.length} de ${results.length} resultados (filtrado por fecha)`
-                  : `${filteredResults.length} resultados de ${config.label}`
-                }
+                {filteredResults.length} resultados de {config.label}
                 <span className="text-xs">• Ordenados por fecha (más recientes primero)</span>
               </p>
             </div>
