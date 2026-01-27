@@ -14,8 +14,8 @@ const ACTOR_IDS: Record<string, string> = {
   facebook: "powerai/facebook-post-search-scraper",
   // Facebook page-specific scraper (fallback for username searches)
   facebook_page: "apify/facebook-posts-scraper",
-  // TikTok: sociavault/tiktok-keyword-search-scraper ($1.50/1000 results, keyword-focused with date filters)
-  tiktok: "sociavault/tiktok-keyword-search-scraper",
+  // TikTok: powerai/tiktok-videos-search-scraper ($4.99/1000 results, same publisher as Twitter)
+  tiktok: "powerai/tiktok-videos-search-scraper",
   // Instagram: apify/instagram-hashtag-scraper ($2.30/1000 results, maintained by Apify)
   instagram: "apify/instagram-hashtag-scraper",
   // YouTube: scraper_one/youtube-search-scraper (reliable, well-maintained)
@@ -136,7 +136,7 @@ serve(async (req) => {
         break;
         
       case "tiktok":
-        // TikTok: sociavault/tiktok-keyword-search-scraper - keyword-focused with date support
+        // TikTok: powerai/tiktok-videos-search-scraper - same publisher as Twitter
         // Combine terms into a single search query
         const tiktokTerms: string[] = [];
         if (query) {
@@ -154,12 +154,12 @@ serve(async (req) => {
           if (cleanUsername) tiktokTerms.push(`@${cleanUsername}`);
         }
         
-        const tiktokQuery = tiktokTerms.join(" ") || "Actinver";
+        // Join with OR for broader search like Twitter
+        const tiktokQuery = tiktokTerms.join(" OR ") || "Actinver";
         
         input = {
-          query: tiktokQuery, // This actor uses 'query' parameter (not 'keyword')
-          maxItems: maxResults,
-          sortBy: "date", // Sort by newest first
+          searchQueries: [tiktokQuery], // powerai actor uses searchQueries array
+          maxVideos: maxResults,
         };
         break;
         
