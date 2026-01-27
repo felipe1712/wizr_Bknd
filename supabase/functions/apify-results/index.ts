@@ -357,19 +357,27 @@ function normalizeYouTube(item: Record<string, unknown>, index: number): Normali
 function normalizeReddit(item: Record<string, unknown>, index: number): NormalizedResult {
   const title = String(get(item, "title") || "");
   const body = String(get(item, "body") || get(item, "selftext") || get(item, "text") || "");
-  const author = String(get(item, "author") || get(item, "username") || "");
-  const subreddit = String(get(item, "subreddit") || get(item, "communityName") || "");
+  // trudax/reddit-scraper-lite uses 'username' for author
+  const author = String(get(item, "username") || get(item, "author") || "");
+  // trudax uses 'communityName' or 'parsedCommunityName'
+  const subreddit = String(get(item, "communityName") || get(item, "parsedCommunityName") || get(item, "subreddit") || "");
   
   const metrics = {
-    likes: Number(get(item, "upvotes") || get(item, "score") || get(item, "ups") || 0),
-    comments: Number(get(item, "numComments") || get(item, "commentsCount") || get(item, "num_comments") || 0),
+    // trudax uses 'upVotes' (camelCase)
+    likes: Number(get(item, "upVotes") || get(item, "upvotes") || get(item, "score") || get(item, "ups") || 0),
+    // trudax uses 'numberOfComments'
+    comments: Number(get(item, "numberOfComments") || get(item, "numComments") || get(item, "commentsCount") || get(item, "num_comments") || 0),
     shares: 0,
   };
 
-  const postType = get(item, "postType") as string || "text";
+  const postType = get(item, "postType") || get(item, "dataType") as string || "text";
+  const isVideo = Boolean(get(item, "isVideo"));
+  
+  // Parse ID - trudax uses 'parsedId' or full 'id' like 't3_1q9dx0x'
+  const rawId = String(get(item, "parsedId") || get(item, "id") || "");
 
   return {
-    id: `reddit-${get(item, "id") || index}-${Date.now()}`,
+    id: `reddit-${rawId || index}-${Date.now()}`,
     platform: "reddit",
     title: title || body.substring(0, 100) + (body.length > 100 ? "..." : ""),
     description: body || title,
@@ -382,13 +390,18 @@ function normalizeReddit(item: Record<string, unknown>, index: number): Normaliz
       ...metrics,
       engagement: calculateEngagement(metrics),
     },
+    // trudax provides 'createdAt' as ISO string
     publishedAt: parseDate(get(item, "createdAt") || get(item, "created_utc") || get(item, "created")),
     url: String(get(item, "url") || get(item, "permalink") || ""),
-    contentType: postType === "video" ? "video" : postType === "image" ? "image" : "post",
-    media: get(item, "media") || get(item, "thumbnail") ? {
-      type: postType === "video" ? "video" : "image",
-      url: String(get(item, "media.url") || get(item, "videoUrl") || get(item, "imageUrl") || ""),
-      thumbnailUrl: String(get(item, "thumbnail") || ""),
+    contentType: isVideo ? "video" : postType === "image" ? "image" : "post",
+    media: get(item, "imageUrls") || get(item, "thumbnail") ? {
+      type: isVideo ? "video" : "image",
+      url: String(
+        (Array.isArray(get(item, "imageUrls")) && (get(item, "imageUrls") as string[]).length > 0)
+          ? (get(item, "imageUrls") as string[])[0]
+          : get(item, "link") || ""
+      ),
+      thumbnailUrl: String(get(item, "thumbnailUrl") || get(item, "thumbnail") || ""),
     } : undefined,
     hashtags: subreddit ? [subreddit] : [],
     raw: item,
