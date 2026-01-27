@@ -42,6 +42,8 @@ interface ScrapeRequest {
   companyUrl?: string;
   channelUrl?: string;
   subreddit?: string;
+  taggedUsername?: string; // Instagram: fetch posts where this user is tagged
+  captionFilter?: string; // Instagram: filter results to only include posts mentioning this term
   maxResults?: number;
 }
 
@@ -64,6 +66,8 @@ serve(async (req) => {
       companyUrl, 
       channelUrl,
       subreddit,
+      taggedUsername,
+      captionFilter,
       maxResults = 50 
     }: ScrapeRequest = await req.json();
 
@@ -182,8 +186,26 @@ serve(async (req) => {
             .replace(/[^a-z0-9_.]/g, ""); // Keep only letters, numbers, underscores, dots
         };
         
-        // CASE 1: Username-based search - scrape specific profiles
-        if (username) {
+        // CASE 1: Tagged posts search - posts where the account is tagged by others
+        if (taggedUsername) {
+          actorId = ACTOR_IDS.instagram_profile;
+          
+          const cleanedTaggedUser = cleanIGTerm(taggedUsername);
+          
+          if (!cleanedTaggedUser) {
+            throw new Error("Instagram tagged search requires a valid username.");
+          }
+          
+          console.log(`Instagram tagged posts search for: ${cleanedTaggedUser}`);
+          
+          input = {
+            directUrls: [`https://www.instagram.com/${cleanedTaggedUser}/`],
+            resultsLimit: Math.min(maxResults, 100), // Get more for tagged posts
+            resultsType: "taggedPosts", // Get posts where this account is tagged
+          };
+        }
+        // CASE 2: Username-based search - scrape specific profiles
+        else if (username) {
           // Use Instagram Profile Scraper for username searches
           actorId = ACTOR_IDS.instagram_profile;
           
@@ -205,7 +227,7 @@ serve(async (req) => {
             resultsType: "posts", // Get posts from profiles
           };
         }
-        // CASE 2: Hashtag-based search
+        // CASE 3: Hashtag-based search with optional caption filter
         else if (hashtag || query) {
           // Use Instagram Hashtag Scraper
           actorId = ACTOR_IDS.instagram; // apify/instagram-hashtag-scraper
@@ -231,7 +253,7 @@ serve(async (req) => {
           // Remove duplicates
           const uniqueHashtags = [...new Set(igHashtags)];
           
-          console.log(`Instagram hashtag search: ${JSON.stringify(uniqueHashtags)}`);
+          console.log(`Instagram hashtag search: ${JSON.stringify(uniqueHashtags)}${captionFilter ? ` with caption filter: ${captionFilter}` : ""}`);
           
           if (uniqueHashtags.length === 0) {
             throw new Error("Instagram requires at least one valid hashtag.");
@@ -239,11 +261,11 @@ serve(async (req) => {
           
           input = {
             hashtags: uniqueHashtags,
-            resultsLimit: Math.min(maxResults, 50),
+            resultsLimit: Math.min(maxResults, 100), // Get more results for post-filtering
           };
         }
         else {
-          throw new Error("Instagram requires a username or hashtag to search.");
+          throw new Error("Instagram requires a username, taggedUsername, or hashtag to search.");
         }
         break;
         

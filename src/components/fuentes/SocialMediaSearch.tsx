@@ -187,12 +187,13 @@ const PLATFORM_CONFIG: Record<Platform, {
     label: "Instagram",
     icon: InstagramIcon,
     color: "bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white",
-    placeholder: "Ej: @elisaqueijeiro, @actinver o #actinver",
+    placeholder: "Ej: @actinver, #actinver o finanzas",
     searchTypes: [
+      { value: "taggedPosts", label: "Posts donde te etiquetan", tooltip: "Extrae publicaciones donde terceros etiquetan a @actinver en sus fotos. Ideal para descubrir menciones orgánicas." },
       { value: "username", label: "Por usuario(s)", tooltip: "Busca publicaciones de perfiles específicos. Puedes ingresar múltiples usuarios separados por comas: @elisaqueijeiro, @actinver" },
-      { value: "hashtag", label: "Por hashtag (#)", tooltip: "Busca publicaciones etiquetadas con un hashtag específico como #actinver." },
+      { value: "hashtag", label: "Por hashtag (#)", tooltip: "Busca publicaciones etiquetadas con un hashtag específico como #actinver. Puedes agregar un filtro de caption para encontrar menciones específicas." },
     ],
-    helpText: "📌 Para encontrar menciones de tu marca, combina ambas búsquedas: 1) Por hashtag para posts con #actinver, 2) Por usuario para perfiles conocidos que mencionen tu marca en el texto.",
+    helpText: "📌 Para máxima cobertura: 1) 'Posts donde te etiquetan' captura fotos donde terceros te tagean, 2) 'Por hashtag' + filtro de caption encuentra posts que mencionan @actinver en el texto.",
   },
   linkedin: {
     label: "LinkedIn",
@@ -261,6 +262,9 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
   // Key = result.id, Value = "relevant" | "discarded" | undefined (not curated)
   const [curationState, setCurationState] = useState<Record<string, "relevant" | "discarded" | undefined>>({});
   const [showDiscarded, setShowDiscarded] = useState(false);
+  
+  // Instagram caption filter for hybrid search
+  const [captionFilter, setCaptionFilter] = useState("");
 
   const config = PLATFORM_CONFIG[platform];
   const PlatformIcon = config.icon;
@@ -530,6 +534,10 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         companyUrl: searchType === "companyUrl" ? searchValue : undefined,
         channelUrl: searchType === "channelUrl" ? searchValue : undefined,
         subreddit: searchType === "subreddit" ? searchValue.replace("r/", "") : undefined,
+        taggedUsername: searchType === "taggedPosts" ? searchValue.replace("@", "") : undefined,
+        captionFilter: (platform === "instagram" && searchType === "hashtag" && captionFilter.trim()) 
+          ? captionFilter.trim() 
+          : undefined,
         maxResults,
       });
 
@@ -553,9 +561,13 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           },
         });
         
-        // Start polling for status - pass searchValue as filter keyword for ALL platforms
-        // Most Apify actors return noisy results that need post-filtering by keyword
-        setTimeout(() => checkJobStatus(data.runId!, searchValue), 3000);
+        // Start polling for status
+        // For Instagram hashtag search with caption filter, use captionFilter as the keyword
+        // Otherwise use searchValue for general keyword filtering
+        const filterKw = (platform === "instagram" && searchType === "hashtag" && captionFilter.trim())
+          ? captionFilter.trim()
+          : searchValue;
+        setTimeout(() => checkJobStatus(data.runId!, filterKw), 3000);
       } else {
         throw new Error(data.error || "Error al iniciar la búsqueda");
       }
@@ -660,6 +672,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     setLastStrictDateDiscard(null);
     setCurationState({});
     setShowDiscarded(false);
+    setCaptionFilter("");
   };
 
   return (
@@ -706,7 +719,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
                   <p className="font-medium mb-1">Por plataforma</p>
                   <ul className="list-disc list-inside text-muted-foreground space-y-1">
                     <li><strong>X/Twitter, Facebook, TikTok:</strong> Admiten búsqueda general con múltiples términos</li>
-                    <li><strong>Instagram:</strong> Solo permite buscar por usuario o hashtag específico</li>
+                    <li><strong>Instagram:</strong> 3 modos: "Posts donde te etiquetan" (fotos tagueadas), "Por usuario" (perfiles), "Por hashtag" + filtro de caption (búsqueda híbrida)</li>
                     <li><strong>LinkedIn:</strong> Para empresas, usa la URL completa (ej: linkedin.com/company/nombre/)</li>
                     <li><strong>YouTube:</strong> Busca videos o extrae de un canal por URL</li>
                     <li><strong>Reddit:</strong> Busca en todo Reddit o dentro de un subreddit</li>
@@ -808,13 +821,36 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
               </Tooltip>
             </div>
             <Input
-              placeholder={config.placeholder}
+              placeholder={searchType === "taggedPosts" ? "Ej: actinver (usuario donde te etiquetan)" : config.placeholder}
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !isSearching && handleSearch()}
               className="bg-background"
             />
           </div>
+          
+          {/* Instagram Caption Filter - Only show for hashtag search */}
+          {platform === "instagram" && searchType === "hashtag" && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-1">
+                <Label>Filtrar por mención en caption (opcional)</Label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[300px]">
+                    <p>Solo mostrará posts cuyo texto/caption contenga este término. Ej: "@actinver" para encontrar menciones de tu cuenta.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <Input
+                placeholder="Ej: @actinver, Actinver"
+                value={captionFilter}
+                onChange={(e) => setCaptionFilter(e.target.value)}
+                className="bg-background"
+              />
+            </div>
+          )}
         </div>
 
         {/* Date Filter Section */}

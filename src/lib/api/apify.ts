@@ -107,6 +107,8 @@ export const apifyApi = {
     companyUrl?: string;
     channelUrl?: string;
     subreddit?: string;
+    taggedUsername?: string; // Instagram: fetch posts where this user is tagged
+    captionFilter?: string; // Instagram: filter results to only include posts mentioning this term
     maxResults?: number;
   }): Promise<ApifyResponse<ScrapeStartResponse>> {
     const result = await invokeEdgeFunction<ScrapeStartResponse>("apify-scrape", params, 45000);
