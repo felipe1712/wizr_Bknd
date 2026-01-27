@@ -7,11 +7,9 @@ const corsHeaders = {
 };
 
 // Apify Actor IDs for different platforms
-// NOTE: Some actors are paid (require "rental") and will return 403 after trial.
-// We use free/community actors that don't require paid subscriptions.
 const ACTOR_IDS: Record<string, string> = {
-  // Twitter/X: using quacker/twitter-scraper (free, no rental required)
-  twitter: "quacker/twitter-scraper",
+  // Twitter/X: powerai/twitter-search-scraper (rented, $4.99/1000 results)
+  twitter: "powerai/twitter-search-scraper",
   // Facebook: using search scraper for third-party mentions (not just pages)
   facebook: "easyapi/facebook-posts-search-scraper",
   // Facebook page-specific scraper (fallback for username searches)
@@ -24,11 +22,13 @@ const ACTOR_IDS: Record<string, string> = {
   youtube: "scrapesmith/free-youtube-search-scraper",
   // Reddit: lite variant for less restrictions
   reddit: "trudax/reddit-scraper-lite",
+  // LinkedIn: harvestapi/linkedin-post-search (no cookies required, $2/1000 results)
+  linkedin: "harvestapi/linkedin-post-search",
 };
 
 // Platforms that require paid subscriptions - return friendly error instead of 403
 const DISABLED_PLATFORMS: Record<string, string> = {
-  linkedin: "LinkedIn requiere una suscripción de pago en Apify. Esta plataforma está temporalmente deshabilitada.",
+  // All platforms now enabled!
 };
 
 interface ScrapeRequest {
@@ -90,12 +90,11 @@ serve(async (req) => {
 
     switch (platform) {
       case "twitter":
-        // quacker/twitter-scraper - uses searchTerms for keyword search
+        // powerai/twitter-search-scraper - search by keywords
         input = {
           searchTerms: query ? query.split(",").map((t: string) => t.trim()).filter(Boolean) : [],
-          twitterHandles: username ? [username.replace("@", "")] : [],
           maxTweets: maxResults,
-          sort: "Latest",
+          tweetType: "Latest", // Get latest tweets
         };
         break;
         
@@ -179,6 +178,14 @@ serve(async (req) => {
             sort: "new", // Changed to new for chronological order
           };
         }
+        break;
+        
+      case "linkedin":
+        // harvestapi/linkedin-post-search - no cookies required
+        input = {
+          search: query || "",
+          maxPosts: maxResults,
+        };
         break;
     }
 
