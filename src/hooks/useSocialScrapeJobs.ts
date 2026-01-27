@@ -198,7 +198,17 @@ export function useSocialScrapeJobs(projectId: string | null) {
     }) => {
       if (!projectId) throw new Error("No project selected");
 
-      const formattedResults = results.map((r) => ({
+      // Deduplicate by external_id to prevent "ON CONFLICT DO UPDATE command cannot affect row a second time" error
+      const uniqueResultsMap = new Map<string, typeof results[0]>();
+      for (const r of results) {
+        const key = r.external_id || r.url || `${r.title}-${r.published_at}`;
+        if (!uniqueResultsMap.has(key)) {
+          uniqueResultsMap.set(key, r);
+        }
+      }
+      const uniqueResults = Array.from(uniqueResultsMap.values());
+
+      const formattedResults = uniqueResults.map((r) => ({
         job_id: jobId,
         project_id: projectId,
         platform: r.platform,
