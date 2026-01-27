@@ -14,8 +14,14 @@ import {
   XCircle,
   Info,
   Sparkles,
+  CalendarIcon,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format, differenceInDays } from "date-fns";
+import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 const FacebookIcon = () => (
   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
@@ -53,9 +59,21 @@ export const FanpageKarmaSearch = ({ projectId, onResultsSaved }: FanpageKarmaSe
   const [platform, setPlatform] = useState<"facebook" | "instagram">("facebook");
   const [profileId, setProfileId] = useState("");
   const [filterKeywords, setFilterKeywords] = useState("");
-  const [periodDays, setPeriodDays] = useState(28);
+  const [periodType, setPeriodType] = useState<string>("28");
+  const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
   const [isSearching, setIsSearching] = useState(false);
   const [lastResult, setLastResult] = useState<SearchResult | null>(null);
+
+  // Calculate periodDays based on selection
+  const getPeriodDays = (): number => {
+    if (periodType === "custom" && customDateRange.from && customDateRange.to) {
+      return differenceInDays(customDateRange.to, customDateRange.from) + 1;
+    }
+    return parseInt(periodType, 10);
+  };
 
   const handleSearch = async () => {
     if (!profileId.trim()) {
@@ -81,7 +99,7 @@ export const FanpageKarmaSearch = ({ projectId, onResultsSaved }: FanpageKarmaSe
           platform,
           profileId: profileId.trim(),
           projectId,
-          periodDays,
+          periodDays: getPeriodDays(),
           filterKeywords: keywords,
         },
       });
@@ -167,20 +185,93 @@ export const FanpageKarmaSearch = ({ projectId, onResultsSaved }: FanpageKarmaSe
           {/* Period selector */}
           <div className="space-y-2">
             <Label>Período</Label>
-            <Select value={String(periodDays)} onValueChange={(v) => setPeriodDays(Number(v))}>
+            <Select value={periodType} onValueChange={(v) => setPeriodType(v)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="1">Últimas 24 horas</SelectItem>
                 <SelectItem value="7">Últimos 7 días</SelectItem>
                 <SelectItem value="14">Últimos 14 días</SelectItem>
                 <SelectItem value="28">Últimos 28 días</SelectItem>
                 <SelectItem value="60">Últimos 60 días</SelectItem>
                 <SelectItem value="90">Últimos 90 días</SelectItem>
+                <SelectItem value="custom">Rango personalizado</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
+
+        {/* Custom date range picker */}
+        {periodType === "custom" && (
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1 space-y-2">
+              <Label>Fecha inicial</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !customDateRange.from && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {customDateRange.from ? (
+                      format(customDateRange.from, "PPP", { locale: es })
+                    ) : (
+                      <span>Seleccionar fecha</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={customDateRange.from}
+                    onSelect={(date) => setCustomDateRange(prev => ({ ...prev, from: date }))}
+                    disabled={(date) => date > new Date()}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="flex-1 space-y-2">
+              <Label>Fecha final</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !customDateRange.to && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {customDateRange.to ? (
+                      format(customDateRange.to, "PPP", { locale: es })
+                    ) : (
+                      <span>Seleccionar fecha</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={customDateRange.to}
+                    onSelect={(date) => setCustomDateRange(prev => ({ ...prev, to: date }))}
+                    disabled={(date) => 
+                      date > new Date() || 
+                      (customDateRange.from ? date < customDateRange.from : false)
+                    }
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+        )}
 
         {/* Profile ID input */}
         <div className="space-y-2">
