@@ -14,8 +14,8 @@ const ACTOR_IDS: Record<string, string> = {
   facebook: "powerai/facebook-post-search-scraper",
   // Facebook page-specific scraper (fallback for username searches)
   facebook_page: "apify/facebook-posts-scraper",
-  // TikTok: clockworks scraper (free tier available)
-  tiktok: "clockworks/tiktok-scraper",
+  // TikTok: sociavault/tiktok-keyword-search-scraper ($1.50/1000 results, keyword-focused with date filters)
+  tiktok: "sociavault/tiktok-keyword-search-scraper",
   // Instagram: apify/instagram-hashtag-scraper ($2.30/1000 results, maintained by Apify)
   instagram: "apify/instagram-hashtag-scraper",
   // YouTube: scraper_one/youtube-search-scraper (reliable, well-maintained)
@@ -136,14 +136,30 @@ serve(async (req) => {
         break;
         
       case "tiktok":
-        // TikTok: send the keyword to filter results on the backend
+        // TikTok: sociavault/tiktok-keyword-search-scraper - keyword-focused with date support
+        // Combine terms into a single search query
+        const tiktokTerms: string[] = [];
+        if (query) {
+          query.split(",").forEach((term: string) => {
+            const cleaned = term.trim();
+            if (cleaned) tiktokTerms.push(cleaned);
+          });
+        }
+        if (hashtag) {
+          const cleanHashtag = hashtag.replace(/^#/, "");
+          if (cleanHashtag) tiktokTerms.push(`#${cleanHashtag}`);
+        }
+        if (username) {
+          const cleanUsername = username.replace(/^@/, "");
+          if (cleanUsername) tiktokTerms.push(`@${cleanUsername}`);
+        }
+        
+        const tiktokQuery = tiktokTerms.join(" ") || "Actinver";
+        
         input = {
-          hashtags: hashtag ? [hashtag] : [],
-          profiles: username ? [username] : [],
-          searchQueries: query ? [query] : [],
-          resultsPerPage: maxResults,
-          // Pass keyword for post-processing filter (handled in apify-status)
-          _filterKeyword: query || hashtag || username || "",
+          keyword: tiktokQuery, // This actor uses 'keyword' parameter
+          maxItems: maxResults,
+          sortBy: "date", // Sort by newest first
         };
         break;
         

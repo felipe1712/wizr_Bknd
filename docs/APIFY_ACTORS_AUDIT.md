@@ -73,31 +73,28 @@
 
 ---
 
-### 3. TikTok ⚠️
-**Actor:** `clockworks/tiktok-scraper`
+### 3. TikTok ✅
+**Actor:** `sociavault/tiktok-keyword-search-scraper`
 
 **Parámetros configurados:**
 ```json
 {
-  "hashtags": ["hashtag"],
-  "profiles": ["username"],
-  "searchQueries": ["query"],
-  "resultsPerPage": 50
+  "keyword": "término de búsqueda",
+  "maxItems": 50,
+  "sortBy": "date"
 }
 ```
 
 **Campos de salida mapeados:**
 - `id` → ID del video
 - `text` / `desc` → Descripción
-- `authorMeta.name` → Username
-- `diggCount`, `commentCount`, `shareCount`, `playCount` → Métricas
-- `createTime` → Timestamp
+- `author.nickname` / `authorMeta.name` → Username
+- `diggCount` / `likes`, `commentCount`, `shareCount`, `playCount` → Métricas
+- `createTime` / `createTimeISO` → Timestamp
 
-**Problemas conocidos:**
-1. **Alta tasa de falsos positivos**: Requiere filtrado estricto por keyword
-2. **Resultados variados**: La relevancia depende del algoritmo interno
+**Estado:** ✅ Funcional - Especializado en búsquedas por keyword con soporte de filtros de fecha ($1.50/1000 resultados)
 
-**Recomendación:** Mantener filtrado post-extracción y limitar a 30-50 resultados
+**Cambio 2026-01-27:** Migrado desde `clockworks/tiktok-scraper` que tenía alta tasa de falsos positivos
 
 ---
 
