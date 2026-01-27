@@ -747,8 +747,10 @@ serve(async (req) => {
         let normalized = normalizeResults(rawItems, platform as Platform);
         rawCount = normalized.length;
 
-        // Filter by keyword for ALL platforms - TikTok actor does NOT filter server-side
-        if (keywordLower) {
+        // Filter by keyword for platforms that need it
+        // SKIP filtering for TikTok - keywords appear in video overlays (OCR) not in metadata
+        // User prefers to see all results and manually curate
+        if (keywordLower && platform !== "tiktok") {
           const beforeCount = normalized.length;
           
           // Handle multiple search terms separated by commas (e.g., "Actinver, @actinver, @actinver_trade")
@@ -761,6 +763,8 @@ serve(async (req) => {
             return searchTerms.some((term: string) => text.includes(term));
           });
           console.log(`Filtered ${platform} results from ${beforeCount} to ${normalized.length} using keywords: ${searchTerms.join(", ")}`);
+        } else if (platform === "tiktok") {
+          console.log(`Skipping keyword filter for TikTok - returning all ${normalized.length} results (user curates manually)`);
         }
 
         // Sort all results chronologically (newest first)

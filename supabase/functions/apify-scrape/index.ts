@@ -160,7 +160,8 @@ serve(async (req) => {
 
         input = {
           keywords,
-          maxResults: Math.min(Math.max(maxResults, 30), 1000),
+          // Increase results for better coverage - TikTok filtering is done client-side
+          maxResults: Math.min(Math.max(maxResults, 200), 1000),
           // 30 = last month (more relevant for monitoring)
           publish_time: 30,
           // 3 = publish time (newest first)
