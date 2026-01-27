@@ -257,38 +257,131 @@ function normalizeFacebook(item: Record<string, unknown>, index: number): Normal
 }
 
 function normalizeTikTok(item: Record<string, unknown>, index: number): NormalizedResult {
+  // Supports multiple TikTok actor output formats:
+  // - clockworks/tiktok-scraper: text/desc, authorMeta, diggCount/playCount/createTime
+  // - powerai/tiktok-videos-search-scraper: title/content_desc, aweme_id/video_id, play/like/comment/share
+
   const authorMeta = item.authorMeta as Record<string, unknown> | undefined;
-  const text = String(get(item, "text") || get(item, "desc") || get(item, "description") || "");
-  const username = String(get(authorMeta, "name") || get(item, "author") || get(item, "authorName") || "");
-  
+  const authorObj = (get(item, "author") as Record<string, unknown>) || undefined;
+  const authorInfoObj = (get(item, "author_info") as Record<string, unknown>) || undefined;
+
+  const title = String(get(item, "title") || "");
+  const desc = String(get(item, "content_desc") || "");
+  const legacyText = String(get(item, "text") || get(item, "desc") || get(item, "description") || "");
+  const text = (title || desc || legacyText).trim();
+
+  const username = String(
+    get(authorMeta, "name") ||
+      get(authorObj, "unique_id") ||
+      get(authorObj, "uniqueId") ||
+      get(authorObj, "username") ||
+      get(authorInfoObj, "unique_id") ||
+      get(authorInfoObj, "uniqueId") ||
+      get(authorInfoObj, "username") ||
+      get(item, "author") ||
+      get(item, "authorName") ||
+      ""
+  );
+
+  const displayName = String(
+    get(authorMeta, "nickName") ||
+      get(authorMeta, "nickname") ||
+      get(authorObj, "nickname") ||
+      get(authorInfoObj, "nickname") ||
+      username
+  );
+
   const metrics = {
-    likes: Number(get(item, "diggCount") || get(item, "likes") || get(item, "likesCount") || 0),
-    comments: Number(get(item, "commentCount") || get(item, "comments") || get(item, "commentsCount") || 0),
-    shares: Number(get(item, "shareCount") || get(item, "shares") || 0),
-    views: Number(get(item, "playCount") || get(item, "views") || get(item, "viewCount") || 0),
+    likes: Number(
+      get(item, "diggCount") ||
+        get(item, "likeCount") ||
+        get(item, "likes") ||
+        get(item, "likesCount") ||
+        get(item, "like") ||
+        get(item, "stats.diggCount") ||
+        0
+    ),
+    comments: Number(
+      get(item, "commentCount") ||
+        get(item, "comments") ||
+        get(item, "commentsCount") ||
+        get(item, "comment") ||
+        get(item, "stats.commentCount") ||
+        0
+    ),
+    shares: Number(get(item, "shareCount") || get(item, "shares") || get(item, "share") || get(item, "stats.shareCount") || 0),
+    views: Number(
+      get(item, "playCount") ||
+        get(item, "views") ||
+        get(item, "viewCount") ||
+        get(item, "play") ||
+        get(item, "stats.playCount") ||
+        0
+    ),
   };
 
+  const videoId = String(get(item, "video_id") || get(item, "aweme_id") || get(item, "id") || "");
+
+  const url = String(
+    get(item, "webVideoUrl") ||
+      get(item, "share_url") ||
+      get(item, "url") ||
+      get(item, "videoUrl") ||
+      (videoId ? `https://www.tiktok.com/video/${videoId}` : "")
+  );
+
   return {
-    id: `tiktok-${get(item, "id") || index}-${Date.now()}`,
+    id: `tiktok-${videoId || index}-${Date.now()}`,
     platform: "tiktok",
-    title: text.substring(0, 100) + (text.length > 100 ? "..." : ""),
-    description: text,
+    title: (text || title).substring(0, 100) + ((text || title).length > 100 ? "..." : ""),
+    description: text || title || desc,
     author: {
-      name: String(get(authorMeta, "nickName") || get(authorMeta, "nickname") || username),
+      name: displayName,
       username: username,
       url: username ? `https://tiktok.com/@${username}` : "",
-      avatarUrl: String(get(authorMeta, "avatar") || get(item, "authorAvatar") || ""),
-      verified: Boolean(get(authorMeta, "verified") || get(item, "authorVerified")),
-      followers: Number(get(authorMeta, "fans") || get(authorMeta, "followers") || 0),
+      avatarUrl: String(
+        get(authorMeta, "avatar") ||
+          get(authorObj, "avatar") ||
+          get(authorObj, "avatar_thumb") ||
+          get(authorInfoObj, "avatar") ||
+          get(authorInfoObj, "avatar_thumb") ||
+          get(item, "authorAvatar") ||
+          ""
+      ),
+      verified: Boolean(
+        get(authorMeta, "verified") || get(authorObj, "verified") || get(authorInfoObj, "verified") || get(item, "authorVerified")
+      ),
+      followers: Number(
+        get(authorMeta, "fans") ||
+          get(authorMeta, "followers") ||
+          get(authorObj, "follower_count") ||
+          get(authorInfoObj, "follower_count") ||
+          0
+      ),
     },
     metrics: { ...metrics, engagement: calculateEngagement(metrics) },
-    publishedAt: parseDate(get(item, "createTime") || get(item, "createdAt")),
-    url: String(get(item, "webVideoUrl") || get(item, "url") || get(item, "videoUrl") || ""),
+    // powerai often includes create time under different keys; keep wide mapping
+    publishedAt: parseDate(
+      get(item, "createTime") ||
+        get(item, "createTimeISO") ||
+        get(item, "createdAt") ||
+        get(item, "create_time") ||
+        get(item, "create_time_iso") ||
+        get(item, "created_at")
+    ),
+    url,
     contentType: "video",
     media: {
       type: "video",
-      url: String(get(item, "videoUrl") || get(item, "webVideoUrl") || ""),
-      thumbnailUrl: String(get(item, "covers.default") || get(item, "thumbnail") || get(item, "cover") || ""),
+      url: String(get(item, "videoUrl") || get(item, "wmplay") || get(item, "play") || get(item, "webVideoUrl") || url || ""),
+      thumbnailUrl: String(
+        get(item, "covers.default") ||
+          get(item, "thumbnail") ||
+          get(item, "cover") ||
+          get(item, "origin_cover") ||
+          get(item, "ai_dynamic_cover") ||
+          ""
+      ),
     },
     hashtags: (get(item, "hashtags") as Array<Record<string, string>>) 
       ? (get(item, "hashtags") as Array<Record<string, string>>).map(h => h.name || h.title || "").filter(Boolean)
