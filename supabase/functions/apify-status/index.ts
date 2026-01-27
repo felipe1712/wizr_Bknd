@@ -547,6 +547,7 @@ serve(async (req) => {
     console.log(`Run ${runId} status: ${status}`);
 
     let items: NormalizedResult[] = [];
+    let rawCount = 0;
 
     // If the run is finished, get and normalize the results
     if (status === "SUCCEEDED" && datasetId) {
@@ -564,6 +565,7 @@ serve(async (req) => {
         }
         
         let normalized = normalizeResults(rawItems, platform as Platform);
+        rawCount = normalized.length;
 
         // Filter by keyword for ALL platforms to reduce false positives
         // Apify actors often return noisy/irrelevant results
@@ -605,6 +607,7 @@ serve(async (req) => {
         platform,
         isFinished: ["SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"].includes(status),
         items: status === "SUCCEEDED" ? items : [],
+        rawCount: rawCount, // Include raw count before filtering
         stats: statusData.data.stats,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

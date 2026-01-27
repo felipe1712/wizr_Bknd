@@ -242,6 +242,11 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
   const [dateFilterEnabled, setDateFilterEnabled] = useState(false);
   const [dateFrom, setDateFrom] = useState<Date | undefined>(subDays(new Date(), 7));
   const [dateTo, setDateTo] = useState<Date | undefined>(new Date());
+  
+  // Progress tracking for real-time feedback
+  const [progressMessage, setProgressMessage] = useState<string>("");
+  const [rawResultsCount, setRawResultsCount] = useState<number>(0);
+  const [filteredResultsCount, setFilteredResultsCount] = useState<number>(0);
 
   const config = PLATFORM_CONFIG[platform];
   const PlatformIcon = config.icon;
@@ -293,8 +298,15 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       if (data.status === "SUCCEEDED") {
         setJobStatus("completed");
         setProgress(100);
+        setProgressMessage("¡Completado!");
         // Results are now pre-normalized by the backend
         const processed = processBackendResults((data.items || []) as SocialSearchResult[]);
+        
+        // Capture filter stats from backend response if available
+        if (data.rawCount !== undefined) {
+          setRawResultsCount(data.rawCount);
+          setFilteredResultsCount(processed.length);
+        }
         setResults(processed);
         
         // Auto-save job and results to database
@@ -374,14 +386,24 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           variant: "destructive",
         });
       } else {
-        // Still running - update progress and check again
+        // Still running - update progress with real-time feedback
         const stats = data.stats || {};
         const pagesLoaded = stats.pagesLoaded || 0;
-        const estimatedProgress = Math.min(90, pagesLoaded * 10);
+        const itemsFound = stats.itemsFound || stats.requestsFinished || 0;
+        const estimatedProgress = Math.min(90, Math.max(pagesLoaded * 10, itemsFound * 2));
         setProgress(estimatedProgress);
         
-        // Poll again in 3 seconds (pass filterKw through)
-        setTimeout(() => checkJobStatus(jobRunId, filterKw), 3000);
+        // Show meaningful progress message
+        if (itemsFound > 0) {
+          setProgressMessage(`Extrayendo datos... ${itemsFound} items encontrados`);
+        } else if (pagesLoaded > 0) {
+          setProgressMessage(`Procesando... ${pagesLoaded} páginas cargadas`);
+        } else {
+          setProgressMessage("Iniciando extracción...");
+        }
+        
+        // Faster polling: 2 seconds instead of 3 for more responsive UX
+        setTimeout(() => checkJobStatus(jobRunId, filterKw), 2000);
       }
     } catch (error) {
       console.error("Error checking job status:", error);
@@ -402,8 +424,11 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     setIsSearching(true);
     setJobStatus("running");
     setProgress(5);
+    setProgressMessage("Conectando con " + config.label + "...");
     setResults([]);
     setCurrentJobId(null);
+    setRawResultsCount(0);
+    setFilteredResultsCount(0);
 
     try {
       // Create job in database first
@@ -820,20 +845,35 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           )}
         </div>
 
-        {/* Progress Indicator */}
+        {/* Progress Indicator - More informative with real-time feedback */}
         {jobStatus === "running" && (
-          <div className="space-y-2">
+          <div className="space-y-2 p-4 rounded-lg border bg-muted/30">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Extrayendo datos de {config.label}...
+              <span className="text-foreground flex items-center gap-2 font-medium">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                {progressMessage || `Extrayendo datos de ${config.label}...`}
               </span>
-              <span className="font-medium">{progress}%</span>
+              <Badge variant="outline" className="tabular-nums">{progress}%</Badge>
             </div>
             <Progress value={progress} className="h-2" />
-            <p className="text-xs text-muted-foreground">
-              Este proceso puede tomar de 30 segundos a varios minutos dependiendo del volumen
-            </p>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Polling cada 2 segundos para resultados en tiempo real</span>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-6 text-xs text-destructive hover:text-destructive"
+                onClick={() => {
+                  setJobStatus("failed");
+                  setIsSearching(false);
+                  toast({
+                    title: "Búsqueda cancelada",
+                    description: "Puedes iniciar una nueva búsqueda",
+                  });
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
           </div>
         )}
 
@@ -852,14 +892,31 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           </div>
         )}
 
+        {/* Completed Status with Filter Stats */}
+        {jobStatus === "completed" && results.length > 0 && (
+          <div className="flex items-center gap-3 p-3 rounded-lg border bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
+            <CheckCircle2 className="h-5 w-5 text-green-600" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                ¡Búsqueda completada!
+              </p>
+              <p className="text-xs text-green-600 dark:text-green-400">
+                {rawResultsCount > 0 && rawResultsCount !== results.length 
+                  ? `${results.length} resultados relevantes de ${rawResultsCount} extraídos (filtrado por keywords)`
+                  : `${results.length} resultados obtenidos de ${config.label}`
+                }
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Results */}
         {filteredResults.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
                 {dateFilterEnabled && filteredResults.length !== results.length 
-                  ? `${filteredResults.length} de ${results.length} resultados (filtrado por fecha)`
+                  ? `Mostrando ${filteredResults.length} de ${results.length} resultados (filtrado por fecha)`
                   : `${filteredResults.length} resultados de ${config.label}`
                 }
                 <span className="text-xs">• Ordenados por fecha (más recientes primero)</span>

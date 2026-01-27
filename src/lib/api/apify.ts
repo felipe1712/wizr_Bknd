@@ -28,7 +28,10 @@ interface ScrapeStatusResponse {
   stats?: {
     pagesLoaded?: number;
     pagesQueued?: number;
+    itemsFound?: number;
+    requestsFinished?: number;
   };
+  rawCount?: number; // Count before filtering
   aggregateMetrics?: Record<string, unknown>;
   error?: string;
 }
