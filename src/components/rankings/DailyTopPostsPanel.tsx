@@ -99,8 +99,13 @@ export function DailyTopPostsPanel({ profiles, topPosts, isLoading, onRefresh }:
       
       const data = await response.json();
 
-      if (data?.success) {
-        toast.success(`Sincronización completada: ${data.topPostsSaved || 0} posts top capturados`);
+      if (data?.success && data?.started) {
+        toast.success("Sincronización iniciada. En unos minutos verás los posts top.");
+        // Try refreshing a couple of times automatically
+        setTimeout(() => onRefresh?.(), 30_000);
+        setTimeout(() => onRefresh?.(), 90_000);
+      } else if (data?.success) {
+        toast.success("Sincronización completada.");
         onRefresh?.();
       } else {
         throw new Error(data?.error || "Error en la sincronización");

@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
@@ -39,11 +40,12 @@ interface PostData {
 }
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
-  try {
+  const runSync = async () => {
     const FANPAGE_KARMA_API_KEY = Deno.env.get("FANPAGE_KARMA_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -286,21 +288,40 @@ serve(async (req) => {
 
     console.log(`Scheduled sync complete: ${successful} success, ${failed} failed, ${topPostsSaved} top posts saved`);
 
+    return {
+      success: true,
+      message: `Synced ${successful} profiles, ${failed} failed, ${topPostsSaved} top posts saved`,
+      synced: successful,
+      failed,
+      topPostsSaved,
+      details: results,
+    };
+  };
+
+  // IMPORTANT: This sync can take several minutes (hundreds of profiles).
+  // To avoid browser/gateway timeouts, we run it in the background and return immediately.
+  try {
+    const edgeRuntimeAny = (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+    const waitUntil = edgeRuntimeAny?.waitUntil;
+
+    if (typeof waitUntil === "function") {
+      waitUntil(
+        runSync().catch((e) => {
+          console.error("Scheduled ranking sync background error:", e);
+        })
+      );
+    } else {
+      // Fallback: run without waitUntil (may still complete, but not guaranteed if the platform enforces strict request lifetimes)
+      runSync().catch((e) => console.error("Scheduled ranking sync fallback error:", e));
+    }
+
     return new Response(
-      JSON.stringify({
-        success: true,
-        message: `Synced ${successful} profiles, ${failed} failed, ${topPostsSaved} top posts saved`,
-        synced: successful,
-        failed,
-        topPostsSaved,
-        details: results,
-      }),
+      JSON.stringify({ success: true, started: true, message: "Sync started" }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error("Scheduled ranking sync error:", errorMessage);
+    console.error("Scheduled ranking sync start error:", errorMessage);
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
