@@ -252,6 +252,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
   const [progressMessage, setProgressMessage] = useState<string>("");
   const [rawResultsCount, setRawResultsCount] = useState<number>(0);
   const [filteredResultsCount, setFilteredResultsCount] = useState<number>(0);
+  const [usedSoftFilter, setUsedSoftFilter] = useState<boolean>(false);
   const [lastStrictDateDiscard, setLastStrictDateDiscard] = useState<{
     discarded: number;
     minDateIso?: string;
@@ -347,6 +348,9 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         // Capture filter stats from backend response if available
         if (data.rawCount !== undefined) {
           setRawResultsCount(data.rawCount);
+        }
+        if ((data as any).softFilter !== undefined) {
+          setUsedSoftFilter((data as any).softFilter);
         }
         
         // STRICT DATE FILTERING: When date filter is enabled, discard results outside the range
@@ -513,6 +517,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     setCurrentJobId(null);
     setRawResultsCount(0);
     setFilteredResultsCount(0);
+    setUsedSoftFilter(false);
 
     try {
       // Create job in database first
@@ -1050,7 +1055,9 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
               <p className="text-xs text-green-600 dark:text-green-400">
                 {rawResultsCount > 0 && rawResultsCount !== results.length 
                   ? `${results.length} resultados relevantes de ${rawResultsCount} extraídos (filtrado por keywords)`
-                  : `${results.length} resultados obtenidos de ${config.label}`
+                  : usedSoftFilter
+                    ? `${results.length} resultados de ${rawResultsCount} extraídos (sin filtrar por keywords)`
+                    : `${results.length} resultados obtenidos de ${config.label}`
                 }
               </p>
             </div>

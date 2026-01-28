@@ -910,7 +910,13 @@ serve(async (req) => {
         // Filter by keyword for platforms that need it
         // SKIP filtering for TikTok - keywords appear in video overlays (OCR) not in metadata
         // User prefers to see all results and manually curate
-        if (keywordLower && platform !== "tiktok") {
+        //
+        // SOFT FILTER for YouTube: When the query IS the keyword, Apify already searched for it.
+        // Re-filtering would be overly restrictive (e.g. a video about "Actinver" might not repeat the word in title).
+        // So for YouTube we skip keyword filtering entirely and rely on frontend date filtering.
+        const useSoftFilter = platform === "youtube";
+        
+        if (keywordLower && platform !== "tiktok" && !useSoftFilter) {
           const beforeCount = normalized.length;
           
           // Handle multiple search terms separated by commas (e.g., "Actinver, @actinver, @actinver_trade")
@@ -925,6 +931,8 @@ serve(async (req) => {
           console.log(`Filtered ${platform} results from ${beforeCount} to ${normalized.length} using keywords: ${searchTerms.join(", ")}`);
         } else if (platform === "tiktok") {
           console.log(`Skipping keyword filter for TikTok - returning all ${normalized.length} results (user curates manually)`);
+        } else if (useSoftFilter) {
+          console.log(`SOFT FILTER: Skipping keyword filter for ${platform} - Apify already searched for query "${keywordLower}". Returning all ${normalized.length} results.`);
         }
 
         // Sort all results chronologically (newest first)
@@ -941,6 +949,9 @@ serve(async (req) => {
         console.log(`Retrieved and normalized ${items.length} items from dataset (sorted chronologically)`);
       }
     }
+
+    // Capture whether soft filter was used
+    const usedSoftFilter = keywordLower && platform === "youtube";
 
     return new Response(
       JSON.stringify({
@@ -959,6 +970,7 @@ serve(async (req) => {
             : undefined,
         items: status === "SUCCEEDED" ? items : [],
         rawCount: rawCount, // Include raw count before filtering
+        softFilter: usedSoftFilter, // True if keyword filtering was skipped
         stats: statusData.data.stats,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
