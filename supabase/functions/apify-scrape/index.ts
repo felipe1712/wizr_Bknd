@@ -21,10 +21,10 @@ const ACTOR_IDS: Record<string, string> = {
   instagram: "apify/instagram-hashtag-scraper",
   // Instagram profile scraper for username-based searches (scrapes posts from specific profiles)
   instagram_profile: "apify/instagram-profile-scraper",
-  // YouTube Videos: scrapesmith/free-youtube-search-scraper (FREE, no rental required)
-  youtube: "scrapesmith/free-youtube-search-scraper",
-  // YouTube Shorts: newbs/youtube-shorts (specialized for Shorts content)
-  youtube_shorts: "newbs/youtube-shorts",
+  // YouTube: streamers/youtube-scraper (Maintained by Apify, $5/1000 videos, supports Videos + Shorts)
+  youtube: "streamers/youtube-scraper",
+  // YouTube Shorts only (deprecated - streamers/youtube-scraper handles both now)
+  youtube_shorts: "streamers/youtube-scraper",
   // Reddit: lite variant for less restrictions
   reddit: "trudax/reddit-scraper-lite",
   // LinkedIn: harvestapi/linkedin-post-search (no cookies required, $2/1000 results)
@@ -271,39 +271,23 @@ serve(async (req) => {
         break;
         
       case "youtube":
-        // scrapesmith/free-youtube-search-scraper - FREE actor, no rental required
-        // Uses 'searchQueries' (array) parameter, not 'query' (string)
-        // Request more results than maxResults to have headroom after keyword filtering.
-        const youtubeResultsCount = Math.max(maxResults * 3, 75);
+      case "youtube_shorts":
+        // streamers/youtube-scraper - Maintained by Apify, $5/1000 videos
+        // Supports both regular videos AND Shorts in a single run!
+        // Uses 'searchQueries' (array), 'maxResults' (videos), 'maxResultsShorts' (shorts)
+        const youtubeResultsCount = Math.max(maxResults * 2, 50);
         if (channelUrl) {
-          // For channel URLs, search by channel name extracted from URL
-          const channelName = channelUrl.replace(/.*@/, "").replace(/.*\/channel\//, "").replace(/.*\/c\//, "");
+          // For channel URLs, use startUrls with the channel URL
           input = {
-            searchQueries: [channelName],
+            startUrls: [{ url: channelUrl }],
             maxResults: youtubeResultsCount,
+            maxResultsShorts: Math.ceil(youtubeResultsCount / 2),
           };
         } else if (query) {
           input = {
             searchQueries: [query],
             maxResults: youtubeResultsCount,
-          };
-        }
-        break;
-        
-      case "youtube_shorts":
-        // newbs/youtube-shorts - specialized for Shorts content
-        // Input: { channel: string[] } - searches for shorts from channels or by keyword
-        const shortsResultsCount = Math.max(maxResults * 2, 50);
-        if (channelUrl) {
-          input = {
-            channel: [channelUrl],
-            maxResults: shortsResultsCount,
-          };
-        } else if (query) {
-          // For keyword search, use the channel array with search URL format
-          input = {
-            channel: [`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAg%253D%253D`],
-            maxResults: shortsResultsCount,
+            maxResultsShorts: Math.ceil(youtubeResultsCount / 2), // Also fetch Shorts!
           };
         }
         break;

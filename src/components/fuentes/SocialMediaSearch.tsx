@@ -687,64 +687,41 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       
       setCurrentJobId(job.id);
 
-      // YOUTUBE COMBINED SEARCH: Launch Videos + Shorts in parallel
+      // YOUTUBE SEARCH: streamers/youtube-scraper handles BOTH videos AND shorts in one run
       if (platform === "youtube") {
-        setProgressMessage("Buscando videos y shorts en paralelo...");
+        setProgressMessage("Buscando videos y shorts...");
         
-        // Start both searches simultaneously.
-        // IMPORTANT: Shorts can be unavailable (e.g. actor not rented). We should still proceed with videos.
-        const [videosSettled, shortsSettled] = await Promise.allSettled([
-          apifyApi.startScrape({
-            platform: "youtube",
-            query: searchType === "query" ? searchValue : undefined,
-            channelUrl: searchType === "channelUrl" ? searchValue : undefined,
-            maxResults,
-          }),
-          apifyApi.startScrape({
-            platform: "youtube_shorts",
-            query: searchType === "query" ? searchValue : undefined,
-            channelUrl: searchType === "channelUrl" ? searchValue : undefined,
-            maxResults: Math.ceil(maxResults / 2), // Fewer shorts typically
-          }),
-        ]);
+        const result = await apifyApi.startScrape({
+          platform: "youtube",
+          query: searchType === "query" ? searchValue : undefined,
+          channelUrl: searchType === "channelUrl" ? searchValue : undefined,
+          maxResults,
+        });
 
-        const videosResult = videosSettled.status === "fulfilled" ? videosSettled.value : null;
-        const shortsResult = shortsSettled.status === "fulfilled" ? shortsSettled.value : null;
+        if (!result.success || !result.data) {
+          throw new Error(result.error || "Error al iniciar la búsqueda de YouTube");
+        }
 
-        // Initialize parallel tracking state
-        const parallelState = {
-          videosRunId: videosResult?.data?.runId || null,
-          shortsRunId: shortsResult?.data?.runId || null,
-          videosComplete: !videosResult?.data?.runId, // Mark as complete if failed
-          shortsComplete: !shortsResult?.data?.runId,
-          videosResults: [] as SocialSearchResult[],
-          shortsResults: [] as SocialSearchResult[],
-        };
-        
-        setYoutubeParallelRuns(parallelState);
-        setProgress(10);
+        const data = result.data;
 
-        // Update job with primary runId (videos)
-        if (parallelState.videosRunId) {
+        if (data.success && data.runId) {
+          setRunId(data.runId);
+          setProgress(10);
+          
+          // Update job with runId and datasetId
           await updateJob({
             id: job.id,
             updates: {
-              run_id: parallelState.videosRunId,
-              dataset_id: videosResult?.data?.datasetId,
+              run_id: data.runId,
+              dataset_id: data.datasetId,
               status: "running",
             },
           });
-        }
-
-        // Start polling both runs
-        if (parallelState.videosRunId || parallelState.shortsRunId) {
-          setTimeout(() => checkYouTubeParallelStatus(parallelState, searchValue), 3000);
+          
+          // Start polling for status (use standard flow - actor returns both videos & shorts)
+          setTimeout(() => checkJobStatus(data.runId!, searchValue), 3000);
         } else {
-          const videoErr = videosResult?.error;
-          const shortsErr = shortsResult?.error;
-          throw new Error(
-            videoErr || shortsErr || "No se pudo iniciar ninguna búsqueda de YouTube"
-          );
+          throw new Error(data.error || "Error al iniciar la búsqueda de YouTube");
         }
       } else {
         // STANDARD SINGLE PLATFORM SEARCH
