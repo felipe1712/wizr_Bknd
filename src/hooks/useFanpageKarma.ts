@@ -272,6 +272,7 @@ export function useSyncFKProfile() {
       const kpiData = data.data || {};
       
       // Fanpage Karma returns metrics as objects with { title, value, formatted_value }
+      // Field names differ between Facebook (page_*) and Instagram (profile_*)
       const extractValue = (key: string): number | null => {
         const metric = kpiData[key];
         if (metric && typeof metric === 'object' && 'value' in metric) {
@@ -280,19 +281,42 @@ export function useSyncFKProfile() {
         return null;
       };
 
+      // Map the correct field names based on network
+      const isInstagram = profile.network === 'instagram';
+      
+      const followers = isInstagram 
+        ? extractValue('profile_followers') 
+        : (extractValue('page_follower') || extractValue('page_fans'));
+      
+      const followerGrowth = isInstagram
+        ? extractValue('profile_followers_growth_percent')
+        : extractValue('page_fans_growth_percent');
+      
+      const engagement = isInstagram
+        ? extractValue('profile_engagement') || extractValue('profile_media_interaction')
+        : (extractValue('page_engagement') || extractValue('page_post_interaction'));
+      
+      const postsPerDay = isInstagram
+        ? extractValue('profile_media_per_day')
+        : extractValue('page_posts_per_day');
+      
+      const performanceIndex = isInstagram
+        ? extractValue('profile_performance_index')
+        : extractValue('page_performance_index');
+
       const { error: insertError } = await supabase
         .from("fk_profile_kpis")
         .upsert({
           fk_profile_id: profile.id,
           period_start: startDate.toISOString().split("T")[0],
           period_end: endDate.toISOString().split("T")[0],
-          followers: extractValue('page_follower') || extractValue('page_fans'),
-          follower_growth_percent: extractValue('page_fans_growth_percent'),
-          engagement_rate: extractValue('page_engagement') || extractValue('page_post_interaction'),
-          posts_per_day: extractValue('page_posts_per_day'),
-          reach_per_day: null, // Not available in standard response
+          followers: followers,
+          follower_growth_percent: followerGrowth,
+          engagement_rate: engagement,
+          posts_per_day: postsPerDay,
+          reach_per_day: null,
           impressions_per_interaction: null,
-          page_performance_index: extractValue('page_performance_index'),
+          page_performance_index: performanceIndex,
           raw_data: kpiData,
           fetched_at: new Date().toISOString(),
         }, { onConflict: "fk_profile_id,period_start,period_end" });

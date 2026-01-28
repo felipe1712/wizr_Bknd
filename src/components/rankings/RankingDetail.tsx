@@ -4,10 +4,11 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, BarChart3, Settings, Trophy, TrendingUp, FileText, Sparkles, MessageCircle, BookOpen } from "lucide-react";
 import { Ranking } from "@/hooks/useRankings";
-import { useFKProfilesByRanking, useFKProfileKPIs, useFKAllKPIs } from "@/hooks/useFanpageKarma";
+import { useFKProfilesByRanking, useFKProfileKPIs, useFKAllKPIs, FKNetwork } from "@/hooks/useFanpageKarma";
 import { RankingBatchForm } from "./RankingBatchForm";
 import { ProfilesList } from "./ProfilesList";
 import { RankingTable } from "./RankingTable";
+import { RankingChart } from "./RankingChart";
 import { TrendsTab } from "./TrendsTab";
 import { TopContentTab } from "./TopContentTab";
 import { RankingInsightsPanel } from "./RankingInsightsPanel";
@@ -27,6 +28,7 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
   const [datePreset, setDatePreset] = useState<DateRangePreset>("28d");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
   const [aiInitialQuestion, setAiInitialQuestion] = useState<string>("");
+  const [rankingFilterNetwork, setRankingFilterNetwork] = useState<FKNetwork | "all">("all");
 
   const { data: profiles = [], isLoading: loadingProfiles } = useFKProfilesByRanking(ranking.id);
   const profileIds = profiles.map((p) => p.id);
@@ -138,14 +140,33 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
                 isLoading={loadingProfiles || loadingKPIs}
               />
               
-              {/* Ranking table */}
+              {/* Ranking table with chart */}
               <RankingTable 
                 profiles={profiles} 
                 kpis={kpis} 
                 isLoading={loadingProfiles || loadingKPIs}
                 sortBy="engagement_rate"
-                filterNetwork="all"
+                filterNetwork={rankingFilterNetwork}
+                onNetworkChange={setRankingFilterNetwork}
               />
+              
+              {/* Chart for current filter */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <RankingChart
+                  profiles={profiles}
+                  kpis={kpis}
+                  isLoading={loadingProfiles || loadingKPIs}
+                  filterNetwork={rankingFilterNetwork}
+                  metric="engagement_rate"
+                />
+                <RankingChart
+                  profiles={profiles}
+                  kpis={kpis}
+                  isLoading={loadingProfiles || loadingKPIs}
+                  filterNetwork={rankingFilterNetwork}
+                  metric="followers"
+                />
+              </div>
             </div>
           )}
         </TabsContent>
