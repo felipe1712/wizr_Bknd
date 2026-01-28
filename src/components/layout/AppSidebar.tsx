@@ -12,6 +12,7 @@ import {
   FolderOpen,
   Settings,
   Trophy,
+  Target,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import wizrIcon from "@/assets/wizr-icon-transparent.png";
@@ -38,9 +39,12 @@ const analysisViews = [
   { title: "Alertas", url: "/dashboard/alertas", icon: Bell, tourId: "nav-alertas" },
   { title: "Influenciadores", url: "/dashboard/influenciadores", icon: Users, tourId: "nav-influenciadores" },
   { title: "Tendencias", url: "/dashboard/tendencias", icon: TrendingUp, tourId: "nav-tendencias" },
-  { title: "Rankings", url: "/dashboard/rankings", icon: Trophy, tourId: "nav-rankings" },
   { title: "Reportes", url: "/dashboard/reportes", icon: FileBarChart, tourId: "nav-reportes" },
   { title: "Fichas", url: "/dashboard/fichas", icon: FileText, tourId: "nav-fichas" },
+];
+
+const benchmarkingItems = [
+  { title: "Rankings", url: "/dashboard/rankings", icon: Trophy, tourId: "nav-rankings" },
 ];
 
 const managementItems = [
@@ -88,6 +92,35 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {analysisViews.map((item) => (
+                <SidebarMenuItem key={item.title} data-tour={item.tourId}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(item.url)}
+                    tooltip={collapsed ? item.title : undefined}
+                  >
+                    <NavLink
+                      to={item.url}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                    >
+                      <item.icon className="h-5 w-5 shrink-0" />
+                      {!collapsed && <span>{item.title}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Benchmarking */}
+        <SidebarGroup className="mt-6">
+          <SidebarGroupLabel className="px-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
+            {!collapsed ? "Benchmarking" : ""}
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {benchmarkingItems.map((item) => (
                 <SidebarMenuItem key={item.title} data-tour={item.tourId}>
                   <SidebarMenuButton
                     asChild

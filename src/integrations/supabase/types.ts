@@ -225,7 +225,9 @@ export type Database = {
           page_performance_index: number | null
           period_end: string
           period_start: string
+          position: number | null
           posts_per_day: number | null
+          previous_position: number | null
           raw_data: Json | null
           reach_per_day: number | null
         }
@@ -240,7 +242,9 @@ export type Database = {
           page_performance_index?: number | null
           period_end: string
           period_start: string
+          position?: number | null
           posts_per_day?: number | null
+          previous_position?: number | null
           raw_data?: Json | null
           reach_per_day?: number | null
         }
@@ -255,7 +259,9 @@ export type Database = {
           page_performance_index?: number | null
           period_end?: string
           period_start?: string
+          position?: number | null
           posts_per_day?: number | null
+          previous_position?: number | null
           raw_data?: Json | null
           reach_per_day?: number | null
         }
@@ -280,7 +286,8 @@ export type Database = {
           last_synced_at: string | null
           network: string
           profile_id: string
-          project_id: string
+          project_id: string | null
+          ranking_id: string | null
           updated_at: string
         }
         Insert: {
@@ -293,7 +300,8 @@ export type Database = {
           last_synced_at?: string | null
           network: string
           profile_id: string
-          project_id: string
+          project_id?: string | null
+          ranking_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -306,7 +314,8 @@ export type Database = {
           last_synced_at?: string | null
           network?: string
           profile_id?: string
-          project_id?: string
+          project_id?: string | null
+          ranking_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -315,6 +324,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_profiles_ranking_id_fkey"
+            columns: ["ranking_id"]
+            isOneToOne: false
+            referencedRelation: "rankings"
             referencedColumns: ["id"]
           },
         ]
@@ -542,6 +558,33 @@ export type Database = {
           updated_at?: string
           user_id?: string
           version?: number
+        }
+        Relationships: []
+      }
+      rankings: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
