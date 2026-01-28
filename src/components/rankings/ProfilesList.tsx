@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Table, 
   TableBody, 
@@ -23,7 +24,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { RefreshCw, Trash2, Users, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
-import { FKProfile, getNetworkLabel, useDeleteFKProfile, useSyncFKProfile, useSyncAllProfiles, FKNetwork } from "@/hooks/useFanpageKarma";
+import { FKProfile, getNetworkLabel, useDeleteFKProfile, useBulkDeleteFKProfiles, useSyncFKProfile, useSyncAllProfiles, FKNetwork } from "@/hooks/useFanpageKarma";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -46,8 +47,11 @@ interface ProfilesListProps {
 
 export function ProfilesList({ profiles, isLoading, rankingId, projectId }: ProfilesListProps) {
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   
   const deleteProfile = useDeleteFKProfile();
+  const bulkDeleteProfiles = useBulkDeleteFKProfiles();
   const syncProfile = useSyncFKProfile();
   const syncAllProfiles = useSyncAllProfiles();
 
@@ -63,6 +67,36 @@ export function ProfilesList({ profiles, isLoading, rankingId, projectId }: Prof
   const handleSyncAll = async () => {
     await syncAllProfiles.mutateAsync({ profiles });
   };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(new Set(profiles.map(p => p.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleSelectOne = (profileId: string, checked: boolean) => {
+    const newSet = new Set(selectedIds);
+    if (checked) {
+      newSet.add(profileId);
+    } else {
+      newSet.delete(profileId);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const handleBulkDelete = async () => {
+    await bulkDeleteProfiles.mutateAsync({ 
+      profileIds: Array.from(selectedIds), 
+      rankingId 
+    });
+    setSelectedIds(new Set());
+    setShowBulkDeleteDialog(false);
+  };
+
+  const isAllSelected = profiles.length > 0 && selectedIds.size === profiles.length;
+  const isSomeSelected = selectedIds.size > 0 && selectedIds.size < profiles.length;
 
   const groupedProfiles = profiles.reduce((acc, profile) => {
     const network = profile.network as FKNetwork;
@@ -113,25 +147,70 @@ export function ProfilesList({ profiles, isLoading, rankingId, projectId }: Prof
               {profiles.length} perfiles en {Object.keys(groupedProfiles).length} redes
             </CardDescription>
           </div>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleSyncAll}
-            disabled={syncAllProfiles.isPending || syncingId !== null}
-          >
-            {syncAllProfiles.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
+          <div className="flex items-center gap-2">
+            {selectedIds.size > 0 && (
+              <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+                <AlertDialogTrigger asChild>
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Eliminar ({selectedIds.size})
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="bg-background">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>¿Eliminar {selectedIds.size} perfiles?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Se eliminarán los perfiles seleccionados y todos sus datos de KPIs almacenados. Esta acción no se puede deshacer.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleBulkDelete}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      disabled={bulkDeleteProfiles.isPending}
+                    >
+                      {bulkDeleteProfiles.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Eliminar {selectedIds.size} perfiles
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
-            Sincronizar Todos
-          </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleSyncAll}
+              disabled={syncAllProfiles.isPending || syncingId !== null}
+            >
+              {syncAllProfiles.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Sincronizar Todos
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-12">
+                <Checkbox 
+                  checked={isAllSelected}
+                  onCheckedChange={handleSelectAll}
+                  aria-label="Seleccionar todos"
+                  className={isSomeSelected ? "data-[state=checked]:bg-primary" : ""}
+                  {...(isSomeSelected ? { "data-state": "indeterminate" } : {})}
+                />
+              </TableHead>
               <TableHead>Red</TableHead>
               <TableHead>Perfil</TableHead>
               <TableHead>Última Sync</TableHead>
@@ -143,9 +222,17 @@ export function ProfilesList({ profiles, isLoading, rankingId, projectId }: Prof
             {profiles.map((profile) => {
               const isSyncing = syncingId === profile.id;
               const network = profile.network as FKNetwork;
+              const isSelected = selectedIds.has(profile.id);
               
               return (
-                <TableRow key={profile.id}>
+                <TableRow key={profile.id} className={isSelected ? "bg-muted/50" : ""}>
+                  <TableCell>
+                    <Checkbox 
+                      checked={isSelected}
+                      onCheckedChange={(checked) => handleSelectOne(profile.id, !!checked)}
+                      aria-label={`Seleccionar ${profile.profile_id}`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={NETWORK_COLORS[network]}>
                       {getNetworkLabel(network)}

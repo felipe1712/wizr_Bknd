@@ -245,6 +245,35 @@ export function useDeleteFKProfile() {
   });
 }
 
+export function useBulkDeleteFKProfiles() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ profileIds, rankingId }: { profileIds: string[]; rankingId?: string }) => {
+      if (profileIds.length === 0) {
+        throw new Error("No se seleccionaron perfiles");
+      }
+
+      const { error } = await supabase
+        .from("fk_profiles")
+        .delete()
+        .in("id", profileIds);
+
+      if (error) throw error;
+      return { count: profileIds.length, rankingId };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["fk-profiles-ranking", result.rankingId] });
+      queryClient.invalidateQueries({ queryKey: ["fk-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["fk-kpis"] });
+      toast.success(`${result.count} perfiles eliminados`);
+    },
+    onError: (error: Error) => {
+      toast.error(`Error al eliminar: ${error.message}`);
+    },
+  });
+}
+
 export function useSyncFKProfile() {
   const queryClient = useQueryClient();
 
