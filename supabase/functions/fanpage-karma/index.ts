@@ -110,11 +110,14 @@ serve(async (req) => {
             throw new Error(`Incomplete response from Fanpage Karma API for ${profileId} after ${maxRetries} attempts. The profile may not be registered in your Fanpage Karma dashboard.`);
           }
           
+          // Handle NaN values in the response (Fanpage Karma sometimes returns NaN which breaks JSON)
+          const sanitizedText = trimmedText.replace(/:\s*NaN\s*(,|})/g, ': null$1');
+          
           let data;
           try {
-            data = JSON.parse(text);
+            data = JSON.parse(sanitizedText);
           } catch (parseErr) {
-            console.error(`Attempt ${attempt}: JSON parse error:`, parseErr);
+            console.error(`Attempt ${attempt}: JSON parse error:`, parseErr, `Response length: ${text.length}`);
             if (attempt < maxRetries) {
               await new Promise(r => setTimeout(r, 1000 * attempt));
               continue;
@@ -131,7 +134,7 @@ serve(async (req) => {
             throw new Error(errMsg);
           }
 
-          console.log(`Fanpage Karma response for ${profileId}:`, JSON.stringify(data.metadata || {}).slice(0, 200));
+          console.log(`Fanpage Karma response for ${profileId}: name="${data.metadata?.profile_name || data.metadata?.name || 'N/A'}", metadata keys: ${Object.keys(data.metadata || {}).join(', ')}`);
 
           return new Response(
             JSON.stringify({
