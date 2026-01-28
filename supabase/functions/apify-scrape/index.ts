@@ -25,8 +25,10 @@ const ACTOR_IDS: Record<string, string> = {
   youtube: "scraper_one/youtube-search-scraper",
   // YouTube Shorts: same actor, handles search queries
   youtube_shorts: "scraper_one/youtube-search-scraper",
-  // Reddit: lite variant for less restrictions
+  // Reddit: lite variant for less restrictions (searches posts)
   reddit: "trudax/reddit-scraper-lite",
+  // Reddit Comments: search directly within comments (not just post titles)
+  reddit_comments: "easyapi/reddit-comments-search-scraper",
   // LinkedIn: harvestapi/linkedin-post-search (no cookies required, $2/1000 results)
   linkedin: "harvestapi/linkedin-post-search",
 };
@@ -37,7 +39,7 @@ const DISABLED_PLATFORMS: Record<string, string> = {
 };
 
 interface ScrapeRequest {
-  platform: "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "youtube_shorts" | "reddit";
+  platform: "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "youtube_shorts" | "reddit" | "reddit_comments";
   query?: string;
   username?: string;
   hashtag?: string;
@@ -322,6 +324,19 @@ serve(async (req) => {
             sort: "new", // Changed to new for chronological order
           };
         }
+        break;
+        
+      case "reddit_comments":
+        // easyapi/reddit-comments-search-scraper - searches WITHIN comments, not just posts
+        // This actor finds comments containing the keyword, even if the post title doesn't mention it
+        if (!query) {
+          throw new Error("Reddit comments search requires a search query.");
+        }
+        input = {
+          keyword: query,
+          maxComments: Math.min(maxResults * 2, 200), // Get more since we filter later
+          sortType: "new", // newest comments first
+        };
         break;
         
       case "linkedin":

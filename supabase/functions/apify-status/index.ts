@@ -99,7 +99,7 @@ async function tryFetchYouTubeFullDescription(videoUrl: string): Promise<string 
   }
 }
 
-type Platform = "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "youtube_shorts" | "reddit";
+type Platform = "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "youtube_shorts" | "reddit" | "reddit_comments";
 
 interface NormalizedResult {
   id: string;
@@ -793,6 +793,60 @@ function normalizeReddit(item: Record<string, unknown>, index: number): Normaliz
   };
 }
 
+// Normalize Reddit Comments from easyapi/reddit-comments-search-scraper
+// This actor returns individual comments, not posts
+function normalizeRedditComment(item: Record<string, unknown>, index: number): NormalizedResult {
+  // easyapi/reddit-comments-search-scraper output structure:
+  // { comment_id, post_id, subreddit, author, created_time, score, author_url, title, url, comment_content, votes, comments }
+  
+  const commentContent = String(get(item, "comment_content") || get(item, "contentText") || get(item, "body") || "");
+  const postTitle = String(get(item, "title") || get(item, "post.title") || "");
+  const author = String(get(item, "author") || get(item, "author.name") || "");
+  const subreddit = String(get(item, "subreddit") || get(item, "subreddit.name") || "");
+  
+  // easyapi returns 'score' or 'votes' for comment upvotes
+  const commentScore = Number(get(item, "score") || get(item, "votes") || 0);
+  // Post-level comment count
+  const postComments = Number(get(item, "comments") || get(item, "comment_count") || 0);
+  
+  const commentId = String(get(item, "comment_id") || get(item, "id") || "");
+  const postUrl = String(get(item, "url") || "");
+  const authorUrl = String(get(item, "author_url") || (author ? `https://reddit.com/u/${author}` : ""));
+  
+  // Parse created_time - can be ISO string
+  const createdTime = get(item, "created_time") || get(item, "created_timestamp") || get(item, "createdAt");
+
+  return {
+    id: `reddit_comments-${commentId || index}-${Date.now()}`,
+    platform: "reddit_comments" as Platform,
+    // For comments, the title is the comment content (truncated)
+    title: commentContent.substring(0, 100) + (commentContent.length > 100 ? "..." : ""),
+    // Full comment as description, with post context
+    description: `💬 Comentario: ${commentContent}\n\n📝 En post: "${postTitle}"`,
+    author: {
+      name: author,
+      username: author,
+      url: authorUrl,
+    },
+    metrics: {
+      likes: commentScore,
+      comments: postComments, // This is the post's comment count
+      shares: 0,
+      engagement: commentScore,
+    },
+    publishedAt: parseDate(createdTime),
+    url: postUrl, // URL points to the post (comment is within)
+    contentType: "post",
+    hashtags: subreddit ? [subreddit] : [],
+    raw: {
+      ...item,
+      _isComment: true,
+      _commentContent: commentContent,
+      _postTitle: postTitle,
+    },
+  };
+}
+
 function normalizeResults(items: unknown[], platform: Platform): NormalizedResult[] {
   return (items || []).map((item, index) => {
     const data = item as Record<string, unknown>;
@@ -814,6 +868,8 @@ function normalizeResults(items: unknown[], platform: Platform): NormalizedResul
         return normalizeYouTubeShort(data, index);
       case "reddit":
         return normalizeReddit(data, index);
+      case "reddit_comments":
+        return normalizeRedditComment(data, index);
       default:
         return {
           id: `unknown-${index}-${Date.now()}`,

@@ -89,8 +89,8 @@ const RedditIcon = () => (
 // User-selectable platforms in the UI
 type SelectablePlatform = "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "reddit";
 
-// All platforms including internal ones (youtube_shorts is used internally for combined search)
-type Platform = SelectablePlatform | "youtube_shorts";
+// All platforms including internal ones (youtube_shorts is used internally for combined search, reddit_comments for comment-specific search)
+type Platform = SelectablePlatform | "youtube_shorts" | "reddit_comments";
 
 interface SocialSearchResult {
   id: string;
@@ -233,10 +233,11 @@ const PLATFORM_CONFIG: Record<SelectablePlatform, {
     color: "bg-orange-600 text-white",
     placeholder: "Ej: término o r/subreddit",
     searchTypes: [
-      { value: "query", label: "Búsqueda general", tooltip: "Busca posts en todo Reddit que contengan los términos especificados. Ordena por más recientes." },
+      { value: "query", label: "Búsqueda en posts", tooltip: "Busca posts que contengan los términos en título o cuerpo. Incluye comentarios del post." },
+      { value: "comments", label: "Búsqueda en comentarios", tooltip: "🔥 NUEVO: Busca DENTRO de comentarios. Encuentra menciones aunque el post no contenga tu keyword." },
       { value: "subreddit", label: "Por subreddit", tooltip: "Busca posts dentro de un subreddit específico. Ingresa sin el prefijo r/." },
     ],
-    helpText: "⚠️ Reddit ordena por 'nuevos' pero NO filtra por fecha en servidor. Activa el filtro de fecha para descartar menciones antiguas automáticamente.",
+    helpText: "💡 Usa 'Búsqueda en comentarios' para encontrar menciones dentro de discusiones, no solo en títulos de posts.",
   },
 };
 
@@ -856,9 +857,14 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         }
       } else {
         // STANDARD SINGLE PLATFORM SEARCH
+        // Special handling for Reddit comments search - use reddit_comments platform
+        const effectivePlatform = (platform === "reddit" && searchType === "comments") 
+          ? "reddit_comments" 
+          : platform;
+        
         const result = await apifyApi.startScrape({
-          platform,
-          query: searchType === "query" ? searchValue : undefined,
+          platform: effectivePlatform,
+          query: (searchType === "query" || searchType === "comments") ? searchValue : undefined,
           username: searchType === "username" ? searchValue.replace("@", "") : undefined,
           hashtag: searchType === "hashtag" ? searchValue.replace("#", "") : undefined,
           companyUrl: searchType === "companyUrl" ? searchValue : undefined,
@@ -1594,6 +1600,13 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
                             {result.platform === "reddit" && result.raw?._matchedInComment && (
                               <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-700">
                                 💬 Mención en comentario
+                              </Badge>
+                            )}
+                            
+                            {/* Reddit_comments badge - results from comment search actor */}
+                            {result.platform === "reddit_comments" && (
+                              <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-700">
+                                💬 Comentario de Reddit
                               </Badge>
                             )}
                             
