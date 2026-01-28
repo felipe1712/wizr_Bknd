@@ -536,8 +536,24 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         const stats = data.stats || {};
         const pagesLoaded = stats.pagesLoaded || 0;
         const itemsFound = stats.itemsFound || stats.requestsFinished || 0;
+        const statusMessage = String((data as any)?.statusMessage || "");
+
+        // YouTube actor frequently exposes useful progress via statusMessage (e.g. "Crawled 37/39 pages")
+        // while stats may be empty. Parse it to show meaningful progress.
+        let messageProgress: number | null = null;
+        if (platform === "youtube" && statusMessage) {
+          const m = statusMessage.match(/Crawled\s+(\d+)\s*\/\s*(\d+)\s*pages/i);
+          if (m?.[1] && m?.[2]) {
+            const done = Number(m[1]);
+            const total = Number(m[2]);
+            if (Number.isFinite(done) && Number.isFinite(total) && total > 0) {
+              messageProgress = Math.min(90, Math.max(5, Math.round((done / total) * 90)));
+            }
+          }
+        }
+
         const estimatedProgress = Math.min(90, Math.max(pagesLoaded * 10, itemsFound * 2));
-        setProgress(estimatedProgress);
+        setProgress(messageProgress ?? estimatedProgress);
         
         // Calculate remaining time
         const remainingMs = MAX_POLLING_DURATION_MS - elapsedMs;
@@ -545,7 +561,9 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         const timeWarning = remainingSecs < 60 ? ` (${remainingSecs}s restantes)` : "";
         
         // Show meaningful progress message with time remaining if running low
-        if (itemsFound > 0) {
+        if (platform === "youtube" && statusMessage) {
+          setProgressMessage(`${statusMessage}${timeWarning}`);
+        } else if (itemsFound > 0) {
           setProgressMessage(`Extrayendo datos... ${itemsFound} items encontrados${timeWarning}`);
         } else if (pagesLoaded > 0) {
           setProgressMessage(`Procesando... ${pagesLoaded} páginas cargadas${timeWarning}`);
@@ -553,8 +571,9 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           setProgressMessage(`Iniciando extracción...${timeWarning}`);
         }
         
-        // Faster polling: 2 seconds instead of 3 for more responsive UX
-        setTimeout(() => checkJobStatus(jobRunId, filterKw, pollingStart), 2000);
+        // Slightly slower polling for YouTube (reduces cold-start spam and still feels responsive)
+        const pollMs = platform === "youtube" ? 3000 : 2000;
+        setTimeout(() => checkJobStatus(jobRunId, filterKw, pollingStart), pollMs);
       }
     } catch (error) {
       console.error("Error checking job status:", error);

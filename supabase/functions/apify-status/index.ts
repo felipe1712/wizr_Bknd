@@ -1006,6 +1006,7 @@ serve(async (req) => {
         success: true,
         runId,
         status,
+        statusMessage,
         platform,
         isFinished: ["SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"].includes(status),
         error:
