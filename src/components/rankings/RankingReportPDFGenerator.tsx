@@ -3,6 +3,7 @@ import { FileDown, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { RankingReportContent } from "@/hooks/useRankingReport";
+import type { FKProfile, FKProfileKPI } from "@/hooks/useFanpageKarma";
 import jsPDF from "jspdf";
 
 interface RankingReportPDFGeneratorProps {
@@ -15,6 +16,13 @@ interface RankingReportPDFGeneratorProps {
   };
   selectedTemplate: "executive" | "technical" | "public";
   editedTemplate: string;
+  profiles?: FKProfile[];
+  kpis?: FKProfileKPI[];
+}
+
+interface ChartData {
+  name: string;
+  value: number;
 }
 
 export function RankingReportPDFGenerator({
@@ -23,15 +31,106 @@ export function RankingReportPDFGenerator({
   dateRange,
   selectedTemplate,
   editedTemplate,
+  profiles = [],
+  kpis = [],
 }: RankingReportPDFGeneratorProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
+
+  // Prepare chart data
+  const prepareEngagementData = (): ChartData[] => {
+    return profiles
+      .map((profile) => {
+        const kpi = kpis.find((k) => k.fk_profile_id === profile.id);
+        return {
+          name: (profile.display_name || profile.profile_id).substring(0, 15),
+          value: kpi?.engagement_rate || 0,
+        };
+      })
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
+  };
+
+  const prepareGrowthData = (): ChartData[] => {
+    return profiles
+      .map((profile) => {
+        const kpi = kpis.find((k) => k.fk_profile_id === profile.id);
+        return {
+          name: (profile.display_name || profile.profile_id).substring(0, 15),
+          value: kpi?.follower_growth_percent || 0,
+        };
+      })
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
+  };
+
+  const drawBarChart = (
+    doc: jsPDF,
+    data: ChartData[],
+    title: string,
+    xPos: number,
+    yPos: number,
+    chartWidth: number,
+    chartHeight: number,
+    unit: string = "%"
+  ) => {
+    if (data.length === 0) return yPos;
+
+    const margin = 5;
+    const labelWidth = 45;
+    const barAreaWidth = chartWidth - labelWidth - margin * 2;
+    const barHeight = Math.min(12, (chartHeight - 25) / data.length);
+    const maxValue = Math.max(...data.map((d) => Math.abs(d.value)), 0.1);
+
+    // Title
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(60, 60, 60);
+    doc.text(title, xPos + chartWidth / 2, yPos, { align: "center" });
+    yPos += 8;
+
+    // Draw bars
+    data.forEach((item, index) => {
+      const barY = yPos + index * (barHeight + 3);
+      
+      // Label
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(80, 80, 80);
+      doc.text(item.name, xPos + margin, barY + barHeight / 2 + 2);
+
+      // Bar
+      const barWidth = (Math.abs(item.value) / maxValue) * barAreaWidth;
+      const barX = xPos + labelWidth + margin;
+
+      // Color based on value
+      if (item.value >= 0) {
+        doc.setFillColor(34, 197, 94); // green
+      } else {
+        doc.setFillColor(239, 68, 68); // red
+      }
+      doc.roundedRect(barX, barY, Math.max(barWidth, 2), barHeight - 1, 1, 1, "F");
+
+      // Value label
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(60, 60, 60);
+      doc.text(
+        `${item.value.toFixed(1)}${unit}`,
+        barX + barWidth + 3,
+        barY + barHeight / 2 + 2
+      );
+    });
+
+    return yPos + data.length * (barHeight + 3) + 10;
+  };
 
   const generatePDF = async () => {
     setIsGenerating(true);
     try {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
       const margin = 20;
       const contentWidth = pageWidth - margin * 2;
       let yPos = margin;
@@ -48,7 +147,7 @@ export function RankingReportPDFGenerator({
       };
 
       const checkPageBreak = (requiredSpace: number) => {
-        if (yPos + requiredSpace > doc.internal.pageSize.getHeight() - margin) {
+        if (yPos + requiredSpace > pageHeight - margin) {
           doc.addPage();
           yPos = margin;
         }
@@ -102,7 +201,49 @@ export function RankingReportPDFGenerator({
       if (report.metrics.topPerformer) {
         addText(`• Top performer: ${report.metrics.topPerformer}`, 10, false);
       }
-      yPos += 5;
+      yPos += 10;
+
+      // Charts Section
+      if (profiles.length > 0 && kpis.length > 0) {
+        checkPageBreak(120);
+        
+        addText("VISUALIZACIÓN DE MÉTRICAS", 12, true, [245, 158, 11]);
+        yPos += 5;
+
+        const engagementData = prepareEngagementData();
+        const growthData = prepareGrowthData();
+        
+        const chartWidth = (contentWidth - 10) / 2;
+        const chartHeight = 100;
+        
+        // Draw engagement chart
+        if (engagementData.length > 0) {
+          drawBarChart(
+            doc,
+            engagementData,
+            "Engagement por Perfil",
+            margin,
+            yPos,
+            chartWidth,
+            chartHeight
+          );
+        }
+
+        // Draw growth chart
+        if (growthData.length > 0) {
+          drawBarChart(
+            doc,
+            growthData,
+            "Crecimiento de Seguidores",
+            margin + chartWidth + 10,
+            yPos,
+            chartWidth,
+            chartHeight
+          );
+        }
+
+        yPos += chartHeight + 10;
+      }
 
       // Selected Template Content
       checkPageBreak(60);
@@ -123,7 +264,7 @@ export function RankingReportPDFGenerator({
         doc.text(
           `Generado por Wizr | Página ${i} de ${pageCount}`,
           pageWidth / 2,
-          doc.internal.pageSize.getHeight() - 10,
+          pageHeight - 10,
           { align: "center" }
         );
       }
