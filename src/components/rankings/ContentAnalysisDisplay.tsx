@@ -70,6 +70,10 @@ const getNarrativeColor = (index: number): string => {
 };
 
 export function ContentAnalysisDisplay({ analysis }: ContentAnalysisDisplayProps) {
+  const narratives = analysis.dominantNarratives || [];
+  const strengths = analysis.contentStrategy?.strengths || [];
+  const opportunities = analysis.contentStrategy?.opportunities || [];
+  
   return (
     <ScrollArea className="max-h-[65vh] pr-4">
       <div className="space-y-6">
@@ -95,7 +99,7 @@ export function ContentAnalysisDisplay({ analysis }: ContentAnalysisDisplayProps
             <h3 className="font-semibold">Narrativas Principales</h3>
           </div>
           <div className="space-y-3">
-            {analysis.dominantNarratives.map((narrative, index) => (
+            {narratives.map((narrative, index) => (
               <Card 
                 key={index} 
                 className={`border ${getNarrativeColor(index)}`}
@@ -138,8 +142,8 @@ export function ContentAnalysisDisplay({ analysis }: ContentAnalysisDisplayProps
                   <span className="text-xs text-muted-foreground uppercase tracking-wide">
                     Estilo
                   </span>
-                  <Badge className={`w-fit ${getToneColor(analysis.toneAnalysis.overall)}`}>
-                    {getToneLabel(analysis.toneAnalysis.overall)}
+                  <Badge className={`w-fit ${getToneColor(analysis.toneAnalysis?.overall || "mixed")}`}>
+                    {getToneLabel(analysis.toneAnalysis?.overall || "mixed")}
                   </Badge>
                 </div>
                 <div className="flex flex-col gap-1">
@@ -147,7 +151,7 @@ export function ContentAnalysisDisplay({ analysis }: ContentAnalysisDisplayProps
                     Tono Emocional
                   </span>
                   <span className="text-sm font-medium">
-                    {analysis.toneAnalysis.emotionalTone || "No determinado"}
+                    {analysis.toneAnalysis?.emotionalTone || "No determinado"}
                   </span>
                 </div>
                 <div className="flex flex-col gap-1">
@@ -155,10 +159,10 @@ export function ContentAnalysisDisplay({ analysis }: ContentAnalysisDisplayProps
                     Usa CTAs
                   </span>
                   <Badge 
-                    variant={analysis.toneAnalysis.callToAction ? "default" : "secondary"}
+                    variant={analysis.toneAnalysis?.callToAction ? "default" : "secondary"}
                     className="w-fit"
                   >
-                    {analysis.toneAnalysis.callToAction ? "Sí" : "No"}
+                    {analysis.toneAnalysis?.callToAction ? "Sí" : "No"}
                   </Badge>
                 </div>
               </div>
@@ -184,14 +188,14 @@ export function ContentAnalysisDisplay({ analysis }: ContentAnalysisDisplayProps
                 </span>
               </div>
               <p className="text-sm font-medium">
-                {analysis.contentStrategy.primaryFocus || "No determinado"}
+                {analysis.contentStrategy?.primaryFocus || "No determinado"}
               </p>
             </CardContent>
           </Card>
 
           <div className="grid gap-4 md:grid-cols-2">
             {/* Strengths */}
-            {analysis.contentStrategy.strengths?.length > 0 && (
+            {strengths.length > 0 && (
               <Card className="border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-900/20">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2 text-green-700 dark:text-green-400">
@@ -201,7 +205,7 @@ export function ContentAnalysisDisplay({ analysis }: ContentAnalysisDisplayProps
                 </CardHeader>
                 <CardContent className="pt-0">
                   <ul className="space-y-2">
-                    {analysis.contentStrategy.strengths.map((strength, i) => (
+                    {strengths.map((strength, i) => (
                       <li key={i} className="text-sm flex items-start gap-2">
                         <span className="text-green-600 dark:text-green-400 mt-0.5">✓</span>
                         <span className="text-foreground/80">{strength}</span>
@@ -213,7 +217,7 @@ export function ContentAnalysisDisplay({ analysis }: ContentAnalysisDisplayProps
             )}
 
             {/* Opportunities */}
-            {analysis.contentStrategy.opportunities?.length > 0 && (
+            {opportunities.length > 0 && (
               <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/20">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2 text-amber-700 dark:text-amber-400">
@@ -223,7 +227,7 @@ export function ContentAnalysisDisplay({ analysis }: ContentAnalysisDisplayProps
                 </CardHeader>
                 <CardContent className="pt-0">
                   <ul className="space-y-2">
-                    {analysis.contentStrategy.opportunities.map((opportunity, i) => (
+                    {opportunities.map((opportunity, i) => (
                       <li key={i} className="text-sm flex items-start gap-2">
                         <span className="text-amber-600 dark:text-amber-400 mt-0.5">→</span>
                         <span className="text-foreground/80">{opportunity}</span>
