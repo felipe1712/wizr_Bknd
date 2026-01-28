@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, BarChart3, Settings, Trophy, TrendingUp, Bell, FileText } from "lucide-react";
+import { ArrowLeft, BarChart3, Settings, Trophy, TrendingUp, FileText } from "lucide-react";
 import { Ranking } from "@/hooks/useRankings";
-import { useFKProfilesByRanking, useFKProfileKPIs } from "@/hooks/useFanpageKarma";
+import { useFKProfilesByRanking, useFKProfileKPIs, useFKAllKPIs } from "@/hooks/useFanpageKarma";
 import { RankingBatchForm } from "./RankingBatchForm";
 import { ProfilesList } from "./ProfilesList";
 import { RankingTable } from "./RankingTable";
+import { TrendsTab } from "./TrendsTab";
+import { TopContentTab } from "./TopContentTab";
 
 type SortMetric = "followers" | "engagement_rate" | "follower_growth_percent" | "posts_per_day";
 
@@ -22,6 +24,7 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
   const { data: profiles = [], isLoading: loadingProfiles } = useFKProfilesByRanking(ranking.id);
   const profileIds = profiles.map((p) => p.id);
   const { data: kpis = [], isLoading: loadingKPIs } = useFKProfileKPIs(profileIds);
+  const { data: allKpis = [], isLoading: loadingAllKpis } = useFKAllKPIs(profileIds);
 
   const syncedCount = profiles.filter((p) => p.last_synced_at).length;
 
@@ -101,23 +104,18 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
         </TabsContent>
 
         <TabsContent value="trends" className="mt-6">
-          <div className="text-center py-12 border rounded-lg border-dashed">
-            <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">Tendencias Históricas</h3>
-            <p className="text-muted-foreground">
-              Próximamente: Gráficos de evolución de posiciones y métricas a lo largo del tiempo.
-            </p>
-          </div>
+          <TrendsTab 
+            profiles={profiles} 
+            kpis={allKpis} 
+            isLoading={loadingProfiles || loadingAllKpis} 
+          />
         </TabsContent>
 
         <TabsContent value="content" className="mt-6">
-          <div className="text-center py-12 border rounded-lg border-dashed">
-            <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">Contenido Top</h3>
-            <p className="text-muted-foreground">
-              Próximamente: Análisis de los posts con mejor engagement de cada perfil.
-            </p>
-          </div>
+          <TopContentTab 
+            profiles={profiles} 
+            isLoading={loadingProfiles} 
+          />
         </TabsContent>
 
         <TabsContent value="config" className="mt-6">
