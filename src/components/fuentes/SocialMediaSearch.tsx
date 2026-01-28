@@ -39,6 +39,7 @@ import {
   Eye,
   EyeOff,
   Filter,
+  Copy,
 } from "lucide-react";
 import { format, subDays, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
@@ -1791,19 +1792,38 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
                               </span>
                             )}
                             {sanitizeExternalUrl(result.url) && (
-                              <a
-                                href={sanitizeExternalUrl(result.url) ?? undefined}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  void openExternalUrl(result.url);
-                                }}
-                                className="flex items-center gap-1 text-primary hover:underline"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                                Ver original
-                              </a>
+                              <>
+                                <a
+                                  href={sanitizeExternalUrl(result.url) ?? undefined}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    void openExternalUrl(result.url);
+                                  }}
+                                  className="flex items-center gap-1 text-primary hover:underline"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                  Ver original
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const url = sanitizeExternalUrl(result.url);
+                                    if (url) {
+                                      await navigator.clipboard.writeText(url);
+                                      toast({
+                                        title: "Enlace copiado",
+                                        description: "La URL quedó en tu portapapeles.",
+                                      });
+                                    }
+                                  }}
+                                  className="flex items-center gap-1 text-muted-foreground hover:text-primary"
+                                >
+                                  <Copy className="h-3 w-3" />
+                                  Copiar
+                                </button>
+                              </>
                             )}
                           </div>
                           
