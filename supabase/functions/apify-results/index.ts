@@ -475,7 +475,13 @@ function normalizeYouTube(item: Record<string, unknown>, index: number): Normali
       ...metrics,
       engagement: calculateEngagement(metrics),
     },
-    publishedAt: parseDate(get(item, "publishedAt") || get(item, "date") || get(item, "uploadDate")),
+    // scraper_one/youtube-search-scraper uses 'interpolatedTimestamp' (ISO string) or 'publishedTimeText' ("2 weeks ago")
+    publishedAt: parseDate(
+      get(item, "interpolatedTimestamp") || 
+      get(item, "publishedAt") || 
+      get(item, "date") || 
+      get(item, "uploadDate")
+    ),
     url: String(get(item, "url") || (get(item, "id") ? `https://youtube.com/watch?v=${get(item, "id")}` : "")),
     contentType: "video",
     media: {
