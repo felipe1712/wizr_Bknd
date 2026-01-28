@@ -179,22 +179,29 @@ serve(async (req) => {
           ppi = extractValue("page_page_performance_index") || extractValue("page_ppi");
         }
 
-        // Insert KPI record
-        const { error: insertError } = await supabase.from("fk_profile_kpis").insert({
-          fk_profile_id: profile.id,
-          period_start: formatDate(startDate),
-          period_end: formatDate(endDate),
-          followers,
-          follower_growth_percent: followerGrowth,
-          engagement_rate: engagementRate,
-          posts_per_day: postsPerDay,
-          page_performance_index: ppi,
-          raw_data: kpiDataObj,
-        });
+        // Upsert KPI record (avoid duplicate key errors when re-running the sync)
+        const { error: kpiUpsertError } = await supabase
+          .from("fk_profile_kpis")
+          .upsert(
+            {
+              fk_profile_id: profile.id,
+              period_start: formatDate(startDate),
+              period_end: formatDate(endDate),
+              followers,
+              follower_growth_percent: followerGrowth,
+              engagement_rate: engagementRate,
+              posts_per_day: postsPerDay,
+              page_performance_index: ppi,
+              raw_data: kpiDataObj,
+            },
+            {
+              onConflict: "fk_profile_id,period_start,period_end",
+            }
+          );
 
-        if (insertError) {
-          results.push({ profile: profile.profile_id, success: false, error: insertError.message });
-          continue;
+        if (kpiUpsertError) {
+          // Don't block top posts just because KPI upsert failed for this profile
+          console.error(`Error upserting KPI for ${profile.profile_id}:`, kpiUpsertError.message);
         }
 
         // Update last_synced_at
