@@ -273,20 +273,20 @@ serve(async (req) => {
       case "youtube":
       case "youtube_shorts":
         // scraper_one/youtube-search-scraper - Good results quality
-        // Uses 'search_query' (string), 'max_results', 'sort_by' (upload_date for newest first)
+        // Uses 'query' (string), 'maxResults', 'sortBy' (upload_date for newest first)
         const youtubeResultsCount = Math.min(maxResults, 50);
         if (channelUrl) {
-          // For channel URLs, use channel_url parameter
+          // For channel URLs, use channelUrl parameter
           input = {
-            channel_url: channelUrl,
-            max_results: youtubeResultsCount,
-            sort_by: "upload_date", // Newest first
+            channelUrl: channelUrl,
+            maxResults: youtubeResultsCount,
+            sortBy: "upload_date", // Newest first
           };
         } else if (query) {
           input = {
-            search_query: query,
-            max_results: youtubeResultsCount,
-            sort_by: "upload_date", // Newest first
+            query: query,
+            maxResults: youtubeResultsCount,
+            sortBy: "upload_date", // Newest first
           };
         }
         break;
