@@ -2,12 +2,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, Check } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { DateRange } from "react-day-picker";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export type DateRangePreset = "1d" | "3d" | "7d" | "14d" | "28d" | "custom";
 
@@ -16,6 +16,7 @@ interface RankingDateFilterProps {
   customRange?: DateRange;
   onPresetChange: (preset: DateRangePreset) => void;
   onCustomRangeChange: (range: DateRange | undefined) => void;
+  onApply?: () => void;
 }
 
 const presetLabels: Record<DateRangePreset, string> = {
@@ -56,15 +57,30 @@ export function RankingDateFilter({
   preset, 
   customRange, 
   onPresetChange, 
-  onCustomRangeChange 
+  onCustomRangeChange,
+  onApply 
 }: RankingDateFilterProps) {
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [initialPreset] = useState(preset);
+  const [initialCustomRange] = useState(customRange);
+
+  // Track if there are unsaved changes
+  useEffect(() => {
+    const presetChanged = preset !== initialPreset;
+    const customRangeChanged = preset === "custom" && (
+      customRange?.from?.getTime() !== initialCustomRange?.from?.getTime() ||
+      customRange?.to?.getTime() !== initialCustomRange?.to?.getTime()
+    );
+    setHasChanges(presetChanged || customRangeChanged);
+  }, [preset, customRange, initialPreset, initialCustomRange]);
 
   const handlePresetChange = (value: string) => {
     onPresetChange(value as DateRangePreset);
     if (value !== "custom") {
       onCustomRangeChange(undefined);
     }
+    setHasChanges(true);
   };
 
   const handleDateSelect = (range: DateRange | undefined) => {
@@ -72,10 +88,16 @@ export function RankingDateFilter({
     if (range?.from && range?.to) {
       setCalendarOpen(false);
     }
+    setHasChanges(true);
+  };
+
+  const handleApply = () => {
+    setHasChanges(false);
+    onApply?.();
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg border">
       <span className="text-sm font-medium text-muted-foreground">Período:</span>
       <Select value={preset} onValueChange={handlePresetChange}>
         <SelectTrigger className="w-[180px]">
@@ -128,6 +150,15 @@ export function RankingDateFilter({
           </PopoverContent>
         </Popover>
       )}
+
+      <Button 
+        onClick={handleApply}
+        size="sm"
+        className="ml-auto"
+      >
+        <Check className="h-4 w-4 mr-1" />
+        Aplicar
+      </Button>
     </div>
   );
 }

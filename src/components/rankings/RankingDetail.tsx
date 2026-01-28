@@ -27,6 +27,8 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
   const [activeTab, setActiveTab] = useState<"ranking" | "insights" | "narratives" | "trends" | "content" | "ai" | "config">("ranking");
   const [datePreset, setDatePreset] = useState<DateRangePreset>("28d");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
+  const [appliedPreset, setAppliedPreset] = useState<DateRangePreset>("28d");
+  const [appliedCustomRange, setAppliedCustomRange] = useState<DateRange | undefined>(undefined);
   const [aiInitialQuestion, setAiInitialQuestion] = useState<string>("");
   const [rankingFilterNetwork, setRankingFilterNetwork] = useState<FKNetwork | "all">("all");
 
@@ -42,8 +44,13 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
     setActiveTab("ai");
   };
 
-  // Get the current date range
-  const dateRange = getDateRangeFromPreset(datePreset, customDateRange);
+  const handleApplyDateRange = () => {
+    setAppliedPreset(datePreset);
+    setAppliedCustomRange(customDateRange);
+  };
+
+  // Get the applied date range (only changes when Apply is clicked)
+  const dateRange = getDateRangeFromPreset(appliedPreset, appliedCustomRange);
 
   return (
     <div className="space-y-6">
@@ -82,6 +89,7 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
           customRange={customDateRange}
           onPresetChange={setDatePreset}
           onCustomRangeChange={setCustomDateRange}
+          onApply={handleApplyDateRange}
         />
       )}
 
