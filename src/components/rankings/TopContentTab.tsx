@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { 
   FileText, 
   ExternalLink, 
@@ -13,7 +14,8 @@ import {
   Image as ImageIcon,
   Video,
   Link as LinkIcon,
-  Flame
+  Flame,
+  Search
 } from "lucide-react";
 import { FKProfile, useFetchProfilePosts, FKPost, FKNetwork } from "@/hooks/useFanpageKarma";
 import { format, isWithinInterval } from "date-fns";
@@ -146,6 +148,7 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
   const [selectedProfileId, setSelectedProfileId] = useState<string>("");
   const [filterNetwork, setFilterNetwork] = useState<FKNetwork | "all">("all");
   const [sortBy, setSortBy] = useState<SortBy>("engagement");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Filter profiles by network
   const filteredProfiles = filterNetwork === "all" 
@@ -168,36 +171,54 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
     isFetching 
   } = useFetchProfilePosts(selectedProfile);
 
-  // Filter posts by date range if provided
-  const filteredPosts = dateRange 
-    ? posts.filter(post => {
-        if (!post.published_at) return true; // Include posts without date
+  // Filter posts by date range and search query
+  const filteredPosts = useMemo(() => {
+    let result = posts;
+    
+    // Filter by date range
+    if (dateRange) {
+      result = result.filter(post => {
+        if (!post.published_at) return true;
         const postDate = new Date(post.published_at);
         return isWithinInterval(postDate, { start: dateRange.from, end: dateRange.to });
-      })
-    : posts;
+      });
+    }
+    
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter(post => {
+        const text = [post.message, post.title].filter(Boolean).join(" ").toLowerCase();
+        return text.includes(query);
+      });
+    }
+    
+    return result;
+  }, [posts, dateRange, searchQuery]);
 
   // Sort posts
-  const sortedPosts = [...filteredPosts].sort((a, b) => {
-    switch (sortBy) {
-      case "engagement":
-        const engA = (a.likes || 0) + (a.comments || 0) + (a.shares || 0);
-        const engB = (b.likes || 0) + (b.comments || 0) + (b.shares || 0);
-        return engB - engA;
-      case "likes":
-        return (b.likes || 0) - (a.likes || 0);
-      case "comments":
-        return (b.comments || 0) - (a.comments || 0);
-      case "shares":
-        return (b.shares || 0) - (a.shares || 0);
-      case "date":
-        const dateA = a.published_at ? new Date(a.published_at).getTime() : 0;
-        const dateB = b.published_at ? new Date(b.published_at).getTime() : 0;
-        return dateB - dateA;
-      default:
-        return 0;
-    }
-  });
+  const sortedPosts = useMemo(() => {
+    return [...filteredPosts].sort((a, b) => {
+      switch (sortBy) {
+        case "engagement":
+          const engA = (a.likes || 0) + (a.comments || 0) + (a.shares || 0);
+          const engB = (b.likes || 0) + (b.comments || 0) + (b.shares || 0);
+          return engB - engA;
+        case "likes":
+          return (b.likes || 0) - (a.likes || 0);
+        case "comments":
+          return (b.comments || 0) - (a.comments || 0);
+        case "shares":
+          return (b.shares || 0) - (a.shares || 0);
+        case "date":
+          const dateA = a.published_at ? new Date(a.published_at).getTime() : 0;
+          const dateB = b.published_at ? new Date(b.published_at).getTime() : 0;
+          return dateB - dateA;
+        default:
+          return 0;
+      }
+    });
+  }, [filteredPosts, sortBy]);
 
   if (profilesLoading) {
     return (
@@ -271,6 +292,22 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
           <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
           Actualizar
         </Button>
+      </div>
+
+      {/* Keyword Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por palabras clave en el contenido..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
+        {searchQuery && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+            {sortedPosts.length} resultados
+          </span>
+        )}
       </div>
 
       {/* Posts list */}

@@ -124,8 +124,12 @@ export function useFKProfileKPIs(profileIds: string[], periodStart?: string, per
         .in("fk_profile_id", profileIds)
         .order("fetched_at", { ascending: false });
 
+      // If period is specified, filter for KPIs that overlap with the requested period
+      // This allows finding relevant data even if sync was done with different date ranges
       if (periodStart && periodEnd) {
-        query = query.eq("period_start", periodStart).eq("period_end", periodEnd);
+        query = query
+          .lte("period_start", periodEnd)
+          .gte("period_end", periodStart);
       }
 
       const { data, error } = await query;
@@ -632,7 +636,7 @@ export function useFetchProfilePosts(profile: FKProfile | undefined) {
       console.log("Posts data received:", postsData.length, "posts");
       
       // Transform Fanpage Karma posts format - map their field names to ours
-      return postsData.slice(0, 50).map((post: Record<string, unknown>, index: number) => {
+      return postsData.slice(0, 100).map((post: Record<string, unknown>, index: number) => {
         // Fanpage Karma uses direct values, not nested objects for posts
         return {
           id: (post.id as string) || `${profile.id}-${index}`,

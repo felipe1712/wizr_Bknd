@@ -41,6 +41,8 @@ function getProfileInfo(profiles: FKProfile[], profileId: string): { name: strin
   };
 }
 
+// Insights automáticos: Top performers y alertas críticas
+// NO duplica las preguntas del RankingQuestionsPanel
 function generateInsights(profiles: FKProfile[], kpis: FKProfileKPI[], filterNetwork: FKNetwork | "all"): InsightCard[] {
   const insights: InsightCard[] = [];
   
@@ -67,154 +69,155 @@ function generateInsights(profiles: FKProfile[], kpis: FKProfileKPI[], filterNet
 
   if (latestKpis.length === 0) return [];
 
-  // 1. Best engagement rate
-  const sortedByEngagement = latestKpis
-    .filter(k => k.engagement_rate !== null)
-    .sort((a, b) => (b.engagement_rate || 0) - (a.engagement_rate || 0));
+  // 1. TOP PERFORMER - Best overall (engagement + growth)
+  const withEngagement = latestKpis.filter(k => k.engagement_rate !== null);
+  const withGrowth = latestKpis.filter(k => k.follower_growth_percent !== null);
   
-  if (sortedByEngagement.length > 0) {
-    const best = sortedByEngagement[0];
-    const info = getProfileInfo(profiles, best.fk_profile_id);
-    insights.push({
-      title: "Mejor Engagement",
-      question: "¿Quién tiene el mejor engagement rate?",
-      answer: info.name,
-      detail: `${((best.engagement_rate || 0) * 100).toFixed(2)}% de engagement`,
-      icon: <Crown className="h-5 w-5 text-amber-500" />,
-      variant: "success",
-      value: `${((best.engagement_rate || 0) * 100).toFixed(2)}%`,
-      network: info.network || undefined
-    });
-  }
-
-  // 2. Worst engagement rate
-  if (sortedByEngagement.length > 1) {
-    const worst = sortedByEngagement[sortedByEngagement.length - 1];
-    const info = getProfileInfo(profiles, worst.fk_profile_id);
-    insights.push({
-      title: "Menor Engagement",
-      question: "¿Quién tiene el peor engagement?",
-      answer: info.name,
-      detail: `Solo ${((worst.engagement_rate || 0) * 100).toFixed(2)}% de engagement`,
-      icon: <AlertTriangle className="h-5 w-5 text-destructive" />,
-      variant: "danger",
-      value: `${((worst.engagement_rate || 0) * 100).toFixed(2)}%`,
-      network: info.network || undefined
-    });
-  }
-
-  // 3. Most followers
-  const sortedByFollowers = latestKpis
-    .filter(k => k.followers !== null)
-    .sort((a, b) => (b.followers || 0) - (a.followers || 0));
-  
-  if (sortedByFollowers.length > 0) {
-    const best = sortedByFollowers[0];
-    const info = getProfileInfo(profiles, best.fk_profile_id);
-    insights.push({
-      title: "Mayor Audiencia",
-      question: "¿Quién tiene más seguidores?",
-      answer: info.name,
-      detail: `${(best.followers || 0).toLocaleString()} seguidores`,
-      icon: <Users className="h-5 w-5 text-blue-500" />,
-      variant: "info",
-      value: formatNumber(best.followers || 0),
-      network: info.network || undefined
-    });
-  }
-
-  // 4. Highest follower growth
-  const sortedByGrowth = latestKpis
-    .filter(k => k.follower_growth_percent !== null)
-    .sort((a, b) => (b.follower_growth_percent || 0) - (a.follower_growth_percent || 0));
-  
-  if (sortedByGrowth.length > 0 && (sortedByGrowth[0].follower_growth_percent || 0) > 0) {
-    const best = sortedByGrowth[0];
-    const info = getProfileInfo(profiles, best.fk_profile_id);
-    insights.push({
-      title: "Mayor Crecimiento",
-      question: "¿Quién creció más?",
-      answer: info.name,
-      detail: `Creció ${(best.follower_growth_percent || 0).toFixed(2)}% en el período`,
-      icon: <TrendingUp className="h-5 w-5 text-emerald-500" />,
-      variant: "success",
-      value: `+${(best.follower_growth_percent || 0).toFixed(2)}%`,
-      network: info.network || undefined
-    });
-  }
-
-  // 5. Lowest/negative growth
-  if (sortedByGrowth.length > 1) {
-    const worst = sortedByGrowth[sortedByGrowth.length - 1];
-    if ((worst.follower_growth_percent || 0) < 0) {
-      const info = getProfileInfo(profiles, worst.fk_profile_id);
+  if (withEngagement.length > 0 && withGrowth.length > 0) {
+    // Calculate a combined score
+    const scores = latestKpis.map(kpi => {
+      const engRank = withEngagement.findIndex(k => k.fk_profile_id === kpi.fk_profile_id);
+      const growthRank = withGrowth.findIndex(k => k.fk_profile_id === kpi.fk_profile_id);
+      return {
+        kpi,
+        score: (engRank >= 0 ? withEngagement.length - engRank : 0) + 
+               (growthRank >= 0 ? withGrowth.length - growthRank : 0)
+      };
+    }).sort((a, b) => b.score - a.score);
+    
+    if (scores.length > 0 && scores[0].score > 0) {
+      const best = scores[0].kpi;
+      const info = getProfileInfo(profiles, best.fk_profile_id);
       insights.push({
-        title: "Pérdida de Seguidores",
-        question: "¿Quién perdió seguidores?",
+        title: "Top Performer",
+        question: "¿Quién destaca en rendimiento general?",
         answer: info.name,
-        detail: `Perdió ${Math.abs(worst.follower_growth_percent || 0).toFixed(2)}%`,
-        icon: <TrendingDown className="h-5 w-5 text-destructive" />,
-        variant: "danger",
-        value: `${(worst.follower_growth_percent || 0).toFixed(2)}%`,
+        detail: `Líder en engagement y crecimiento combinado`,
+        icon: <Crown className="h-5 w-5 text-amber-500" />,
+        variant: "success",
         network: info.network || undefined
       });
     }
   }
 
-  // 6. Most active (posts per day)
+  // 2. RISING STAR - Fastest growing small account
+  const smallAccounts = latestKpis.filter(k => 
+    k.followers !== null && 
+    k.follower_growth_percent !== null && 
+    k.followers > 0
+  );
+  const medianFollowers = smallAccounts.length > 0 
+    ? smallAccounts.sort((a, b) => (a.followers || 0) - (b.followers || 0))[Math.floor(smallAccounts.length / 2)]?.followers || 0
+    : 0;
+  
+  const risingStars = smallAccounts
+    .filter(k => (k.followers || 0) < medianFollowers && (k.follower_growth_percent || 0) > 0)
+    .sort((a, b) => (b.follower_growth_percent || 0) - (a.follower_growth_percent || 0));
+  
+  if (risingStars.length > 0) {
+    const star = risingStars[0];
+    const info = getProfileInfo(profiles, star.fk_profile_id);
+    insights.push({
+      title: "Estrella Emergente",
+      question: "¿Qué cuenta pequeña crece más rápido?",
+      answer: info.name,
+      detail: `+${(star.follower_growth_percent || 0).toFixed(2)}% con ${formatNumber(star.followers || 0)} seguidores`,
+      icon: <Sparkles className="h-5 w-5 text-yellow-500" />,
+      variant: "success",
+      value: `+${(star.follower_growth_percent || 0).toFixed(2)}%`,
+      network: info.network || undefined
+    });
+  }
+
+  // 3. EFFICIENCY CHAMPION - Best engagement per post
+  const withActivity = latestKpis.filter(k => 
+    k.engagement_rate !== null && 
+    k.posts_per_day !== null && 
+    (k.posts_per_day || 0) > 0
+  );
+  
+  if (withActivity.length > 0) {
+    const sorted = withActivity.sort((a, b) => {
+      const effA = (a.engagement_rate || 0) / (a.posts_per_day || 1);
+      const effB = (b.engagement_rate || 0) / (b.posts_per_day || 1);
+      return effB - effA;
+    });
+    const best = sorted[0];
+    const info = getProfileInfo(profiles, best.fk_profile_id);
+    insights.push({
+      title: "Más Eficiente",
+      question: "¿Quién logra más con menos publicaciones?",
+      answer: info.name,
+      detail: `${((best.engagement_rate || 0) * 100).toFixed(2)}% engagement con ${(best.posts_per_day || 0).toFixed(1)} posts/día`,
+      icon: <Target className="h-5 w-5 text-emerald-500" />,
+      variant: "success",
+      network: info.network || undefined
+    });
+  }
+
+  // 4. WARNING - Significant follower loss
+  const losingFollowers = latestKpis
+    .filter(k => k.follower_growth_percent !== null && (k.follower_growth_percent || 0) < -1)
+    .sort((a, b) => (a.follower_growth_percent || 0) - (b.follower_growth_percent || 0));
+  
+  if (losingFollowers.length > 0) {
+    const worst = losingFollowers[0];
+    const info = getProfileInfo(profiles, worst.fk_profile_id);
+    insights.push({
+      title: "Alerta: Pérdida",
+      question: "¿Quién pierde seguidores significativamente?",
+      answer: info.name,
+      detail: `Perdió ${Math.abs(worst.follower_growth_percent || 0).toFixed(2)}% de su audiencia`,
+      icon: <AlertTriangle className="h-5 w-5 text-destructive" />,
+      variant: "danger",
+      value: `${(worst.follower_growth_percent || 0).toFixed(2)}%`,
+      network: info.network || undefined
+    });
+  }
+
+  // 5. MARKET SHARE - Total audience distribution
+  const withFollowers = latestKpis.filter(k => k.followers !== null && (k.followers || 0) > 0);
+  if (withFollowers.length >= 2) {
+    const total = withFollowers.reduce((sum, k) => sum + (k.followers || 0), 0);
+    const sorted = withFollowers.sort((a, b) => (b.followers || 0) - (a.followers || 0));
+    const leader = sorted[0];
+    const share = ((leader.followers || 0) / total) * 100;
+    const info = getProfileInfo(profiles, leader.fk_profile_id);
+    insights.push({
+      title: "Cuota de Mercado",
+      question: "¿Quién domina la audiencia total?",
+      answer: info.name,
+      detail: `${share.toFixed(1)}% del total de seguidores del ranking`,
+      icon: <Users className="h-5 w-5 text-blue-500" />,
+      variant: "info",
+      value: `${share.toFixed(1)}%`,
+      network: info.network || undefined
+    });
+  }
+
+  // 6. ACTIVITY INSIGHT - Average vs outliers
   const sortedByActivity = latestKpis
     .filter(k => k.posts_per_day !== null)
     .sort((a, b) => (b.posts_per_day || 0) - (a.posts_per_day || 0));
   
-  if (sortedByActivity.length > 0) {
-    const best = sortedByActivity[0];
-    const info = getProfileInfo(profiles, best.fk_profile_id);
-    insights.push({
-      title: "Más Activo",
-      question: "¿Quién publica más?",
-      answer: info.name,
-      detail: `${(best.posts_per_day || 0).toFixed(1)} posts por día`,
-      icon: <Flame className="h-5 w-5 text-orange-500" />,
-      variant: "info",
-      value: `${(best.posts_per_day || 0).toFixed(1)}/día`,
-      network: info.network || undefined
-    });
-  }
-
-  // 7. Least active
-  if (sortedByActivity.length > 1) {
-    const least = sortedByActivity[sortedByActivity.length - 1];
-    const info = getProfileInfo(profiles, least.fk_profile_id);
-    insights.push({
-      title: "Menos Activo",
-      question: "¿Quién publica menos?",
-      answer: info.name,
-      detail: `Solo ${(least.posts_per_day || 0).toFixed(1)} posts por día`,
-      icon: <Target className="h-5 w-5 text-gray-500" />,
-      variant: "warning",
-      value: `${(least.posts_per_day || 0).toFixed(1)}/día`,
-      network: info.network || undefined
-    });
-  }
-
-  // 8. Best page performance index
-  const sortedByPPI = latestKpis
-    .filter(k => k.page_performance_index !== null)
-    .sort((a, b) => (b.page_performance_index || 0) - (a.page_performance_index || 0));
-  
-  if (sortedByPPI.length > 0) {
-    const best = sortedByPPI[0];
-    const info = getProfileInfo(profiles, best.fk_profile_id);
-    insights.push({
-      title: "Mejor Rendimiento",
-      question: "¿Mejor índice de rendimiento?",
-      answer: info.name,
-      detail: `Page Performance Index de ${(best.page_performance_index || 0).toFixed(0)}%`,
-      icon: <BarChart3 className="h-5 w-5 text-violet-500" />,
-      variant: "success",
-      value: `${(best.page_performance_index || 0).toFixed(0)}%`,
-      network: info.network || undefined
-    });
+  if (sortedByActivity.length >= 2) {
+    const avg = sortedByActivity.reduce((sum, k) => sum + (k.posts_per_day || 0), 0) / sortedByActivity.length;
+    const mostActive = sortedByActivity[0];
+    const leastActive = sortedByActivity[sortedByActivity.length - 1];
+    
+    if ((mostActive.posts_per_day || 0) > avg * 2) {
+      const info = getProfileInfo(profiles, mostActive.fk_profile_id);
+      insights.push({
+        title: "Hiperactividad",
+        question: "¿Quién publica muy por encima del promedio?",
+        answer: info.name,
+        detail: `${(mostActive.posts_per_day || 0).toFixed(1)} posts/día vs promedio ${avg.toFixed(1)}`,
+        icon: <Flame className="h-5 w-5 text-orange-500" />,
+        variant: "warning",
+        value: `${((mostActive.posts_per_day || 0) / avg).toFixed(1)}x`,
+        network: info.network || undefined
+      });
+    }
   }
 
   return insights;
