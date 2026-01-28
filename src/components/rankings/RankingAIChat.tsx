@@ -4,9 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { 
-  MessageCircle, 
   Send, 
   Bot, 
   User, 
@@ -16,6 +14,7 @@ import {
 } from "lucide-react";
 import { FKProfile, FKProfileKPI } from "@/hooks/useFanpageKarma";
 import { supabase } from "@/integrations/supabase/client";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   id: string;
@@ -95,16 +94,18 @@ export function RankingAIChat({ profiles, kpis, rankingName, initialQuestion }: 
       const context = buildContextFromData(profiles, kpis);
       
       const systemPrompt = `Eres un analista experto en redes sociales y benchmarking competitivo. 
-Estás analizando el ranking "${rankingName}" que contiene los siguientes perfiles y sus métricas:
+Estás analizando el ranking "${rankingName}" con estos perfiles y métricas:
 
 ${context}
 
-Tu tarea es responder preguntas del usuario sobre estos datos de forma clara, concisa y accionable.
-- Responde siempre en español
-- Incluye datos específicos cuando sea relevante
-- Si no hay datos suficientes, indícalo claramente
-- Sugiere insights adicionales cuando sea apropiado
-- Mantén respuestas breves pero informativas (máximo 200 palabras)`;
+INSTRUCCIONES DE FORMATO:
+- Responde en español con lenguaje ejecutivo y profesional
+- Usa formato limpio: párrafos cortos, sin exceso de negritas ni símbolos
+- Para listas usa viñetas simples (-)
+- Incluye datos específicos con números claros
+- Máximo 150 palabras
+- Destaca solo lo más importante, evita relleno
+- Si no hay datos suficientes, indícalo brevemente`;
 
       const { data, error } = await supabase.functions.invoke("ranking-ai-chat", {
         body: {
@@ -218,13 +219,19 @@ Tu tarea es responder preguntas del usuario sobre estos datos de forma clara, co
                     </div>
                   )}
                   <div
-                    className={`rounded-lg px-4 py-2 max-w-[80%] ${
+                    className={`rounded-lg px-4 py-3 max-w-[85%] ${
                       message.role === "user"
                         ? "bg-primary text-primary-foreground"
                         : "bg-muted"
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    {message.role === "user" ? (
+                      <p className="text-sm">{message.content}</p>
+                    ) : (
+                      <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&>p]:my-2 [&>ul]:my-2 [&>ul]:pl-4 [&>li]:my-0.5">
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      </div>
+                    )}
                   </div>
                   {message.role === "user" && (
                     <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary flex items-center justify-center">
