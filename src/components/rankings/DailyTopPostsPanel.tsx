@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,9 +15,13 @@ import {
   Eye, 
   ExternalLink,
   Sparkles,
-  Calendar
+  Calendar,
+  RefreshCw,
+  Loader2
 } from "lucide-react";
 import { FKProfile, FKDailyTopPost, getNetworkLabel, FKNetwork } from "@/hooks/useFanpageKarma";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { 
   SiFacebook, 
   SiInstagram, 
@@ -31,6 +36,7 @@ interface DailyTopPostsPanelProps {
   profiles: FKProfile[];
   topPosts: FKDailyTopPost[];
   isLoading: boolean;
+  onRefresh?: () => void;
 }
 
 const networkIcons: Record<string, React.ElementType> = {
@@ -53,7 +59,39 @@ const networkColors: Record<string, string> = {
   twitter: "bg-neutral-100 text-neutral-700 dark:bg-neutral-900/30 dark:text-neutral-400",
 };
 
-export function DailyTopPostsPanel({ profiles, topPosts, isLoading }: DailyTopPostsPanelProps) {
+export function DailyTopPostsPanel({ profiles, topPosts, isLoading, onRefresh }: DailyTopPostsPanelProps) {
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Sync top posts manually
+  const handleSyncTopPosts = async () => {
+    if (profiles.length === 0) {
+      toast.error("No hay perfiles para sincronizar");
+      return;
+    }
+
+    setIsSyncing(true);
+    
+    try {
+      // Call the scheduled-ranking-sync function manually
+      const { data, error } = await supabase.functions.invoke("scheduled-ranking-sync", {
+        body: {}
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success(`Sincronización completada: ${data.topPostsSaved || 0} posts top capturados`);
+        onRefresh?.();
+      } else {
+        throw new Error(data?.error || "Error en la sincronización");
+      }
+    } catch (err) {
+      console.error("Error syncing top posts:", err);
+      toast.error(`Error al sincronizar: ${err instanceof Error ? err.message : "Error desconocido"}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
   // Group posts by date
   const postsByDate = useMemo(() => {
     const grouped = new Map<string, FKDailyTopPost[]>();
@@ -100,11 +138,29 @@ export function DailyTopPostsPanel({ profiles, topPosts, isLoading }: DailyTopPo
   if (topPosts.length === 0) {
     return (
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5 text-amber-500" />
             Top Posts Diarios
           </CardTitle>
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={handleSyncTopPosts}
+            disabled={isSyncing || profiles.length === 0}
+          >
+            {isSyncing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Sincronizando...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Sincronizar ahora
+              </>
+            )}
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-muted-foreground">
@@ -113,7 +169,7 @@ export function DailyTopPostsPanel({ profiles, topPosts, isLoading }: DailyTopPo
               No hay posts top registrados aún.
             </p>
             <p className="text-xs mt-1">
-              Los posts se capturan automáticamente cada día a las 00:00 UTC.
+              Presiona "Sincronizar ahora" o espera al corte automático (00:00 UTC).
             </p>
           </div>
         </CardContent>
@@ -123,11 +179,29 @@ export function DailyTopPostsPanel({ profiles, topPosts, isLoading }: DailyTopPo
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <CardTitle className="flex items-center gap-2">
           <Trophy className="h-5 w-5 text-amber-500" />
           Top Posts Diarios
         </CardTitle>
+        <Button 
+          size="sm" 
+          variant="outline" 
+          onClick={handleSyncTopPosts}
+          disabled={isSyncing}
+        >
+          {isSyncing ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Sincronizando...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Sincronizar
+            </>
+          )}
+        </Button>
       </CardHeader>
       <CardContent>
         <ScrollArea className="max-h-[500px] pr-2">

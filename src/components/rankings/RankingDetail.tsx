@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { format as formatDate } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,6 +28,7 @@ interface RankingDetailProps {
 }
 
 export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"ranking" | "insights" | "narratives" | "trends" | "content" | "reports" | "ai" | "config">("ranking");
   const [datePreset, setDatePreset] = useState<DateRangePreset>("28d");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
@@ -56,6 +58,12 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
   const handleApplyDateRange = () => {
     setAppliedPreset(datePreset);
     setAppliedCustomRange(customDateRange);
+  };
+
+  const handleRefreshTopPosts = () => {
+    queryClient.invalidateQueries({ queryKey: ["fk-daily-top-posts"] });
+    queryClient.invalidateQueries({ queryKey: ["fk-kpis"] });
+    queryClient.invalidateQueries({ queryKey: ["fk-profiles-ranking"] });
   };
 
   return (
@@ -196,6 +204,7 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
               profiles={profiles}
               topPosts={dailyTopPosts}
               isLoading={loadingProfiles || loadingTopPosts}
+              onRefresh={handleRefreshTopPosts}
             />
             
             {/* Questions and AI Chat */}
