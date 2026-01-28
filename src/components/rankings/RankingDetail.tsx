@@ -3,7 +3,7 @@ import { format as formatDate } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, BarChart3, Settings, Trophy, TrendingUp, FileText, Sparkles, MessageCircle, BookOpen } from "lucide-react";
+import { ArrowLeft, BarChart3, Settings, Trophy, TrendingUp, FileText, Sparkles, MessageCircle, BookOpen, FileBarChart } from "lucide-react";
 import { Ranking } from "@/hooks/useRankings";
 import { useFKProfilesByRanking, useFKProfileKPIs, useFKAllKPIs, FKNetwork } from "@/hooks/useFanpageKarma";
 import { RankingBatchForm } from "./RankingBatchForm";
@@ -17,6 +17,7 @@ import { RankingQuestionsPanel } from "./RankingQuestionsPanel";
 import { RankingAIChat } from "./RankingAIChat";
 import { NarrativesAnalysisPanel } from "./NarrativesAnalysisPanel";
 import { RankingDateFilter, DateRangePreset, getDateRangeFromPreset } from "./RankingDateFilter";
+import { RankingReportGenerator } from "./RankingReportGenerator";
 import { DateRange } from "react-day-picker";
 
 interface RankingDetailProps {
@@ -25,7 +26,7 @@ interface RankingDetailProps {
 }
 
 export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
-  const [activeTab, setActiveTab] = useState<"ranking" | "insights" | "narratives" | "trends" | "content" | "ai" | "config">("ranking");
+  const [activeTab, setActiveTab] = useState<"ranking" | "insights" | "narratives" | "trends" | "content" | "reports" | "ai" | "config">("ranking");
   const [datePreset, setDatePreset] = useState<DateRangePreset>("28d");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
   const [appliedPreset, setAppliedPreset] = useState<DateRangePreset>("28d");
@@ -118,6 +119,10 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
           <TabsTrigger value="narratives" disabled={profiles.length === 0}>
             <BookOpen className="h-4 w-4 mr-2" />
             Narrativas
+          </TabsTrigger>
+          <TabsTrigger value="reports" disabled={profiles.length === 0}>
+            <FileBarChart className="h-4 w-4 mr-2" />
+            Reportes
           </TabsTrigger>
           <TabsTrigger value="ai" disabled={profiles.length === 0}>
             <MessageCircle className="h-4 w-4 mr-2" />
@@ -218,6 +223,15 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
           <NarrativesAnalysisPanel
             profiles={profiles}
             isLoading={loadingProfiles}
+            dateRange={dateRange}
+          />
+        </TabsContent>
+
+        <TabsContent value="reports" className="mt-6">
+          <RankingReportGenerator
+            rankingName={ranking.name}
+            profiles={profiles}
+            kpis={kpis}
             dateRange={dateRange}
           />
         </TabsContent>
