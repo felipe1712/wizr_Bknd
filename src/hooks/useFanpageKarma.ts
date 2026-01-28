@@ -707,3 +707,88 @@ export function useFKAllKPIs(profileIds: string[]) {
     enabled: profileIds.length > 0,
   });
 }
+
+// ============ DAILY TOP POSTS ============
+
+export interface FKDailyTopPost {
+  id: string;
+  fk_profile_id: string;
+  network: string;
+  post_date: string;
+  post_url: string | null;
+  post_content: string | null;
+  post_image_url: string | null;
+  engagement: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  views: number;
+  raw_data: Record<string, unknown>;
+  fetched_at: string;
+}
+
+export function useFKDailyTopPosts(profileIds: string[], startDate?: string, endDate?: string) {
+  return useQuery({
+    queryKey: ["fk-daily-top-posts", profileIds, startDate, endDate],
+    queryFn: async () => {
+      if (profileIds.length === 0) return [];
+
+      let query = supabase
+        .from("fk_daily_top_posts")
+        .select("*")
+        .in("fk_profile_id", profileIds)
+        .order("post_date", { ascending: false });
+
+      if (startDate) {
+        query = query.gte("post_date", startDate);
+      }
+      if (endDate) {
+        query = query.lte("post_date", endDate);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as FKDailyTopPost[];
+    },
+    enabled: profileIds.length > 0,
+  });
+}
+
+export function useFKDailyTopPostsByRanking(rankingId: string | undefined, startDate?: string, endDate?: string) {
+  return useQuery({
+    queryKey: ["fk-daily-top-posts-ranking", rankingId, startDate, endDate],
+    queryFn: async () => {
+      if (!rankingId) return [];
+
+      // First get profile IDs for this ranking
+      const { data: profiles, error: profilesError } = await supabase
+        .from("fk_profiles")
+        .select("id")
+        .eq("ranking_id", rankingId)
+        .eq("is_active", true);
+
+      if (profilesError) throw profilesError;
+      if (!profiles || profiles.length === 0) return [];
+
+      const profileIds = profiles.map(p => p.id);
+
+      let query = supabase
+        .from("fk_daily_top_posts")
+        .select("*")
+        .in("fk_profile_id", profileIds)
+        .order("post_date", { ascending: false });
+
+      if (startDate) {
+        query = query.gte("post_date", startDate);
+      }
+      if (endDate) {
+        query = query.lte("post_date", endDate);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as FKDailyTopPost[];
+    },
+    enabled: !!rankingId,
+  });
+}

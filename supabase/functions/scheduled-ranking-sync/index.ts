@@ -17,6 +17,27 @@ interface FkProfile {
   display_name: string | null;
 }
 
+interface PostData {
+  url?: string;
+  link?: string;
+  content?: string;
+  text?: string;
+  message?: string;
+  description?: string;
+  image?: string;
+  picture?: string;
+  thumbnail?: string;
+  engagement?: number;
+  interactions?: number;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  views?: number;
+  date?: string;
+  created_time?: string;
+  published_at?: string;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -57,7 +78,7 @@ serve(async (req) => {
 
     console.log(`Scheduled sync: Found ${profiles.length} profiles to sync`);
 
-    // Calculate period (last 28 days by default)
+    // Calculate period (last 28 days by default for KPIs)
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 28);
@@ -65,35 +86,44 @@ serve(async (req) => {
     const formatDate = (d: Date) => d.toISOString().split("T")[0];
     const period = `${formatDate(startDate)}_${formatDate(endDate)}`;
 
-    const results: { profile: string; success: boolean; error?: string }[] = [];
+    // Calculate yesterday's date for top posts
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = formatDate(yesterday);
+    const yesterdayPeriod = `${yesterdayStr}_${yesterdayStr}`;
+
+    const results: { profile: string; success: boolean; error?: string; topPost?: boolean }[] = [];
 
     // Process each profile
     for (const profile of profiles as FkProfile[]) {
       try {
-        const url = `${FANPAGE_KARMA_API_BASE}/${profile.network}/${encodeURIComponent(profile.profile_id)}/kpi?token=${FANPAGE_KARMA_API_KEY}&period=${period}`;
+        // ============ SYNC KPIs ============
+        const kpiUrl = `${FANPAGE_KARMA_API_BASE}/${profile.network}/${encodeURIComponent(profile.profile_id)}/kpi?token=${FANPAGE_KARMA_API_KEY}&period=${period}`;
         
-        console.log(`Syncing ${profile.network}/${profile.profile_id}`);
+        console.log(`Syncing KPIs: ${profile.network}/${profile.profile_id}`);
         
-        const response = await fetch(url);
-        const text = await response.text();
+        const kpiResponse = await fetch(kpiUrl);
+        const kpiText = await kpiResponse.text();
         
-        let data;
+        let kpiData;
         try {
-          data = JSON.parse(text);
+          // Handle NaN values in response
+          const sanitizedText = kpiText.trim().replace(/:\s*NaN\s*(,|})/g, ': null$1');
+          kpiData = JSON.parse(sanitizedText);
         } catch {
-          results.push({ profile: profile.profile_id, success: false, error: "Invalid JSON response" });
+          results.push({ profile: profile.profile_id, success: false, error: "Invalid JSON response for KPIs" });
           continue;
         }
 
-        if (!response.ok) {
-          results.push({ profile: profile.profile_id, success: false, error: data.metadata?.message || "API error" });
+        if (!kpiResponse.ok) {
+          results.push({ profile: profile.profile_id, success: false, error: kpiData.metadata?.message || "KPI API error" });
           continue;
         }
 
         // Extract KPIs based on network
-        const kpiData = data.data || {};
+        const kpiDataObj = kpiData.data || {};
         const extractValue = (key: string) => {
-          const item = kpiData[key];
+          const item = kpiDataObj[key];
           return item?.value ?? item?.absolute ?? null;
         };
 
@@ -157,20 +187,86 @@ serve(async (req) => {
           engagement_rate: engagementRate,
           posts_per_day: postsPerDay,
           page_performance_index: ppi,
-          raw_data: kpiData,
+          raw_data: kpiDataObj,
         });
 
         if (insertError) {
           results.push({ profile: profile.profile_id, success: false, error: insertError.message });
-        } else {
-          // Update last_synced_at
-          await supabase
-            .from("fk_profiles")
-            .update({ last_synced_at: new Date().toISOString() })
-            .eq("id", profile.id);
-          
-          results.push({ profile: profile.profile_id, success: true });
+          continue;
         }
+
+        // Update last_synced_at
+        await supabase
+          .from("fk_profiles")
+          .update({ last_synced_at: new Date().toISOString() })
+          .eq("id", profile.id);
+
+        // ============ FETCH TOP POST OF YESTERDAY ============
+        let topPostSaved = false;
+        try {
+          const postsUrl = `${FANPAGE_KARMA_API_BASE}/${profile.network}/${encodeURIComponent(profile.profile_id)}/posts?token=${FANPAGE_KARMA_API_KEY}&period=${yesterdayPeriod}`;
+          
+          console.log(`Fetching posts: ${profile.network}/${profile.profile_id} for ${yesterdayStr}`);
+          
+          const postsResponse = await fetch(postsUrl);
+          const postsText = await postsResponse.text();
+          
+          if (postsResponse.ok && postsText.trim().endsWith('}')) {
+            const sanitizedPostsText = postsText.trim().replace(/:\s*NaN\s*(,|})/g, ': null$1');
+            const postsData = JSON.parse(sanitizedPostsText);
+            const posts: PostData[] = postsData.data || [];
+            
+            if (posts.length > 0) {
+              // Find post with highest engagement
+              const topPost = posts.reduce((best: PostData | null, current: PostData) => {
+                const currentEngagement = current.engagement || current.interactions || 
+                  ((current.likes || 0) + (current.comments || 0) + (current.shares || 0));
+                const bestEngagement = best ? (best.engagement || best.interactions || 
+                  ((best.likes || 0) + (best.comments || 0) + (best.shares || 0))) : 0;
+                return currentEngagement > bestEngagement ? current : best;
+              }, null);
+
+              if (topPost) {
+                const engagement = topPost.engagement || topPost.interactions || 
+                  ((topPost.likes || 0) + (topPost.comments || 0) + (topPost.shares || 0));
+
+                // Upsert top post (update if exists for same profile/network/date)
+                const { error: topPostError } = await supabase
+                  .from("fk_daily_top_posts")
+                  .upsert({
+                    fk_profile_id: profile.id,
+                    network: profile.network,
+                    post_date: yesterdayStr,
+                    post_url: topPost.url || topPost.link || null,
+                    post_content: topPost.content || topPost.text || topPost.message || topPost.description || null,
+                    post_image_url: topPost.image || topPost.picture || topPost.thumbnail || null,
+                    engagement: engagement,
+                    likes: topPost.likes || 0,
+                    comments: topPost.comments || 0,
+                    shares: topPost.shares || 0,
+                    views: topPost.views || 0,
+                    raw_data: topPost,
+                  }, {
+                    onConflict: 'fk_profile_id,network,post_date'
+                  });
+
+                if (!topPostError) {
+                  topPostSaved = true;
+                  console.log(`Saved top post for ${profile.profile_id} (${profile.network}): ${engagement} engagement`);
+                } else {
+                  console.error(`Error saving top post for ${profile.profile_id}:`, topPostError.message);
+                }
+              }
+            } else {
+              console.log(`No posts found for ${profile.profile_id} on ${yesterdayStr}`);
+            }
+          }
+        } catch (postErr) {
+          console.error(`Error fetching posts for ${profile.profile_id}:`, postErr);
+          // Don't fail the whole sync if posts fail
+        }
+        
+        results.push({ profile: profile.profile_id, success: true, topPost: topPostSaved });
 
         // Small delay to avoid rate limiting
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -186,15 +282,17 @@ serve(async (req) => {
 
     const successful = results.filter((r) => r.success).length;
     const failed = results.filter((r) => !r.success).length;
+    const topPostsSaved = results.filter((r) => r.topPost).length;
 
-    console.log(`Scheduled sync complete: ${successful} success, ${failed} failed`);
+    console.log(`Scheduled sync complete: ${successful} success, ${failed} failed, ${topPostsSaved} top posts saved`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Synced ${successful} profiles, ${failed} failed`,
+        message: `Synced ${successful} profiles, ${failed} failed, ${topPostsSaved} top posts saved`,
         synced: successful,
         failed,
+        topPostsSaved,
         details: results,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
