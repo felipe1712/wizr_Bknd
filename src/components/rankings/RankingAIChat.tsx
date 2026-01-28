@@ -226,9 +226,9 @@ INSTRUCCIONES DE FORMATO:
                     }`}
                   >
                     {message.role === "user" ? (
-                      <p className="text-sm">{message.content}</p>
+                      <p className="text-sm break-words whitespace-pre-wrap">{message.content}</p>
                     ) : (
-                      <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&>p]:my-2 [&>ul]:my-2 [&>ul]:pl-4 [&>li]:my-0.5">
+                      <div className="prose prose-sm dark:prose-invert max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&>p]:my-2 [&>ul]:my-2 [&>ul]:pl-4 [&>li]:my-0.5">
                         <ReactMarkdown>{message.content}</ReactMarkdown>
                       </div>
                     )}
