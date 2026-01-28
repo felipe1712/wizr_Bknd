@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, BarChart3, Settings, Trophy, TrendingUp, FileText, Sparkles, MessageCircle, BookOpen, FileBarChart } from "lucide-react";
 import { Ranking } from "@/hooks/useRankings";
-import { useFKProfilesByRanking, useFKProfileKPIs, useFKAllKPIs, FKNetwork } from "@/hooks/useFanpageKarma";
+import { useFKProfilesByRanking, useFKProfileKPIs, useFKAllKPIs, useFKDailyTopPosts, FKNetwork } from "@/hooks/useFanpageKarma";
 import { RankingBatchForm } from "./RankingBatchForm";
 import { ProfilesList } from "./ProfilesList";
 import { RankingTable } from "./RankingTable";
@@ -18,6 +18,7 @@ import { RankingAIChat } from "./RankingAIChat";
 import { NarrativesAnalysisPanel } from "./NarrativesAnalysisPanel";
 import { RankingDateFilter, DateRangePreset, getDateRangeFromPreset } from "./RankingDateFilter";
 import { RankingReportGenerator } from "./RankingReportGenerator";
+import { DailyTopPostsPanel } from "./DailyTopPostsPanel";
 import { DateRange } from "react-day-picker";
 
 interface RankingDetailProps {
@@ -43,6 +44,7 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
   const profileIds = profiles.map((p) => p.id);
   const { data: kpis = [], isLoading: loadingKPIs } = useFKProfileKPIs(profileIds, periodStart, periodEnd);
   const { data: allKpis = [], isLoading: loadingAllKpis } = useFKAllKPIs(profileIds);
+  const { data: dailyTopPosts = [], isLoading: loadingTopPosts } = useFKDailyTopPosts(profileIds, periodStart, periodEnd);
 
   const syncedCount = profiles.filter((p) => p.last_synced_at).length;
 
@@ -188,18 +190,28 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
         </TabsContent>
 
         <TabsContent value="insights" className="mt-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <RankingQuestionsPanel
+          <div className="space-y-6">
+            {/* Daily Top Posts */}
+            <DailyTopPostsPanel
               profiles={profiles}
-              kpis={kpis}
-              isLoading={loadingProfiles || loadingKPIs}
-              onAskAI={handleAskAI}
+              topPosts={dailyTopPosts}
+              isLoading={loadingProfiles || loadingTopPosts}
             />
-            <RankingAIChat
-              profiles={profiles}
-              kpis={kpis}
-              rankingName={ranking.name}
-            />
+            
+            {/* Questions and AI Chat */}
+            <div className="grid gap-6 lg:grid-cols-2">
+              <RankingQuestionsPanel
+                profiles={profiles}
+                kpis={kpis}
+                isLoading={loadingProfiles || loadingKPIs}
+                onAskAI={handleAskAI}
+              />
+              <RankingAIChat
+                profiles={profiles}
+                kpis={kpis}
+                rankingName={ranking.name}
+              />
+            </div>
           </div>
         </TabsContent>
 

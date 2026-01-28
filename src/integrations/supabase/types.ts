@@ -251,6 +251,65 @@ export type Database = {
           },
         ]
       }
+      fk_daily_top_posts: {
+        Row: {
+          comments: number | null
+          engagement: number | null
+          fetched_at: string
+          fk_profile_id: string
+          id: string
+          likes: number | null
+          network: string
+          post_content: string | null
+          post_date: string
+          post_image_url: string | null
+          post_url: string | null
+          raw_data: Json | null
+          shares: number | null
+          views: number | null
+        }
+        Insert: {
+          comments?: number | null
+          engagement?: number | null
+          fetched_at?: string
+          fk_profile_id: string
+          id?: string
+          likes?: number | null
+          network: string
+          post_content?: string | null
+          post_date: string
+          post_image_url?: string | null
+          post_url?: string | null
+          raw_data?: Json | null
+          shares?: number | null
+          views?: number | null
+        }
+        Update: {
+          comments?: number | null
+          engagement?: number | null
+          fetched_at?: string
+          fk_profile_id?: string
+          id?: string
+          likes?: number | null
+          network?: string
+          post_content?: string | null
+          post_date?: string
+          post_image_url?: string | null
+          post_url?: string | null
+          raw_data?: Json | null
+          shares?: number | null
+          views?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_daily_top_posts_fk_profile_id_fkey"
+            columns: ["fk_profile_id"]
+            isOneToOne: false
+            referencedRelation: "fk_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fk_profile_kpis: {
         Row: {
           engagement_rate: number | null
