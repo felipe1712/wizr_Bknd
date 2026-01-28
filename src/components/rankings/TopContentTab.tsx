@@ -16,7 +16,10 @@ import {
   Video,
   Link as LinkIcon,
   Flame,
-  Search
+  Search,
+  Sparkles,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { FKProfile, useFetchProfilePosts, FKPost, FKNetwork } from "@/hooks/useFanpageKarma";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +27,23 @@ import { format, isWithinInterval } from "date-fns";
 import { es } from "date-fns/locale";
 import { NetworkFilter } from "./NetworkFilter";
 import { ProfileSelectGrouped } from "./ProfileSelectGrouped";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import ReactMarkdown from "react-markdown";
 
 interface TopContentTabProps {
   profiles: FKProfile[];
@@ -151,11 +171,22 @@ function PostCard({ post, profileName, rank }: { post: FKPost; profileName: stri
   );
 }
 
+const POSTS_PER_PAGE = 20;
+
 export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange }: TopContentTabProps) {
+  const { toast } = useToast();
   const [selectedProfileId, setSelectedProfileId] = useState<string>("__all__");
   const [filterNetwork, setFilterNetwork] = useState<FKNetwork | "all">("all");
   const [sortBy, setSortBy] = useState<SortBy>("engagement");
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  
+  // Analysis state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+  const [showAnalysisDialog, setShowAnalysisDialog] = useState(false);
   
   // State for on-demand search in "all profiles" mode
   const [allProfilesSearchTriggered, setAllProfilesSearchTriggered] = useState(false);
@@ -182,7 +213,13 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
   useEffect(() => {
     setAllProfilesSearchTriggered(false);
     setPendingSearchQuery("");
+    setCurrentPage(1);
   }, [selectedProfileId]);
+  
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterNetwork, sortBy, dateRange]);
   
   // Fetch posts for single profile (when not "all")
   const { 
@@ -283,6 +320,128 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
       }
     });
   }, [filteredPosts, sortBy]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(sortedPosts.length / POSTS_PER_PAGE);
+  const paginatedPosts = useMemo(() => {
+    const startIndex = (currentPage - 1) * POSTS_PER_PAGE;
+    return sortedPosts.slice(startIndex, startIndex + POSTS_PER_PAGE);
+  }, [sortedPosts, currentPage]);
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pages: (number | "ellipsis")[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push("ellipsis");
+      for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+        pages.push(i);
+      }
+      if (currentPage < totalPages - 2) pages.push("ellipsis");
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
+  // Quick analysis function
+  const handleQuickAnalysis = async () => {
+    if (sortedPosts.length === 0) {
+      toast({
+        title: "Sin posts",
+        description: "No hay posts para analizar",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setAnalysisResult(null);
+
+    try {
+      // Prepare posts for analysis (limit to 50 for performance)
+      const postsForAnalysis = sortedPosts.slice(0, 50).map(post => ({
+        message: post.message || post.title || "",
+        contentType: post.content_type || "post",
+        engagement: (post.likes || 0) + (post.comments || 0) + (post.shares || 0),
+        date: post.published_at,
+      }));
+
+      // Group by profile for better context
+      const profileGroups = new Map<string, typeof postsForAnalysis>();
+      sortedPosts.slice(0, 50).forEach((post, idx) => {
+        const profileId = post.profile_id || "unknown";
+        if (!profileGroups.has(profileId)) {
+          profileGroups.set(profileId, []);
+        }
+        profileGroups.get(profileId)!.push(postsForAnalysis[idx]);
+      });
+
+      // Create a simple combined analysis request
+      const combinedPosts = postsForAnalysis;
+      const profileCount = profileGroups.size;
+
+      const { data, error } = await supabase.functions.invoke("analyze-narratives", {
+        body: {
+          profileName: isAllProfiles ? `${profileCount} perfiles` : (selectedProfile?.profile_id || "Perfil"),
+          network: isAllProfiles ? "múltiples redes" : (selectedProfile?.network || "social"),
+          posts: combinedPosts,
+          dateRange: dateRange ? {
+            from: format(dateRange.from, "yyyy-MM-dd"),
+            to: format(dateRange.to, "yyyy-MM-dd"),
+          } : null,
+        },
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || "Error en el análisis");
+
+      // Format the analysis result as readable text
+      const analysis = data.analysis;
+      let resultText = `## Resumen del Contenido\n\n${analysis.summary}\n\n`;
+      
+      resultText += `### Narrativas Principales\n\n`;
+      analysis.dominantNarratives?.forEach((n: { theme: string; description: string; frequency: number }, i: number) => {
+        resultText += `**${i + 1}. ${n.theme}** (${n.frequency}%)\n${n.description}\n\n`;
+      });
+
+      resultText += `### Tono de Comunicación\n\n`;
+      resultText += `- **Estilo**: ${analysis.toneAnalysis?.overall === "formal" ? "Formal" : analysis.toneAnalysis?.overall === "informal" ? "Informal" : "Mixto"}\n`;
+      resultText += `- **Tono emocional**: ${analysis.toneAnalysis?.emotionalTone || "No determinado"}\n`;
+      resultText += `- **Usa CTAs**: ${analysis.toneAnalysis?.callToAction ? "Sí" : "No"}\n\n`;
+
+      resultText += `### Estrategia de Contenido\n\n`;
+      resultText += `**Enfoque principal**: ${analysis.contentStrategy?.primaryFocus || "No determinado"}\n\n`;
+      
+      if (analysis.contentStrategy?.strengths?.length > 0) {
+        resultText += `**Fortalezas**:\n`;
+        analysis.contentStrategy.strengths.forEach((s: string) => {
+          resultText += `- ${s}\n`;
+        });
+        resultText += `\n`;
+      }
+
+      if (analysis.contentStrategy?.opportunities?.length > 0) {
+        resultText += `**Oportunidades de mejora**:\n`;
+        analysis.contentStrategy.opportunities.forEach((o: string) => {
+          resultText += `- ${o}\n`;
+        });
+      }
+
+      setAnalysisResult(resultText);
+      setShowAnalysisDialog(true);
+    } catch (err) {
+      console.error("Analysis error:", err);
+      toast({
+        title: "Error en el análisis",
+        description: err instanceof Error ? err.message : "Error desconocido",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   if (profilesLoading) {
     return (
@@ -483,11 +642,33 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
                 }
               </CardDescription>
             </div>
-            {sortedPosts.length > 0 && (
-              <Badge variant="secondary">
-                {sortedPosts.length} posts
-              </Badge>
-            )}
+            <div className="flex items-center gap-2">
+              {sortedPosts.length > 0 && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleQuickAnalysis}
+                    disabled={isAnalyzing}
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Analizando...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Analizar
+                      </>
+                    )}
+                  </Button>
+                  <Badge variant="secondary">
+                    {sortedPosts.length} posts
+                  </Badge>
+                </>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -505,7 +686,7 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
                 <>
                   <p className="font-medium mb-1">Búsqueda en todos los perfiles</p>
                   <p className="text-sm">
-                    Escribe una palabra clave arriba y presiona "Buscar" para encontrar contenido en los {filteredProfiles.length} perfiles.
+                    Presiona "Ver todo" para cargar todas las publicaciones, o escribe una palabra clave y presiona "Buscar".
                   </p>
                 </>
               ) : searchQuery ? (
@@ -523,18 +704,87 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
             </div>
           ) : (
             <div className="space-y-4">
-              {sortedPosts.map((post, index) => (
+              {/* Pagination info */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between text-sm text-muted-foreground border-b pb-3">
+                  <span>
+                    Mostrando {((currentPage - 1) * POSTS_PER_PAGE) + 1} - {Math.min(currentPage * POSTS_PER_PAGE, sortedPosts.length)} de {sortedPosts.length} posts
+                  </span>
+                  <span>
+                    Página {currentPage} de {totalPages}
+                  </span>
+                </div>
+              )}
+
+              {/* Posts */}
+              {paginatedPosts.map((post, index) => (
                 <PostCard 
                   key={post.id || `${post.profile_id}-${index}`} 
                   post={post} 
                   profileName={post.profile_id || selectedProfile?.profile_id || ""} 
-                  rank={index + 1}
+                  rank={((currentPage - 1) * POSTS_PER_PAGE) + index + 1}
                 />
               ))}
+
+              {/* Pagination controls */}
+              {totalPages > 1 && (
+                <div className="pt-4 border-t">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious 
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                      
+                      {getPageNumbers().map((page, idx) => (
+                        <PaginationItem key={idx}>
+                          {page === "ellipsis" ? (
+                            <PaginationEllipsis />
+                          ) : (
+                            <PaginationLink
+                              onClick={() => setCurrentPage(page)}
+                              isActive={currentPage === page}
+                              className="cursor-pointer"
+                            >
+                              {page}
+                            </PaginationLink>
+                          )}
+                        </PaginationItem>
+                      ))}
+                      
+                      <PaginationItem>
+                        <PaginationNext 
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Analysis Result Dialog */}
+      <Dialog open={showAnalysisDialog} onOpenChange={setShowAnalysisDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Análisis de Contenido
+            </DialogTitle>
+          </DialogHeader>
+          {analysisResult && (
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <ReactMarkdown>{analysisResult}</ReactMarkdown>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
