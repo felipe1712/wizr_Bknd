@@ -347,8 +347,10 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       .map((item, idx) => ({
         ...item,
         id: item.id || `${idPrefix}-${idx}-${Date.now()}`,
+        // Explicitly preserve URL from backend response
+        url: (item as any).url || '',
       }))
-      // Sort by publishedAt descending (newest first) - backend should do this too, but ensure consistency
+      // Sort by publishedAt descending (newest first)
       .sort((a, b) => {
         const dateA = new Date(a.publishedAt).getTime();
         const dateB = new Date(b.publishedAt).getTime();
