@@ -43,6 +43,10 @@ import {
 } from "lucide-react";
 import { format, subDays, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
+import { toZonedTime, formatInTimeZone } from "date-fns-tz";
+
+// Mexico City timezone (Central Mexico)
+const MEXICO_TIMEZONE = "America/Mexico_City";
 
 // Platform icons using simple components
 const TwitterIcon = () => (
@@ -1690,6 +1694,21 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
                             )}
                           </div>
                           
+                          {/* Thumbnail */}
+                          {result.media?.thumbnailUrl && (
+                            <div className="mt-2">
+                              <img 
+                                src={result.media.thumbnailUrl} 
+                                alt={result.title || "Thumbnail"}
+                                className="h-20 w-auto max-w-[120px] object-cover rounded border"
+                                onError={(e) => {
+                                  // Hide broken images
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            </div>
+                          )}
+                          
                           {/* Reddit extracted comments preview */}
                           {/* Reddit extracted comments preview - show matching comments first if matched in comment */}
                           {result.platform === "reddit" && (
@@ -1786,9 +1805,9 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
                               </span>
                             )}
                             {result.publishedAt && (
-                              <span className="flex items-center gap-1">
+                              <span className="flex items-center gap-1" title="Hora del Centro de México (UTC-6)">
                                 <Clock className="h-3 w-3" />
-                                {format(new Date(result.publishedAt), "d MMM yyyy HH:mm", { locale: es })}
+                                {formatInTimeZone(new Date(result.publishedAt), MEXICO_TIMEZONE, "d MMM yyyy HH:mm", { locale: es })}
                               </span>
                             )}
                             {sanitizeExternalUrl(result.url) && (

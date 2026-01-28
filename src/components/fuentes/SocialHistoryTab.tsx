@@ -23,6 +23,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useSocialScrapeJobs, SocialScrapeJob, SocialResult } from "@/hooks/useSocialScrapeJobs";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { formatInTimeZone } from "date-fns-tz";
+
+// Mexico City timezone (Central Mexico)
+const MEXICO_TIMEZONE = "America/Mexico_City";
 import {
   Search,
   Download,
@@ -387,7 +391,7 @@ export function SocialHistoryTab({ projectId }: SocialHistoryTabProps) {
                           <span className="font-medium">{job.results_count}</span>
                         </TableCell>
                         <TableCell>
-                          {format(new Date(job.started_at), "d MMM yyyy HH:mm", { locale: es })}
+                          {formatInTimeZone(new Date(job.started_at), MEXICO_TIMEZONE, "d MMM yyyy HH:mm", { locale: es })}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
@@ -465,6 +469,25 @@ export function SocialHistoryTab({ projectId }: SocialHistoryTabProps) {
                                                 <p className="text-sm line-clamp-3">
                                                   {result.title || result.description || "Sin contenido"}
                                                 </p>
+                                                
+                                                {/* Thumbnail from raw_data if available */}
+                                                {(() => {
+                                                  const rawData = result.raw_data as Record<string, unknown> | null;
+                                                  const media = rawData?.media as Record<string, unknown> | undefined;
+                                                  const thumbnailUrl = (media?.thumbnailUrl as string | undefined) 
+                                                    || (rawData?.thumbnailUrl as string | undefined)
+                                                    || (rawData?.thumbnail as string | undefined);
+                                                  return thumbnailUrl ? (
+                                                    <img 
+                                                      src={thumbnailUrl} 
+                                                      alt={result.title || "Thumbnail"}
+                                                      className="h-16 w-auto max-w-[100px] object-cover rounded border mt-2"
+                                                      onError={(e) => {
+                                                        (e.target as HTMLImageElement).style.display = 'none';
+                                                      }}
+                                                    />
+                                                  ) : null;
+                                                })()}
                                                 <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                                                   <span className="flex items-center gap-1">
                                                     <Heart className="h-3 w-3" />
@@ -483,7 +506,7 @@ export function SocialHistoryTab({ projectId }: SocialHistoryTabProps) {
                                                   {result.published_at && (
                                                     <span className="flex items-center gap-1">
                                                       <Clock className="h-3 w-3" />
-                                                      {format(new Date(result.published_at), "d MMM yyyy HH:mm", { locale: es })}
+                                                      {formatInTimeZone(new Date(result.published_at), MEXICO_TIMEZONE, "d MMM yyyy HH:mm", { locale: es })}
                                                     </span>
                                                   )}
                                                   {result.url && (
