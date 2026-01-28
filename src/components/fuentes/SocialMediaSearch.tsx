@@ -411,9 +411,11 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           setUsedSoftFilter((data as any).softFilter);
         }
         
-        // STRICT DATE FILTERING: When date filter is enabled, discard results outside the range
-        // This applies especially to platforms without native date filtering (TikTok, Instagram, etc.)
+        // DATE FILTERING: Apply strict or soft filter depending on platform and results
+        // YouTube uses SOFT FILTER: if ALL results fall outside range, show them anyway with warning
+        // Other platforms use STRICT FILTER: discard results outside the range
         let discardedByDateCount = 0;
+        let appliedSoftFilter = false;
         if (dateFilterEnabled && dateFrom && dateTo) {
           const fromStart = startOfDay(dateFrom);
           const toEnd = endOfDay(dateTo);
@@ -427,20 +429,34 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           const minDateIso = validDates[0]?.toISOString();
           const maxDateIso = validDates[validDates.length - 1]?.toISOString();
           
-          processed = processed.filter((r) => {
-            if (!r.publishedAt) return false; // Discard items without date in strict mode
+          const filteredByDate = processed.filter((r) => {
+            if (!r.publishedAt) return false; // Discard items without date
             const pubDate = new Date(r.publishedAt);
             if (isNaN(pubDate.getTime())) return false; // Discard invalid dates
             return !isBefore(pubDate, fromStart) && !isAfter(pubDate, toEnd);
           });
           
-          discardedByDateCount = beforeFilter - processed.length;
-          setLastStrictDateDiscard({ discarded: discardedByDateCount, minDateIso, maxDateIso });
-          if (discardedByDateCount > 0) {
-            console.log(`Strict date filter: discarded ${discardedByDateCount} results outside range ${format(dateFrom, "yyyy-MM-dd")} to ${format(dateTo, "yyyy-MM-dd")}`);
+          discardedByDateCount = beforeFilter - filteredByDate.length;
+          
+          // SOFT FILTER for YouTube: If ALL results are outside the range, show them with a warning
+          // This prevents "0 results" when the API doesn't have content in the exact date window
+          if (platform === "youtube" && filteredByDate.length === 0 && processed.length > 0) {
+            appliedSoftFilter = true;
+            setUsedSoftFilter(true);
+            console.log(`YouTube SOFT FILTER: No results in range ${format(dateFrom, "yyyy-MM-dd")} to ${format(dateTo, "yyyy-MM-dd")}. Showing all ${processed.length} results with warning. Actual range: ${minDateIso} to ${maxDateIso}`);
+            // Keep all results, don't filter
+          } else {
+            // STRICT FILTER for other platforms or when YouTube has some results in range
+            processed = filteredByDate;
+            if (discardedByDateCount > 0) {
+              console.log(`Strict date filter: discarded ${discardedByDateCount} results outside range ${format(dateFrom, "yyyy-MM-dd")} to ${format(dateTo, "yyyy-MM-dd")}`);
+            }
           }
+          
+          setLastStrictDateDiscard({ discarded: discardedByDateCount, minDateIso, maxDateIso });
         } else {
           setLastStrictDateDiscard(null);
+          setUsedSoftFilter(false);
         }
         
         setFilteredResultsCount(processed.length);
@@ -494,11 +510,14 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         }
         
         const dateFilterNote = discardedByDateCount > 0 
-          ? ` (${discardedByDateCount} descartados por fecha)` 
+          ? appliedSoftFilter
+            ? ` (sin resultados en el rango seleccionado - mostrando ${processed.length} disponibles)`
+            : ` (${discardedByDateCount} descartados por fecha)` 
           : "";
         toast({
-          title: "Búsqueda completada",
+          title: appliedSoftFilter ? "Búsqueda completada (sin filtro de fecha)" : "Búsqueda completada",
           description: `Se encontraron ${processed.length} resultados en ${config.label}${dateFilterNote}`,
+          variant: appliedSoftFilter ? "default" : "default",
         });
       } else if (data.status === "FAILED" || data.status === "ABORTED" || data.status === "TIMED-OUT") {
         setJobStatus("failed");
@@ -646,16 +665,27 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         // Apply date filtering to combined results
         let combinedResults = [...updatedState.videosResults, ...updatedState.shortsResults];
         
-        // STRICT DATE FILTERING
+        // DATE FILTERING with SOFT FILTER for YouTube
+        let appliedSoftFilter = false;
         if (dateFilterEnabled && dateFrom && dateTo) {
           const fromStart = startOfDay(dateFrom);
           const toEnd = endOfDay(dateTo);
           
-          combinedResults = combinedResults.filter((item) => {
+          const filteredByDate = combinedResults.filter((item) => {
             if (!item.publishedAt) return false;
             const pubDate = new Date(item.publishedAt);
             return !isBefore(pubDate, fromStart) && !isAfter(pubDate, toEnd);
           });
+          
+          // SOFT FILTER: If ALL results are outside the range, show them with a warning
+          if (filteredByDate.length === 0 && combinedResults.length > 0) {
+            appliedSoftFilter = true;
+            setUsedSoftFilter(true);
+            console.log(`YouTube parallel SOFT FILTER: No results in range. Showing all ${combinedResults.length} available.`);
+            // Keep all results
+          } else {
+            combinedResults = filteredByDate;
+          }
         }
 
         // Sort by date (newest first)
@@ -706,9 +736,12 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           });
         }
 
+        const softFilterNote = appliedSoftFilter 
+          ? " (sin resultados en el rango - mostrando disponibles)" 
+          : "";
         toast({
-          title: "Búsqueda completada",
-          description: `${combinedResults.length} resultados (${videosCount} videos, ${shortsCount} shorts)`,
+          title: appliedSoftFilter ? "Búsqueda completada (sin filtro de fecha)" : "Búsqueda completada",
+          description: `${combinedResults.length} resultados (${videosCount} videos, ${shortsCount} shorts)${softFilterNote}`,
         });
 
         refetchJobs();
@@ -1313,20 +1346,60 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
 
         {/* Completed Status with Filter Stats */}
         {jobStatus === "completed" && results.length > 0 && (
-          <div className="flex items-center gap-3 p-3 rounded-lg border bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
-            <CheckCircle2 className="h-5 w-5 text-green-600" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                ¡Búsqueda completada!
-              </p>
-              <p className="text-xs text-green-600 dark:text-green-400">
-                {rawResultsCount > 0 && rawResultsCount !== results.length 
-                  ? `${results.length} resultados relevantes de ${rawResultsCount} extraídos (filtrado por keywords)`
-                  : usedSoftFilter
-                    ? `${results.length} resultados de ${rawResultsCount} extraídos (sin filtrar por keywords)`
-                    : `${results.length} resultados obtenidos de ${config.label}`
-                }
-              </p>
+          <div className="space-y-2">
+            {/* Soft Filter Warning for YouTube */}
+            {usedSoftFilter && platform === "youtube" && dateFilterEnabled && lastStrictDateDiscard && (
+              <div className="flex items-start gap-3 p-3 rounded-lg border bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900">
+                <Info className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                    No hay resultados en el rango seleccionado
+                  </p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    Se encontraron {results.length} resultados pero ninguno entre{" "}
+                    <span className="font-medium">{format(dateFrom!, "d MMM yyyy", { locale: es })}</span> y{" "}
+                    <span className="font-medium">{format(dateTo!, "d MMM yyyy", { locale: es })}</span>.
+                    {lastStrictDateDiscard.minDateIso && lastStrictDateDiscard.maxDateIso && (
+                      <span>
+                        {" "}Fechas disponibles:{" "}
+                        <span className="font-medium">
+                          {format(new Date(lastStrictDateDiscard.minDateIso), "d MMM yyyy", { locale: es })}
+                        </span>
+                        {" "}–{" "}
+                        <span className="font-medium">
+                          {format(new Date(lastStrictDateDiscard.maxDateIso), "d MMM yyyy", { locale: es })}
+                        </span>
+                      </span>
+                    )}
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-2 h-7 text-xs"
+                    onClick={() => setDateFilterEnabled(false)}
+                  >
+                    Desactivar filtro de fecha
+                  </Button>
+                </div>
+              </div>
+            )}
+            
+            {/* Success message */}
+            <div className="flex items-center gap-3 p-3 rounded-lg border bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                  ¡Búsqueda completada!
+                </p>
+                <p className="text-xs text-green-600 dark:text-green-400">
+                  {rawResultsCount > 0 && rawResultsCount !== results.length && !usedSoftFilter
+                    ? `${results.length} resultados relevantes de ${rawResultsCount} extraídos (filtrado por keywords)`
+                    : usedSoftFilter
+                      ? `${results.length} resultados de YouTube (sin filtro de fecha aplicado)`
+                      : `${results.length} resultados obtenidos de ${config.label}`
+                  }
+                </p>
+              </div>
             </div>
           </div>
         )}
