@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +35,7 @@ import {
 import { FKProfile, FKProfileKPI, FKNetwork, getNetworkLabel } from "@/hooks/useFanpageKarma";
 import { NetworkFilter } from "./NetworkFilter";
 import { RankingReportPDFGenerator } from "./RankingReportPDFGenerator";
+import { RankingReportCharts } from "./RankingReportCharts";
 
 interface RankingReportGeneratorProps {
   rankingName: string;
@@ -392,6 +393,15 @@ export function RankingReportGenerator({
               </div>
             </div>
 
+            {/* Charts Section */}
+            <div className="space-y-2">
+              <h4 className="font-medium flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-primary" />
+                Visualización de Métricas
+              </h4>
+              <RankingReportCharts profiles={filteredData.profiles} kpis={filteredData.kpis} />
+            </div>
+
             <Separator />
 
             {/* Output Channels */}
@@ -435,6 +445,8 @@ export function RankingReportGenerator({
                         }}
                         selectedTemplate={selectedTemplate}
                         editedTemplate={currentTemplate}
+                        profiles={filteredData.profiles}
+                        kpis={filteredData.kpis}
                       />
                     </div>
                   </div>
