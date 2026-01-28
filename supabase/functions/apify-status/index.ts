@@ -99,7 +99,7 @@ async function tryFetchYouTubeFullDescription(videoUrl: string): Promise<string 
   }
 }
 
-type Platform = "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "reddit";
+type Platform = "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "youtube_shorts" | "reddit";
 
 interface NormalizedResult {
   id: string;
@@ -684,6 +684,52 @@ function normalizeYouTube(item: Record<string, unknown>, index: number): Normali
   };
 }
 
+// Normalize YouTube Shorts from newbs/youtube-shorts actor
+function normalizeYouTubeShort(item: Record<string, unknown>, index: number): NormalizedResult {
+  // newbs/youtube-shorts output structure:
+  // { id, url, title, viewCount, likeCount, commentCount, channelName, channelUrl, uploadDate, thumbnail, description }
+  const title = String(get(item, "title") || "");
+  const description = String(get(item, "description") || "");
+  const videoId = String(get(item, "id") || get(item, "videoId") || "");
+  
+  const metrics = {
+    likes: Number(get(item, "likeCount") || get(item, "likes") || 0),
+    comments: Number(get(item, "commentCount") || get(item, "comments") || 0),
+    shares: 0,
+    views: Number(get(item, "viewCount") || get(item, "views") || 0),
+  };
+
+  const channelName = String(get(item, "channelName") || get(item, "channel") || "");
+  const channelUrl = String(get(item, "channelUrl") || "");
+
+  // Parse upload date - could be ISO string or relative like "2 days ago"
+  const uploadDate = get(item, "uploadDate") || get(item, "publishedAt");
+  
+  return {
+    id: `youtube_shorts-${videoId || index}-${Date.now()}`,
+    platform: "youtube_shorts" as Platform,
+    title: title,
+    description: description || title,
+    author: {
+      name: channelName,
+      username: channelName,
+      url: channelUrl,
+      avatarUrl: "",
+    },
+    metrics: { ...metrics, engagement: calculateEngagement(metrics) },
+    publishedAt: parseDate(uploadDate),
+    url: String(get(item, "url") || (videoId ? `https://youtube.com/shorts/${videoId}` : "")),
+    contentType: "video",
+    media: {
+      type: "video",
+      url: String(get(item, "url") || ""),
+      thumbnailUrl: String(get(item, "thumbnail") || get(item, "thumbnailUrl") || ""),
+    },
+    hashtags: extractHashtags(description),
+    raw: item,
+  };
+}
+
 function normalizeReddit(item: Record<string, unknown>, index: number): NormalizedResult {
   const title = String(get(item, "title") || "");
   const body = String(get(item, "body") || get(item, "selftext") || get(item, "text") || "");
@@ -750,6 +796,8 @@ function normalizeResults(items: unknown[], platform: Platform): NormalizedResul
         return normalizeLinkedIn(data, index);
       case "youtube":
         return normalizeYouTube(data, index);
+      case "youtube_shorts":
+        return normalizeYouTubeShort(data, index);
       case "reddit":
         return normalizeReddit(data, index);
       default:

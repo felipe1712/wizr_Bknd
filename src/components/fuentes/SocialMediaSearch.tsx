@@ -86,7 +86,11 @@ const RedditIcon = () => (
   </svg>
 );
 
-type Platform = "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "reddit";
+// User-selectable platforms in the UI
+type SelectablePlatform = "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "reddit";
+
+// All platforms including internal ones (youtube_shorts is used internally for combined search)
+type Platform = SelectablePlatform | "youtube_shorts";
 
 interface SocialSearchResult {
   id: string;
@@ -139,7 +143,7 @@ interface SocialMediaSearchProps {
   onResultsSaved?: () => void;
 }
 
-const PLATFORM_CONFIG: Record<Platform, { 
+const PLATFORM_CONFIG: Record<SelectablePlatform, { 
   label: string; 
   icon: React.ComponentType; 
   color: string;
@@ -211,10 +215,10 @@ const PLATFORM_CONFIG: Record<Platform, {
     color: "bg-red-600 text-white",
     placeholder: "Ej: término o URL de canal",
     searchTypes: [
-      { value: "query", label: "Búsqueda general", tooltip: "Busca videos que contengan las palabras clave en título o descripción." },
+      { value: "query", label: "Búsqueda general", tooltip: "Busca videos Y shorts que contengan las palabras clave. Ambas búsquedas se ejecutan en paralelo." },
       { value: "channelUrl", label: "Por canal (URL)", tooltip: "Requiere la URL completa del canal. Ejemplo: https://www.youtube.com/@ChannelName" },
     ],
-    helpText: "Busca videos por términos generales o extrae contenido de un canal específico usando su URL.",
+    helpText: "🎬 Busca videos Y shorts automáticamente en paralelo. Los resultados muestran un badge para distinguir el tipo de contenido.",
   },
   reddit: {
     label: "Reddit",
@@ -232,7 +236,7 @@ const PLATFORM_CONFIG: Record<Platform, {
 export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSearchProps) => {
   const { toast } = useToast();
   const { createJob, updateJob, saveResults, refetchJobs } = useSocialScrapeJobs(projectId);
-  const [platform, setPlatform] = useState<Platform>("twitter");
+  const [platform, setPlatform] = useState<SelectablePlatform>("twitter");
   const [searchType, setSearchType] = useState("query");
   const [searchValue, setSearchValue] = useState("");
   const [maxResults, setMaxResults] = useState(25);
@@ -242,6 +246,16 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
   const [runId, setRunId] = useState<string | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [results, setResults] = useState<SocialSearchResult[]>([]);
+  
+  // YouTube combined search: track both video and shorts runs
+  const [youtubeParallelRuns, setYoutubeParallelRuns] = useState<{
+    videosRunId: string | null;
+    shortsRunId: string | null;
+    videosComplete: boolean;
+    shortsComplete: boolean;
+    videosResults: SocialSearchResult[];
+    shortsResults: SocialSearchResult[];
+  } | null>(null);
   
   // Date filter state
   const [dateFilterEnabled, setDateFilterEnabled] = useState(false);
@@ -499,6 +513,147 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     }
   }, [platform, config.label, toast, currentJobId, updateJob, saveResults, refetchJobs, dateFilterEnabled, dateFrom, dateTo]);
 
+  // YouTube parallel status checker for combined Videos + Shorts search
+  const checkYouTubeParallelStatus = useCallback(async (
+    parallelState: {
+      videosRunId: string | null;
+      shortsRunId: string | null;
+      videosComplete: boolean;
+      shortsComplete: boolean;
+      videosResults: SocialSearchResult[];
+      shortsResults: SocialSearchResult[];
+    },
+    filterKw: string
+  ) => {
+    try {
+      const updatedState = { ...parallelState };
+      let anyUpdate = false;
+
+      // Check videos status if not complete
+      if (parallelState.videosRunId && !parallelState.videosComplete) {
+        const videosStatus = await apifyApi.checkStatus(parallelState.videosRunId, "youtube", filterKw);
+        if (videosStatus.success && videosStatus.data) {
+          const vData = videosStatus.data;
+          if (vData.status === "SUCCEEDED" || vData.status === "FAILED" || vData.status === "ABORTED" || vData.status === "TIMED-OUT") {
+            updatedState.videosComplete = true;
+            if (vData.items && Array.isArray(vData.items)) {
+              updatedState.videosResults = vData.items as SocialSearchResult[];
+            }
+            anyUpdate = true;
+          }
+        }
+      }
+
+      // Check shorts status if not complete
+      if (parallelState.shortsRunId && !parallelState.shortsComplete) {
+        const shortsStatus = await apifyApi.checkStatus(parallelState.shortsRunId, "youtube_shorts", filterKw);
+        if (shortsStatus.success && shortsStatus.data) {
+          const sData = shortsStatus.data;
+          if (sData.status === "SUCCEEDED" || sData.status === "FAILED" || sData.status === "ABORTED" || sData.status === "TIMED-OUT") {
+            updatedState.shortsComplete = true;
+            if (sData.items && Array.isArray(sData.items)) {
+              updatedState.shortsResults = sData.items as SocialSearchResult[];
+            }
+            anyUpdate = true;
+          }
+        }
+      }
+
+      // Update progress message
+      const videosCount = updatedState.videosResults.length;
+      const shortsCount = updatedState.shortsResults.length;
+      setProgressMessage(
+        `Videos: ${updatedState.videosComplete ? `✓ ${videosCount}` : "buscando..."} | ` +
+        `Shorts: ${updatedState.shortsComplete ? `✓ ${shortsCount}` : "buscando..."}`
+      );
+
+      // Calculate progress based on completion
+      const progress = 10 + (updatedState.videosComplete ? 40 : 0) + (updatedState.shortsComplete ? 40 : 0);
+      setProgress(Math.min(progress, 90));
+
+      // Both complete - merge and finalize
+      if (updatedState.videosComplete && updatedState.shortsComplete) {
+        // Apply date filtering to combined results
+        let combinedResults = [...updatedState.videosResults, ...updatedState.shortsResults];
+        
+        // STRICT DATE FILTERING
+        if (dateFilterEnabled && dateFrom && dateTo) {
+          const fromStart = startOfDay(dateFrom);
+          const toEnd = endOfDay(dateTo);
+          
+          combinedResults = combinedResults.filter((item) => {
+            if (!item.publishedAt) return false;
+            const pubDate = new Date(item.publishedAt);
+            return !isBefore(pubDate, fromStart) && !isAfter(pubDate, toEnd);
+          });
+        }
+
+        // Sort by date (newest first)
+        combinedResults.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+
+        setResults(combinedResults);
+        setRawResultsCount(updatedState.videosResults.length + updatedState.shortsResults.length);
+        setFilteredResultsCount(combinedResults.length);
+        setProgress(100);
+        setJobStatus("completed");
+        setIsSearching(false);
+
+        // Update job in database
+        if (currentJobId) {
+          await updateJob({
+            id: currentJobId,
+            updates: {
+              status: "completed",
+              results_count: combinedResults.length,
+              completed_at: new Date().toISOString(),
+            },
+          });
+          await saveResults({
+            jobId: currentJobId,
+            results: combinedResults.map((r) => ({
+              platform: r.platform,
+              external_id: r.id,
+              title: r.title || "",
+              description: r.description || "",
+              author_name: r.author?.name || "",
+              author_username: r.author?.username || "",
+              author_url: r.author?.url || "",
+              author_avatar_url: r.author?.avatarUrl,
+              author_verified: r.author?.verified,
+              author_followers: r.author?.followers,
+              likes: r.metrics?.likes || 0,
+              comments: r.metrics?.comments || 0,
+              shares: r.metrics?.shares || 0,
+              views: r.metrics?.views,
+              engagement: r.metrics?.engagement,
+              published_at: r.publishedAt,
+              url: r.url || "",
+              content_type: r.contentType || "post",
+              hashtags: r.hashtags,
+              mentions: r.mentions,
+              raw_data: JSON.parse(JSON.stringify(r.raw || {})),
+            })),
+          });
+        }
+
+        toast({
+          title: "Búsqueda completada",
+          description: `${combinedResults.length} resultados (${videosCount} videos, ${shortsCount} shorts)`,
+        });
+
+        refetchJobs();
+      } else {
+        // Continue polling
+        setYoutubeParallelRuns(updatedState);
+        setTimeout(() => checkYouTubeParallelStatus(updatedState, filterKw), 2000);
+      }
+    } catch (error) {
+      console.error("Error checking YouTube parallel status:", error);
+      setJobStatus("failed");
+      setIsSearching(false);
+    }
+  }, [currentJobId, updateJob, saveResults, refetchJobs, dateFilterEnabled, dateFrom, dateTo, toast]);
+
   const handleSearch = async () => {
     if (!searchValue.trim()) {
       toast({
@@ -518,6 +673,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     setRawResultsCount(0);
     setFilteredResultsCount(0);
     setUsedSoftFilter(false);
+    setYoutubeParallelRuns(null);
 
     try {
       // Create job in database first
@@ -531,50 +687,102 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       
       setCurrentJobId(job.id);
 
-      const result = await apifyApi.startScrape({
-        platform,
-        query: searchType === "query" ? searchValue : undefined,
-        username: searchType === "username" ? searchValue.replace("@", "") : undefined,
-        hashtag: searchType === "hashtag" ? searchValue.replace("#", "") : undefined,
-        companyUrl: searchType === "companyUrl" ? searchValue : undefined,
-        channelUrl: searchType === "channelUrl" ? searchValue : undefined,
-        subreddit: searchType === "subreddit" ? searchValue.replace("r/", "") : undefined,
-        taggedUsername: searchType === "taggedPosts" ? searchValue.replace("@", "") : undefined,
-        captionFilter: (platform === "instagram" && searchType === "hashtag" && captionFilter.trim()) 
-          ? captionFilter.trim() 
-          : undefined,
-        maxResults,
-      });
+      // YOUTUBE COMBINED SEARCH: Launch Videos + Shorts in parallel
+      if (platform === "youtube") {
+        setProgressMessage("Buscando videos y shorts en paralelo...");
+        
+        // Start both searches simultaneously
+        const [videosResult, shortsResult] = await Promise.all([
+          apifyApi.startScrape({
+            platform: "youtube",
+            query: searchType === "query" ? searchValue : undefined,
+            channelUrl: searchType === "channelUrl" ? searchValue : undefined,
+            maxResults,
+          }),
+          apifyApi.startScrape({
+            platform: "youtube_shorts",
+            query: searchType === "query" ? searchValue : undefined,
+            channelUrl: searchType === "channelUrl" ? searchValue : undefined,
+            maxResults: Math.ceil(maxResults / 2), // Fewer shorts typically
+          }),
+        ]);
 
-      if (!result.success || !result.data) {
-        throw new Error(result.error || "Error al iniciar la búsqueda");
-      }
-
-      const data = result.data;
-
-      if (data.success && data.runId) {
-        setRunId(data.runId);
+        // Initialize parallel tracking state
+        const parallelState = {
+          videosRunId: videosResult.data?.runId || null,
+          shortsRunId: shortsResult.data?.runId || null,
+          videosComplete: !videosResult.data?.runId, // Mark as complete if failed
+          shortsComplete: !shortsResult.data?.runId,
+          videosResults: [] as SocialSearchResult[],
+          shortsResults: [] as SocialSearchResult[],
+        };
+        
+        setYoutubeParallelRuns(parallelState);
         setProgress(10);
-        
-        // Update job with runId and datasetId
-        await updateJob({
-          id: job.id,
-          updates: {
-            run_id: data.runId,
-            dataset_id: data.datasetId,
-            status: "running",
-          },
-        });
-        
-        // Start polling for status
-        // For Instagram hashtag search with caption filter, use captionFilter as the keyword
-        // Otherwise use searchValue for general keyword filtering
-        const filterKw = (platform === "instagram" && searchType === "hashtag" && captionFilter.trim())
-          ? captionFilter.trim()
-          : searchValue;
-        setTimeout(() => checkJobStatus(data.runId!, filterKw), 3000);
+
+        // Update job with primary runId (videos)
+        if (parallelState.videosRunId) {
+          await updateJob({
+            id: job.id,
+            updates: {
+              run_id: parallelState.videosRunId,
+              dataset_id: videosResult.data?.datasetId,
+              status: "running",
+            },
+          });
+        }
+
+        // Start polling both runs
+        if (parallelState.videosRunId || parallelState.shortsRunId) {
+          setTimeout(() => checkYouTubeParallelStatus(parallelState, searchValue), 3000);
+        } else {
+          throw new Error("No se pudo iniciar ninguna búsqueda de YouTube");
+        }
       } else {
-        throw new Error(data.error || "Error al iniciar la búsqueda");
+        // STANDARD SINGLE PLATFORM SEARCH
+        const result = await apifyApi.startScrape({
+          platform,
+          query: searchType === "query" ? searchValue : undefined,
+          username: searchType === "username" ? searchValue.replace("@", "") : undefined,
+          hashtag: searchType === "hashtag" ? searchValue.replace("#", "") : undefined,
+          companyUrl: searchType === "companyUrl" ? searchValue : undefined,
+          channelUrl: searchType === "channelUrl" ? searchValue : undefined,
+          subreddit: searchType === "subreddit" ? searchValue.replace("r/", "") : undefined,
+          taggedUsername: searchType === "taggedPosts" ? searchValue.replace("@", "") : undefined,
+          captionFilter: (platform === "instagram" && searchType === "hashtag" && captionFilter.trim()) 
+            ? captionFilter.trim() 
+            : undefined,
+          maxResults,
+        });
+
+        if (!result.success || !result.data) {
+          throw new Error(result.error || "Error al iniciar la búsqueda");
+        }
+
+        const data = result.data;
+
+        if (data.success && data.runId) {
+          setRunId(data.runId);
+          setProgress(10);
+          
+          // Update job with runId and datasetId
+          await updateJob({
+            id: job.id,
+            updates: {
+              run_id: data.runId,
+              dataset_id: data.datasetId,
+              status: "running",
+            },
+          });
+          
+          // Start polling for status
+          const filterKw = (platform === "instagram" && searchType === "hashtag" && captionFilter.trim())
+            ? captionFilter.trim()
+            : searchValue;
+          setTimeout(() => checkJobStatus(data.runId!, filterKw), 3000);
+        } else {
+          throw new Error(data.error || "Error al iniciar la búsqueda");
+        }
       }
     } catch (error) {
       console.error("Search error:", error);
@@ -736,7 +944,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         </Collapsible>
         {/* Platform Selection */}
         <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
-          {(Object.keys(PLATFORM_CONFIG) as Platform[]).map((plat) => {
+          {(Object.keys(PLATFORM_CONFIG) as SelectablePlatform[]).map((plat) => {
             const cfg = PLATFORM_CONFIG[plat];
             const Icon = cfg.icon;
             const isDisabled = cfg.disabled;

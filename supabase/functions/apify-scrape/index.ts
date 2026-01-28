@@ -21,8 +21,10 @@ const ACTOR_IDS: Record<string, string> = {
   instagram: "apify/instagram-hashtag-scraper",
   // Instagram profile scraper for username-based searches (scrapes posts from specific profiles)
   instagram_profile: "apify/instagram-profile-scraper",
-  // YouTube: scraper_one/youtube-search-scraper (reliable, well-maintained)
+  // YouTube Videos: scraper_one/youtube-search-scraper (reliable, well-maintained)
   youtube: "scraper_one/youtube-search-scraper",
+  // YouTube Shorts: newbs/youtube-shorts (specialized for Shorts content)
+  youtube_shorts: "newbs/youtube-shorts",
   // Reddit: lite variant for less restrictions
   reddit: "trudax/reddit-scraper-lite",
   // LinkedIn: harvestapi/linkedin-post-search (no cookies required, $2/1000 results)
@@ -35,7 +37,7 @@ const DISABLED_PLATFORMS: Record<string, string> = {
 };
 
 interface ScrapeRequest {
-  platform: "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "reddit";
+  platform: "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "youtube_shorts" | "reddit";
   query?: string;
   username?: string;
   hashtag?: string;
@@ -290,6 +292,24 @@ serve(async (req) => {
             resultsCount: youtubeResultsCount,
             sortType: "date", // Sort by newest first for monitoring
             uploadDate: "thisMonth", // Broader range; frontend filters by user dates
+          };
+        }
+        break;
+        
+      case "youtube_shorts":
+        // newbs/youtube-shorts - specialized for Shorts content
+        // Input: { channel: string[] } - searches for shorts from channels or by keyword
+        const shortsResultsCount = Math.max(maxResults * 2, 50);
+        if (channelUrl) {
+          input = {
+            channel: [channelUrl],
+            maxResults: shortsResultsCount,
+          };
+        } else if (query) {
+          // For keyword search, use the channel array with search URL format
+          input = {
+            channel: [`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAg%253D%253D`],
+            maxResults: shortsResultsCount,
           };
         }
         break;
