@@ -302,6 +302,47 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
   const config = PLATFORM_CONFIG[platform];
   const PlatformIcon = config.icon;
 
+  const sanitizeExternalUrl = useCallback((url?: string | null) => {
+    const raw = (url || "").trim();
+    if (!raw) return null;
+    if (/^https?:\/\//i.test(raw)) return raw;
+    return `https://${raw}`;
+  }, []);
+
+  const openExternalUrl = useCallback(
+    async (url?: string | null) => {
+      const safeUrl = sanitizeExternalUrl(url);
+      if (!safeUrl) {
+        toast({
+          title: "Enlace no disponible",
+          description: "Este resultado no incluye una URL válida.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Some embedded previews/iframes block opening new tabs.
+      // If blocked, we copy the link as a fallback.
+      const win = window.open(safeUrl, "_blank", "noopener,noreferrer");
+      if (win) return;
+
+      try {
+        await navigator.clipboard.writeText(safeUrl);
+        toast({
+          title: "Enlace copiado",
+          description: "Tu navegador bloqueó la apertura. El enlace quedó en el portapapeles.",
+        });
+      } catch {
+        toast({
+          title: "No se pudo abrir",
+          description: `Copia y pega este enlace en una pestaña nueva: ${safeUrl}`,
+          variant: "destructive",
+        });
+      }
+    },
+    [sanitizeExternalUrl, toast]
+  );
+
   // Curated results: filter out discarded items unless showDiscarded is true
   const curatedResults = useMemo(() => {
     return results.filter((r) => {
@@ -1571,11 +1612,15 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
                           {result.author?.name && (
                             <div className="flex items-center gap-2">
                               <User className="h-3 w-3 text-muted-foreground" />
-                              {result.author.url ? (
-                                <a 
-                                  href={result.author.url}
+                              {sanitizeExternalUrl(result.author.url) ? (
+                                <a
+                                  href={sanitizeExternalUrl(result.author.url) ?? undefined}
                                   target="_blank"
                                   rel="noopener noreferrer"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    void openExternalUrl(result.author.url);
+                                  }}
                                   className="text-sm font-medium hover:text-primary flex items-center gap-1"
                                 >
                                   {result.author.name || `@${result.author.username}`}
@@ -1745,11 +1790,15 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
                                 {format(new Date(result.publishedAt), "d MMM yyyy", { locale: es })}
                               </span>
                             )}
-                            {result.url && result.url.startsWith("http") && (
+                            {sanitizeExternalUrl(result.url) && (
                               <a
-                                href={result.url}
+                                href={sanitizeExternalUrl(result.url) ?? undefined}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  void openExternalUrl(result.url);
+                                }}
                                 className="flex items-center gap-1 text-primary hover:underline"
                               >
                                 <ExternalLink className="h-3 w-3" />
