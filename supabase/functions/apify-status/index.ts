@@ -748,12 +748,21 @@ function normalizeReddit(item: Record<string, unknown>, index: number): Normaliz
 
   const postType = get(item, "postType") as string || "text";
   
-  // trudax uses 'scrapedAt' or 'dataPostedAt' - try multiple fields
-  // Also handle unix timestamps
-  const rawDate = get(item, "dataPostedAt") || get(item, "scrapedAt") || get(item, "createdAt") || get(item, "created_utc") || get(item, "created");
+  // trudax uses 'dataPostedAt' (ISO string like "2024-12-15T10:30:00.000Z")
+  // Fallback chain for different field names and formats
+  const rawDate = get(item, "dataPostedAt") || get(item, "createdAt") || get(item, "created_utc") || get(item, "created") || get(item, "scrapedAt");
   
   // Build URL - trudax provides 'url' directly
   const postUrl = String(get(item, "url") || get(item, "permalink") || "");
+  
+  // Extract comments array if present (trudax returns 'comments' array with nested comment objects)
+  const commentsArray = get(item, "comments") as Array<Record<string, unknown>> | undefined;
+  const extractedComments = commentsArray?.map((c) => ({
+    author: String(get(c, "username") || get(c, "author") || ""),
+    body: String(get(c, "body") || get(c, "text") || ""),
+    upVotes: Number(get(c, "upVotes") || get(c, "ups") || get(c, "score") || 0),
+    createdAt: get(c, "dataPostedAt") || get(c, "createdAt"),
+  })).filter(c => c.body.trim()) || [];
 
   return {
     id: `reddit-${get(item, "parsedId") || get(item, "id") || index}-${Date.now()}`,
@@ -775,7 +784,12 @@ function normalizeReddit(item: Record<string, unknown>, index: number): Normaliz
       thumbnailUrl: String(get(item, "thumbnail") || ""),
     } : undefined,
     hashtags: subreddit ? [subreddit] : [],
-    raw: item,
+    // Include extracted comments in raw for frontend access
+    raw: { 
+      ...item, 
+      _extractedComments: extractedComments,
+      _commentsCount: extractedComments.length,
+    },
   };
 }
 

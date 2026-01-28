@@ -226,10 +226,10 @@ const PLATFORM_CONFIG: Record<SelectablePlatform, {
     color: "bg-orange-600 text-white",
     placeholder: "Ej: término o r/subreddit",
     searchTypes: [
-      { value: "query", label: "Búsqueda general", tooltip: "Busca posts y comentarios en todo Reddit que contengan los términos especificados." },
-      { value: "subreddit", label: "Por subreddit", tooltip: "Busca posts y comentarios dentro de un subreddit específico. Ingresa sin el prefijo r/." },
+      { value: "query", label: "Búsqueda general", tooltip: "Busca posts en todo Reddit que contengan los términos especificados. Ordena por más recientes." },
+      { value: "subreddit", label: "Por subreddit", tooltip: "Busca posts dentro de un subreddit específico. Ingresa sin el prefijo r/." },
     ],
-    helpText: "💬 Las búsquedas ahora incluyen los 10 comentarios principales de cada publicación para un análisis más completo.",
+    helpText: "⚠️ Reddit ordena por 'nuevos' pero NO filtra por fecha en servidor. Activa el filtro de fecha para descartar menciones antiguas automáticamente.",
   },
 };
 
@@ -1309,7 +1309,20 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           </div>
         )}
 
-        {/* Action Buttons */}
+        {/* Reddit Date Filter Warning */}
+        {platform === "reddit" && !dateFilterEnabled && (
+          <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+            <Info className="h-4 w-4 mt-0.5 text-amber-600 shrink-0" />
+            <div className="text-sm">
+              <p className="font-medium text-amber-700 dark:text-amber-400">Recomendación: Activa el filtro de fecha</p>
+              <p className="text-amber-600/80 dark:text-amber-300/70">
+                Reddit ordena por "nuevos" pero puede incluir posts antiguos que mencionan tu término. 
+                Activa el filtro arriba para descartar automáticamente resultados fuera del período deseado.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <Button 
             onClick={handleSearch} 
@@ -1540,21 +1553,60 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
                           </p>
 
                           {/* Content type badge - with YouTube Short detection */}
-                          {(result.contentType && result.contentType !== "post") || (result.platform === "youtube" && result.raw?._isShort) ? (
-                            <Badge variant="outline" className="text-xs">
-                              {result.platform === "youtube" && result.raw?._isShort 
-                                ? "🎬 Short" 
-                                : result.contentType === "video" 
-                                  ? "📹 Video" 
-                                  : result.contentType === "image" 
-                                    ? "📷 Imagen" 
-                                    : result.contentType === "article" 
-                                      ? "📰 Artículo" 
-                                      : result.contentType === "thread" 
-                                        ? "🧵 Hilo" 
-                                        : result.contentType}
-                            </Badge>
-                          ) : null}
+                          <div className="flex flex-wrap gap-2">
+                            {(result.contentType && result.contentType !== "post") || (result.platform === "youtube" && result.raw?._isShort) ? (
+                              <Badge variant="outline" className="text-xs">
+                                {result.platform === "youtube" && result.raw?._isShort 
+                                  ? "🎬 Short" 
+                                  : result.contentType === "video" 
+                                    ? "📹 Video" 
+                                    : result.contentType === "image" 
+                                      ? "📷 Imagen" 
+                                      : result.contentType === "article" 
+                                        ? "📰 Artículo" 
+                                        : result.contentType === "thread" 
+                                          ? "🧵 Hilo" 
+                                          : result.contentType}
+                              </Badge>
+                            ) : null}
+                            
+                            {/* Reddit comments badge */}
+                            {result.platform === "reddit" && typeof result.raw?._commentsCount === "number" && result.raw._commentsCount > 0 && (
+                              <Badge variant="secondary" className="text-xs">
+                                💬 {result.raw._commentsCount} comentarios capturados
+                              </Badge>
+                            )}
+                          </div>
+                          
+                          {/* Reddit extracted comments preview */}
+                          {result.platform === "reddit" && Array.isArray(result.raw?._extractedComments) && result.raw._extractedComments.length > 0 && (
+                            <Collapsible className="mt-2">
+                              <CollapsibleTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-6 text-xs gap-1 text-muted-foreground hover:text-foreground">
+                                  <ChevronDown className="h-3 w-3" />
+                                  Ver comentarios ({(result.raw._extractedComments as Array<unknown>).length})
+                                </Button>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="mt-2 space-y-2 pl-4 border-l-2 border-muted">
+                                {(result.raw._extractedComments as Array<{author: string; body: string; upVotes: number}>)
+                                  .slice(0, 5)
+                                  .map((comment, idx) => (
+                                    <div key={idx} className="text-xs space-y-0.5">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium text-muted-foreground">u/{comment.author}</span>
+                                        <span className="text-muted-foreground/60">• {comment.upVotes} pts</span>
+                                      </div>
+                                      <p className="text-foreground/80 line-clamp-2">{comment.body}</p>
+                                    </div>
+                                  ))}
+                                {(result.raw._extractedComments as Array<unknown>).length > 5 && (
+                                  <p className="text-xs text-muted-foreground">
+                                    +{(result.raw._extractedComments as Array<unknown>).length - 5} comentarios más...
+                                  </p>
+                                )}
+                              </CollapsibleContent>
+                            </Collapsible>
+                          )}
 
                           {/* Metrics */}
                           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
