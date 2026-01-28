@@ -272,23 +272,26 @@ serve(async (req) => {
         
       case "youtube":
       case "youtube_shorts":
-        // scraper_one/youtube-search-scraper - Good results quality
-        // Uses 'query' (string), 'maxResults', 'sortBy' (upload_date for newest first)
-        const youtubeResultsCount = Math.min(maxResults, 50);
-        if (channelUrl) {
-          // For channel URLs, use channelUrl parameter
-          input = {
-            channelUrl: channelUrl,
-            maxResults: youtubeResultsCount,
-            sortBy: "upload_date", // Newest first
-          };
-        } else if (query) {
-          input = {
-            query: query,
-            maxResults: youtubeResultsCount,
-            sortBy: "upload_date", // Newest first
-          };
+        // scraper_one/youtube-search-scraper
+        // OpenAPI input uses:
+        // - query (required)
+        // - resultsCount (1..100)
+        // - sortType: relevance|date|views|rating
+        // - timeWindow (days) works only when sortType='date'
+        // NOTE: This actor is search-based (no channelUrl input in schema).
+        const youtubeResultsCount = Math.min(Math.max(maxResults, 1), 100);
+
+        if (!query) {
+          throw new Error("YouTube requiere un término de búsqueda (query).");
         }
+
+        input = {
+          query,
+          resultsCount: youtubeResultsCount,
+          sortType: "date", // Ensure newest-first results
+          // Keep this generous so monitoring windows like 7/30/90d work without changing the query.
+          timeWindow: 365,
+        };
         break;
         
       case "reddit":
