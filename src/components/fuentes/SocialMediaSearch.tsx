@@ -342,11 +342,11 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
   }, []);
 
   // Results are now normalized by the backend - sort chronologically
-  const processBackendResults = (items: SocialSearchResult[]): SocialSearchResult[] => {
+  const processBackendResults = (items: SocialSearchResult[], idPrefix: string = platform): SocialSearchResult[] => {
     return (items || [])
       .map((item, idx) => ({
         ...item,
-        id: item.id || `${platform}-${idx}-${Date.now()}`,
+        id: item.id || `${idPrefix}-${idx}-${Date.now()}`,
       }))
       // Sort by publishedAt descending (newest first) - backend should do this too, but ensure consistency
       .sort((a, b) => {
@@ -358,7 +358,12 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       });
   };
 
-  const checkJobStatus = useCallback(async (jobRunId: string, filterKw?: string, startTime?: number) => {
+  const checkJobStatus = useCallback(async (
+    jobRunId: string,
+    filterKw?: string,
+    startTime?: number,
+    platformOverride?: Platform,
+  ) => {
     // Track polling start time
     const pollingStart = startTime || pollingStartTime || Date.now();
     if (!startTime && !pollingStartTime) {
@@ -399,8 +404,12 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     }
     
     try {
+      // IMPORTANT: if the run was started with an internal platform (e.g. reddit_comments),
+      // we must poll status using that same platform so backend applies the correct filtering.
+      const statusPlatform: Platform = platformOverride || (platform as Platform);
+
       // Pass filterKeyword to backend for TikTok exact-match filtering
-      const result = await apifyApi.checkStatus(jobRunId, platform, filterKw);
+      const result = await apifyApi.checkStatus(jobRunId, statusPlatform, filterKw);
 
       if (!result.success || !result.data) {
         throw new Error(result.error || "Error al verificar estado");
@@ -415,7 +424,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         setIsSearching(false); // Stop the spinner
         setPollingStartTime(null); // Reset polling timer
         // Results are now pre-normalized by the backend
-        let processed = processBackendResults((data.items || []) as SocialSearchResult[]);
+        let processed = processBackendResults((data.items || []) as SocialSearchResult[], statusPlatform);
         // Backend already applied keyword filtering for some platforms (e.g., Reddit/TikTok).
         // Keep this count to explain why rawCount != shownCount.
         setKeywordFilteredCount(processed.length);
@@ -457,7 +466,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           
           // SOFT FILTER for YouTube: If ALL results are outside the range, show them with a warning
           // This prevents "0 results" when the API doesn't have content in the exact date window
-          if (platform === "youtube" && filteredByDate.length === 0 && processed.length > 0) {
+          if (statusPlatform === "youtube" && filteredByDate.length === 0 && processed.length > 0) {
             appliedSoftFilter = true;
             setUsedSoftFilter(true);
             console.log(`YouTube SOFT FILTER: No results in range ${format(dateFrom, "yyyy-MM-dd")} to ${format(dateTo, "yyyy-MM-dd")}. Showing all ${processed.length} results with warning. Actual range: ${minDateIso} to ${maxDateIso}`);
@@ -608,8 +617,8 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         }
         
         // Slightly slower polling for YouTube (reduces cold-start spam and still feels responsive)
-        const pollMs = platform === "youtube" ? 3000 : 2000;
-        setTimeout(() => checkJobStatus(jobRunId, filterKw, pollingStart), pollMs);
+        const pollMs = statusPlatform === "youtube" ? 3000 : 2000;
+        setTimeout(() => checkJobStatus(jobRunId, filterKw, pollingStart, statusPlatform), pollMs);
       }
     } catch (error) {
       console.error("Error checking job status:", error);
@@ -903,7 +912,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
             : searchValue;
           const startTime = Date.now();
           setPollingStartTime(startTime);
-          setTimeout(() => checkJobStatus(data.runId!, filterKw, startTime), 3000);
+          setTimeout(() => checkJobStatus(data.runId!, filterKw, startTime, effectivePlatform as Platform), 3000);
         } else {
           throw new Error(data.error || "Error al iniciar la búsqueda");
         }
