@@ -70,14 +70,34 @@ export function DailyTopPostsPanel({ profiles, topPosts, isLoading, onRefresh }:
     }
 
     setIsSyncing(true);
+    toast.info("Sincronizando posts... Esto puede tardar 2-3 minutos con muchos perfiles.");
     
     try {
-      // Call the scheduled-ranking-sync function manually
-      const { data, error } = await supabase.functions.invoke("scheduled-ranking-sync", {
-        body: {}
-      });
-
-      if (error) throw error;
+      // Create AbortController with longer timeout for large syncs
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 minutes
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scheduled-ranking-sync`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({}),
+          signal: controller.signal,
+        }
+      );
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
+      
+      const data = await response.json();
 
       if (data?.success) {
         toast.success(`Sincronización completada: ${data.topPostsSaved || 0} posts top capturados`);
@@ -87,7 +107,11 @@ export function DailyTopPostsPanel({ profiles, topPosts, isLoading, onRefresh }:
       }
     } catch (err) {
       console.error("Error syncing top posts:", err);
-      toast.error(`Error al sincronizar: ${err instanceof Error ? err.message : "Error desconocido"}`);
+      if (err instanceof Error && err.name === 'AbortError') {
+        toast.error("La sincronización tardó demasiado. Intenta de nuevo o espera al corte automático.");
+      } else {
+        toast.error(`Error al sincronizar: ${err instanceof Error ? err.message : "Error desconocido"}`);
+      }
     } finally {
       setIsSyncing(false);
     }
