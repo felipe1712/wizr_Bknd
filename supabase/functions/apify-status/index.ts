@@ -6,6 +6,99 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const TRANSIENT_STATUS_CODES = new Set([502, 503, 504]);
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// Retry wrapper for transient upstream failures and network hiccups.
+async function fetchWithRetry(
+  url: string,
+  options?: { retries?: number; baseDelayMs?: number; timeoutMs?: number }
+): Promise<Response> {
+  const retries = options?.retries ?? 3;
+  const baseDelayMs = options?.baseDelayMs ?? 800;
+  const timeoutMs = options?.timeoutMs ?? 12000;
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetchWithTimeout(url, timeoutMs);
+
+      // Retry only on transient server errors.
+      if (res.status >= 500 && TRANSIENT_STATUS_CODES.has(res.status) && attempt < retries) {
+        console.log(`Upstream returned ${res.status} for ${url}; retrying (${attempt}/${retries})`);
+        await sleep(baseDelayMs * attempt);
+        continue;
+      }
+
+      return res;
+    } catch (err) {
+      // Retry on network errors / aborts.
+      if (attempt < retries) {
+        console.log(`Network/timeout error for ${url}; retrying (${attempt}/${retries})`, err);
+        await sleep(baseDelayMs * attempt);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  // Should be unreachable.
+  throw new Error("Max retries exceeded");
+}
+
+function safeJsonUnescape(input: string): string {
+  try {
+    // Convert JSON string literal to actual string.
+    return JSON.parse(`"${input.replace(/"/g, "\\\"")}"`);
+  } catch {
+    return input
+      .replace(/\\n/g, "\n")
+      .replace(/\\r/g, "\r")
+      .replace(/\\t/g, "\t")
+      .replace(/\\\\/g, "\\");
+  }
+}
+
+async function tryFetchYouTubeFullDescription(videoUrl: string): Promise<string | null> {
+  if (!videoUrl) return null;
+  try {
+    // YouTube blocks some automated traffic; best-effort only.
+    const res = await fetchWithTimeout(videoUrl, 8000);
+    if (!res.ok) return null;
+    const html = await res.text();
+
+    // 1) Most reliable: shortDescription inside ytInitialPlayerResponse JSON.
+    const m1 = html.match(/\"shortDescription\"\s*:\s*\"([^\"]*)\"/);
+    if (m1?.[1]) {
+      const desc = safeJsonUnescape(m1[1]);
+      return desc.trim() ? desc : null;
+    }
+
+    // 2) Fallback: meta description.
+    const m2 = html.match(/<meta\s+name=\"description\"\s+content=\"([^\"]*)\"/i);
+    if (m2?.[1]) {
+      const desc = safeJsonUnescape(m2[1]);
+      return desc.trim() ? desc : null;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 type Platform = "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "reddit";
 
 interface NormalizedResult {
@@ -696,34 +789,6 @@ serve(async (req) => {
     // Normalize filterKeyword for case-insensitive matching
     const keywordLower = (filterKeyword || "").toLowerCase().trim();
 
-    // Get run status with retry logic for transient failures (502, 503, 504)
-    const fetchWithRetry = async (url: string, retries = 3, delay = 1000): Promise<Response> => {
-      for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-          const response = await fetch(url);
-          
-          // Retry on transient server errors
-          if (response.status >= 500 && response.status < 600 && attempt < retries) {
-            console.log(`Apify API returned ${response.status}, retrying (attempt ${attempt}/${retries})...`);
-            await new Promise(resolve => setTimeout(resolve, delay * attempt));
-            continue;
-          }
-          
-          return response;
-        } catch (networkError) {
-          // Retry on network errors
-          if (attempt < retries) {
-            console.log(`Network error, retrying (attempt ${attempt}/${retries}):`, networkError);
-            await new Promise(resolve => setTimeout(resolve, delay * attempt));
-            continue;
-          }
-          throw networkError;
-        }
-      }
-      // This shouldn't be reached, but TypeScript needs it
-      throw new Error("Max retries exceeded");
-    };
-
     const statusResponse = await fetchWithRetry(
       `https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_API_TOKEN}`
     );
@@ -731,6 +796,25 @@ serve(async (req) => {
     if (!statusResponse.ok) {
       const errorText = await statusResponse.text();
       console.error("Apify status error:", errorText);
+
+      // Treat transient upstream errors as a non-fatal polling state.
+      if (TRANSIENT_STATUS_CODES.has(statusResponse.status)) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            runId,
+            status: "RUNNING",
+            platform,
+            isFinished: false,
+            items: [],
+            rawCount: 0,
+            transientError: true,
+            transientStatusCode: statusResponse.status,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       throw new Error(`Failed to get run status: ${statusResponse.status}`);
     }
 
@@ -788,6 +872,40 @@ serve(async (req) => {
         
         let normalized = normalizeResults(rawItems, platform as Platform);
         rawCount = normalized.length;
+
+        // YouTube: Enrich with full video description (best-effort) BEFORE keyword filtering.
+        // This helps catch mentions that appear only in the full description, not in the snippet.
+        if (platform === "youtube" && keywordLower) {
+          const searchTerms: string[] = keywordLower
+            .split(",")
+            .map((t: string) => t.trim().replace(/^@/, ""))
+            .filter(Boolean);
+
+          let enriched = 0;
+          const maxEnrich = 12; // keep runtime small
+
+          for (const item of normalized) {
+            if (enriched >= maxEnrich) break;
+            const currentText = `${item.title} ${item.description}`.toLowerCase();
+            const alreadyMatches = searchTerms.some((t) => currentText.includes(t));
+            if (alreadyMatches) continue;
+
+            const url = item.url;
+            if (!url || !url.includes("youtube.com/watch")) continue;
+
+            const fullDesc = await tryFetchYouTubeFullDescription(url);
+            if (fullDesc) {
+              // Append so we don't lose snippet context.
+              item.description = `${item.description}\n\n${fullDesc}`.trim();
+              item.raw = { ...item.raw, _fullDescription: fullDesc, _fullDescriptionSource: "youtube_html" };
+              enriched++;
+            }
+          }
+
+          if (enriched > 0) {
+            console.log(`YouTube: enriched ${enriched} items with full descriptions before filtering.`);
+          }
+        }
 
         // Filter by keyword for platforms that need it
         // SKIP filtering for TikTok - keywords appear in video overlays (OCR) not in metadata
