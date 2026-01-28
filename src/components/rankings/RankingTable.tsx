@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { 
   Table, 
   TableBody, 
@@ -11,10 +12,12 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Trophy, TrendingUp, TrendingDown, Minus, BarChart3 } from "lucide-react";
+import { Trophy, TrendingUp, TrendingDown, Minus, BarChart3, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { FKProfile, FKProfileKPI, FKNetwork, getNetworkLabel } from "@/hooks/useFanpageKarma";
+import { NetworkFilter } from "./NetworkFilter";
 
 type SortMetric = "followers" | "engagement_rate" | "follower_growth_percent" | "posts_per_day";
+type SortDirection = "asc" | "desc";
 
 interface RankingTableProps {
   profiles: FKProfile[];
@@ -22,6 +25,7 @@ interface RankingTableProps {
   isLoading: boolean;
   sortBy?: SortMetric;
   filterNetwork?: FKNetwork | "all";
+  onNetworkChange?: (network: FKNetwork | "all") => void;
 }
 
 const MEDAL_COLORS = ["🥇", "🥈", "🥉"];
@@ -49,9 +53,46 @@ export function RankingTable({
   profiles, 
   kpis, 
   isLoading, 
-  sortBy = "engagement_rate",
-  filterNetwork = "all"
+  sortBy: initialSortBy = "engagement_rate",
+  filterNetwork: externalFilterNetwork = "all",
+  onNetworkChange
 }: RankingTableProps) {
+  const [sortMetric, setSortMetric] = useState<SortMetric>(initialSortBy);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [internalFilterNetwork, setInternalFilterNetwork] = useState<FKNetwork | "all">(externalFilterNetwork);
+  
+  const filterNetwork = onNetworkChange ? externalFilterNetwork : internalFilterNetwork;
+  const setFilterNetwork = onNetworkChange || setInternalFilterNetwork;
+
+  const handleSort = (metric: SortMetric) => {
+    if (sortMetric === metric) {
+      setSortDirection(prev => prev === "desc" ? "asc" : "desc");
+    } else {
+      setSortMetric(metric);
+      setSortDirection("desc");
+    }
+  };
+
+  const SortableHeader = ({ metric, children }: { metric: SortMetric; children: React.ReactNode }) => (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="-ml-3 h-8 data-[state=open]:bg-accent"
+      onClick={() => handleSort(metric)}
+    >
+      {children}
+      {sortMetric === metric ? (
+        sortDirection === "desc" ? (
+          <ArrowDown className="ml-2 h-4 w-4" />
+        ) : (
+          <ArrowUp className="ml-2 h-4 w-4" />
+        )
+      ) : (
+        <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
+      )}
+    </Button>
+  );
+
   const rankedData = useMemo(() => {
     // Create a map of profile ID to latest KPIs
     const kpiMap = new Map<string, FKProfileKPI>();
@@ -72,13 +113,16 @@ export function RankingTable({
 
     // Sort by the selected metric
     data.sort((a, b) => {
-      const aVal = a.kpi?.[sortBy] ?? -Infinity;
-      const bVal = b.kpi?.[sortBy] ?? -Infinity;
-      return (bVal as number) - (aVal as number);
+      const aVal = a.kpi?.[sortMetric] ?? -Infinity;
+      const bVal = b.kpi?.[sortMetric] ?? -Infinity;
+      const comparison = (bVal as number) - (aVal as number);
+      return sortDirection === "desc" ? comparison : -comparison;
     });
 
     return data;
-  }, [profiles, kpis, sortBy, filterNetwork]);
+  }, [profiles, kpis, sortMetric, sortDirection, filterNetwork]);
+
+  const profileNetworks = profiles.map(p => p.network as FKNetwork);
 
   // Calculate max values for relative bars
   const maxEngagement = useMemo(() => {
@@ -117,16 +161,25 @@ export function RankingTable({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Trophy className="h-5 w-5 text-amber-500" />
-          Ranking de Perfiles
-        </CardTitle>
-        <CardDescription>
-          Ordenado por {sortBy === "engagement_rate" ? "Tasa de Engagement" : 
-            sortBy === "followers" ? "Seguidores" :
-            sortBy === "follower_growth_percent" ? "Crecimiento" : "Publicaciones/día"}
-        </CardDescription>
+      <CardHeader className="pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-amber-500" />
+              Ranking de Perfiles
+            </CardTitle>
+            <CardDescription className="mt-1">
+              {rankedData.length} perfiles · Ordenado por {sortMetric === "engagement_rate" ? "Engagement" : 
+                sortMetric === "followers" ? "Seguidores" :
+                sortMetric === "follower_growth_percent" ? "Crecimiento" : "Posts/día"}
+            </CardDescription>
+          </div>
+          <NetworkFilter
+            networks={profileNetworks}
+            selected={filterNetwork}
+            onChange={setFilterNetwork}
+          />
+        </div>
       </CardHeader>
       <CardContent>
         <Table>
@@ -135,9 +188,15 @@ export function RankingTable({
               <TableHead className="w-12">#</TableHead>
               <TableHead>Perfil</TableHead>
               <TableHead>Red</TableHead>
-              <TableHead className="text-right">Seguidores</TableHead>
-              <TableHead className="text-right">Crecimiento</TableHead>
-              <TableHead className="text-right">Engagement</TableHead>
+              <TableHead className="text-right">
+                <SortableHeader metric="followers">Seguidores</SortableHeader>
+              </TableHead>
+              <TableHead className="text-right">
+                <SortableHeader metric="follower_growth_percent">Crecimiento</SortableHeader>
+              </TableHead>
+              <TableHead className="text-right">
+                <SortableHeader metric="engagement_rate">Engagement</SortableHeader>
+              </TableHead>
               <TableHead className="w-32">Relativo</TableHead>
             </TableRow>
           </TableHeader>

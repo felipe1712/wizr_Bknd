@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   FileText, 
   ExternalLink, 
@@ -14,12 +13,13 @@ import {
   Image as ImageIcon,
   Video,
   Link as LinkIcon,
-  ArrowUpDown,
   Flame
 } from "lucide-react";
-import { FKProfile, useFetchProfilePosts, FKPost } from "@/hooks/useFanpageKarma";
+import { FKProfile, useFetchProfilePosts, FKPost, FKNetwork } from "@/hooks/useFanpageKarma";
 import { format, isWithinInterval } from "date-fns";
 import { es } from "date-fns/locale";
+import { NetworkFilter } from "./NetworkFilter";
+import { ProfileSelectGrouped } from "./ProfileSelectGrouped";
 
 interface TopContentTabProps {
   profiles: FKProfile[];
@@ -144,9 +144,22 @@ function PostCard({ post, profileName, rank }: { post: FKPost; profileName: stri
 
 export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange }: TopContentTabProps) {
   const [selectedProfileId, setSelectedProfileId] = useState<string>("");
+  const [filterNetwork, setFilterNetwork] = useState<FKNetwork | "all">("all");
   const [sortBy, setSortBy] = useState<SortBy>("engagement");
-  
-  const selectedProfile = profiles.find(p => p.id === selectedProfileId) || profiles[0];
+
+  // Filter profiles by network
+  const filteredProfiles = filterNetwork === "all" 
+    ? profiles 
+    : profiles.filter(p => p.network === filterNetwork);
+
+  const selectedProfile = filteredProfiles.find(p => p.id === selectedProfileId) || filteredProfiles[0];
+
+  // Reset selection when filter changes and current selection is filtered out
+  useEffect(() => {
+    if (selectedProfileId && !filteredProfiles.find(p => p.id === selectedProfileId)) {
+      setSelectedProfileId(filteredProfiles[0]?.id || "");
+    }
+  }, [filterNetwork, filteredProfiles, selectedProfileId]);
   
   const { 
     data: posts = [], 
@@ -211,43 +224,42 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
     );
   }
 
+  const profileNetworks = profiles.map(p => p.network as FKNetwork);
+
   return (
     <div className="space-y-6">
+      {/* Network Filter */}
+      <NetworkFilter
+        networks={profileNetworks}
+        selected={filterNetwork}
+        onChange={setFilterNetwork}
+      />
+
       {/* Controls */}
       <div className="flex flex-wrap gap-4 items-center">
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium">Perfil:</span>
-          <Select 
-            value={selectedProfileId || selectedProfile?.id || ""} 
+          <ProfileSelectGrouped
+            profiles={profiles}
+            value={selectedProfileId || selectedProfile?.id || ""}
             onValueChange={setSelectedProfileId}
-          >
-            <SelectTrigger className="w-64">
-              <SelectValue placeholder="Selecciona un perfil" />
-            </SelectTrigger>
-            <SelectContent>
-              {profiles.map((profile) => (
-                <SelectItem key={profile.id} value={profile.id}>
-                  @{profile.profile_id} ({profile.network})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            filterNetwork={filterNetwork}
+          />
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium">Ordenar por:</span>
-          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortBy)}>
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="engagement">Total Engagement</SelectItem>
-              <SelectItem value="likes">Likes</SelectItem>
-              <SelectItem value="comments">Comentarios</SelectItem>
-              <SelectItem value="shares">Compartidos</SelectItem>
-              <SelectItem value="date">Más reciente</SelectItem>
-            </SelectContent>
-          </Select>
+          <span className="text-sm font-medium">Ordenar:</span>
+          <select 
+            value={sortBy} 
+            onChange={(e) => setSortBy(e.target.value as SortBy)}
+            className="h-9 px-3 rounded-md border border-input bg-background text-sm"
+          >
+            <option value="engagement">Total Engagement</option>
+            <option value="likes">Likes</option>
+            <option value="comments">Comentarios</option>
+            <option value="shares">Compartidos</option>
+            <option value="date">Más reciente</option>
+          </select>
         </div>
         
         <Button 

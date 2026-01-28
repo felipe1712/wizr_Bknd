@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   BookOpen, 
   RefreshCw, 
@@ -17,9 +16,11 @@ import {
   Hash,
   Target
 } from "lucide-react";
-import { FKProfile, useFetchProfilePosts, FKPost } from "@/hooks/useFanpageKarma";
+import { FKProfile, useFetchProfilePosts, FKPost, FKNetwork } from "@/hooks/useFanpageKarma";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { NetworkFilter } from "./NetworkFilter";
+import { ProfileSelectGrouped } from "./ProfileSelectGrouped";
 
 interface NarrativesAnalysisPanelProps {
   profiles: FKProfile[];
@@ -73,10 +74,23 @@ const getSentimentLabel = (sentiment: string) => {
 
 export function NarrativesAnalysisPanel({ profiles, isLoading: profilesLoading, dateRange }: NarrativesAnalysisPanelProps) {
   const [selectedProfileId, setSelectedProfileId] = useState<string>("");
+  const [filterNetwork, setFilterNetwork] = useState<FKNetwork | "all">("all");
   const [analysis, setAnalysis] = useState<NarrativeAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  const selectedProfile = profiles.find(p => p.id === selectedProfileId) || profiles[0];
+  // Filter profiles by network
+  const filteredProfiles = filterNetwork === "all" 
+    ? profiles 
+    : profiles.filter(p => p.network === filterNetwork);
+
+  const selectedProfile = filteredProfiles.find(p => p.id === selectedProfileId) || filteredProfiles[0];
+
+  // Reset selection when filter changes
+  useEffect(() => {
+    if (selectedProfileId && !filteredProfiles.find(p => p.id === selectedProfileId)) {
+      setSelectedProfileId(filteredProfiles[0]?.id || "");
+    }
+  }, [filterNetwork, filteredProfiles, selectedProfileId]);
 
   const { 
     data: posts = [], 
@@ -156,27 +170,27 @@ export function NarrativesAnalysisPanel({ profiles, isLoading: profilesLoading, 
     );
   }
 
+  const profileNetworks = profiles.map(p => p.network as FKNetwork);
+
   return (
     <div className="space-y-6">
+      {/* Network Filter */}
+      <NetworkFilter
+        networks={profileNetworks}
+        selected={filterNetwork}
+        onChange={setFilterNetwork}
+      />
+
       {/* Controls */}
       <div className="flex flex-wrap gap-4 items-center">
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium">Perfil:</span>
-          <Select 
-            value={selectedProfileId || selectedProfile?.id || ""} 
+          <ProfileSelectGrouped
+            profiles={profiles}
+            value={selectedProfileId || selectedProfile?.id || ""}
             onValueChange={setSelectedProfileId}
-          >
-            <SelectTrigger className="w-64">
-              <SelectValue placeholder="Selecciona un perfil" />
-            </SelectTrigger>
-            <SelectContent>
-              {profiles.map((profile) => (
-                <SelectItem key={profile.id} value={profile.id}>
-                  @{profile.profile_id} ({profile.network})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            filterNetwork={filterNetwork}
+          />
         </div>
 
         <Button 
