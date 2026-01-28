@@ -2,6 +2,7 @@ import { useProject } from "@/contexts/ProjectContext";
 import { usePanoramaData } from "@/hooks/usePanoramaData";
 import { useDateRangeFilter } from "@/hooks/useDateRangeFilter";
 import { DateRangeSelector } from "@/components/reports/DateRangeSelector";
+import { DataOriginBreadcrumb } from "@/components/analysis/DataOriginBreadcrumb";
 import { ActivityChart } from "@/components/panorama/ActivityChart";
 import { SentimentOverview } from "@/components/panorama/SentimentOverview";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,7 +43,7 @@ const TEMPORAL_LABELS: Record<string, string> = {
 const PanoramaPage = () => {
   const { selectedProject, loading: projectLoading } = useProject();
   const navigate = useNavigate();
-  const { dateConfig, setDateConfig, daysRange } = useDateRangeFilter("30d");
+  const { dateConfig, setDateConfig, daysRange, startDate, endDate } = useDateRangeFilter("30d");
   const { metrics, isLoading: metricsLoading } = usePanoramaData(selectedProject?.id, daysRange);
 
   const loading = projectLoading || metricsLoading;
@@ -102,6 +103,12 @@ const PanoramaPage = () => {
 
       {/* Date Range Selector */}
       <DateRangeSelector value={dateConfig} onChange={setDateConfig} />
+
+      {/* Data Origin Breadcrumb */}
+      <DataOriginBreadcrumb 
+        mentionCount={metrics.totalMentions} 
+        dateRange={startDate && endDate ? { start: startDate, end: endDate } : undefined}
+      />
 
       {/* Metrics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

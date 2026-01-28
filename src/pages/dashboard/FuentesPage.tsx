@@ -21,6 +21,7 @@ import { SocialHistoryTab } from "@/components/fuentes/SocialHistoryTab";
 import { GoogleNewsSearch } from "@/components/fuentes/GoogleNewsSearch";
 import { CommentsAnalysisTab } from "@/components/fuentes/CommentsAnalysisTab";
 import { MentionsHubTab } from "@/components/fuentes/MentionsHubTab";
+import { SavedMentionsBadge } from "@/components/fuentes/SavedMentionsBadge";
 
 import wizrLogoIcon from "@/assets/wizr-logo-icon.png";
 import { cn } from "@/lib/utils";
@@ -563,6 +564,9 @@ const FuentesPage = () => {
 
         {/* Search Tab */}
         <TabsContent value="search" className="space-y-4 mt-4">
+          {/* Saved Mentions Badge */}
+          <SavedMentionsBadge count={mentions.length} />
+          
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -989,6 +993,9 @@ const FuentesPage = () => {
 
         {/* Social Media Tab */}
         <TabsContent value="social" className="mt-4 space-y-6">
+          {/* Saved Mentions Badge */}
+          <SavedMentionsBadge count={mentions.length} />
+          
           <SocialMediaSearch 
             projectId={selectedProject.id} 
             onResultsSaved={() => {
@@ -1284,6 +1291,9 @@ const FuentesPage = () => {
 
         {/* Google News Tab */}
         <TabsContent value="google-news" className="space-y-4 mt-4">
+          {/* Saved Mentions Badge */}
+          <SavedMentionsBadge count={mentions.length} />
+          
           <GoogleNewsSearch 
             projectId={selectedProject.id} 
             defaultKeywords={entities.flatMap(e => [e.nombre, ...e.palabras_clave])} 

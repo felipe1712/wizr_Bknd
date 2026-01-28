@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useDateRangeFilter } from "@/hooks/useDateRangeFilter";
 import { DateRangeSelector } from "@/components/reports/DateRangeSelector";
+import { DataOriginBreadcrumb } from "@/components/analysis/DataOriginBreadcrumb";
 import { useProject } from "@/contexts/ProjectContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -42,7 +43,7 @@ import {
 const TendenciasPage = () => {
   const { selectedProject, loading: projectLoading } = useProject();
   const navigate = useNavigate();
-  const { dateConfig, setDateConfig, daysRange } = useDateRangeFilter("30d");
+  const { dateConfig, setDateConfig, daysRange, startDate, endDate } = useDateRangeFilter("30d");
   const timeRange = dateConfig.type === "7d" ? "7d" : dateConfig.type === "90d" ? "90d" : "30d";
   const [selectedEntityId, setSelectedEntityId] = useState<string>("all");
 
@@ -139,6 +140,14 @@ const TendenciasPage = () => {
 
       {/* Date Range Selector */}
       <DateRangeSelector value={dateConfig} onChange={setDateConfig} />
+
+      {/* Data Origin Breadcrumb */}
+      {hasData && (
+        <DataOriginBreadcrumb 
+          mentionCount={summary.totalMentions}
+          dateRange={startDate && endDate ? { start: startDate, end: endDate } : undefined}
+        />
+      )}
 
       {!hasData ? (
         <Card className="border-dashed">

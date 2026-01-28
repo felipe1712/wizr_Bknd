@@ -3,6 +3,7 @@ import { useProject } from "@/contexts/ProjectContext";
 import { useNavigate } from "react-router-dom";
 import { useDateRangeFilter } from "@/hooks/useDateRangeFilter";
 import { DateRangeSelector } from "@/components/reports/DateRangeSelector";
+import { DataOriginBreadcrumb } from "@/components/analysis/DataOriginBreadcrumb";
 import { useComparativeData } from "@/hooks/useComparativeData";
 import { ShareOfVoiceChart } from "@/components/comparativa/ShareOfVoiceChart";
 import { SentimentComparisonChart } from "@/components/comparativa/SentimentComparisonChart";
@@ -46,7 +47,7 @@ const ComparativaPage = () => {
   const { selectedProject, loading: projectLoading } = useProject();
   const navigate = useNavigate();
   const [selectedEntityIds, setSelectedEntityIds] = useState<string[]>([]);
-  const { dateConfig, setDateConfig, daysRange } = useDateRangeFilter("30d");
+  const { dateConfig, setDateConfig, daysRange, startDate, endDate } = useDateRangeFilter("30d");
 
   const { entities, comparativeData, isLoading } = useComparativeData(
     selectedProject?.id,
@@ -254,6 +255,14 @@ const ComparativaPage = () => {
 
       {/* Date Range Selector */}
       <DateRangeSelector value={dateConfig} onChange={setDateConfig} />
+
+      {/* Data Origin Breadcrumb */}
+      {comparativeData && (
+        <DataOriginBreadcrumb 
+          mentionCount={comparativeData.entities.reduce((sum, e) => sum + e.totalMentions, 0)}
+          dateRange={startDate && endDate ? { start: startDate, end: endDate } : undefined}
+        />
+      )}
 
       {/* Selected Entities Pills */}
       {selectedEntities.length > 0 && (

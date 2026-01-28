@@ -7,6 +7,7 @@ import { useProject } from "@/contexts/ProjectContext";
 import { useNavigate } from "react-router-dom";
 import { useDateRangeFilter } from "@/hooks/useDateRangeFilter";
 import { DateRangeSelector } from "@/components/reports/DateRangeSelector";
+import { DataOriginBreadcrumb } from "@/components/analysis/DataOriginBreadcrumb";
 import { useMentions } from "@/hooks/useMentions";
 import { useSemanticAnalysis } from "@/hooks/useSemanticAnalysis";
 import { AnalysisResults } from "@/components/semantica/AnalysisResults";
@@ -92,6 +93,12 @@ const SemanticaPage = () => {
 
       {/* Date Range Selector */}
       <DateRangeSelector value={dateConfig} onChange={setDateConfig} />
+
+      {/* Data Origin Breadcrumb */}
+      <DataOriginBreadcrumb 
+        mentionCount={mentions.length} 
+        dateRange={startDate && endDate ? { start: startDate, end: endDate } : undefined}
+      />
 
       {/* Stats Bar */}
       <div className="flex items-center gap-4 rounded-lg border bg-card p-4">
