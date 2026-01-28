@@ -319,17 +319,19 @@ export function RankingInsightsPanel({ profiles, kpis, isLoading }: RankingInsig
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground mb-1">{insight.question}</p>
-              <div className="flex items-baseline gap-2">
-                <p className="font-semibold text-lg">{insight.answer}</p>
+            <CardContent className="pt-0">
+              <p className="text-xs text-muted-foreground mb-1 line-clamp-1">{insight.question}</p>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <p className="font-semibold text-base truncate max-w-[140px]" title={insight.answer}>
+                  {insight.answer}
+                </p>
                 {insight.value && (
-                  <Badge variant="outline" className="text-xs font-bold">
+                  <Badge variant="outline" className="text-xs font-bold flex-shrink-0">
                     {insight.value}
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">{insight.detail}</p>
+              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{insight.detail}</p>
             </CardContent>
           </Card>
         ))}
