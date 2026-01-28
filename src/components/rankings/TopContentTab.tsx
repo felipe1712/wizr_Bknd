@@ -31,6 +31,11 @@ interface TopContentTabProps {
 
 type SortBy = "engagement" | "likes" | "comments" | "shares" | "date";
 
+// Extended post type that includes the profile_id for multi-profile view
+interface FKPostWithProfile extends FKPost {
+  profile_id?: string;
+}
+
 const formatNumber = (num: number | null | undefined): string => {
   if (num === null || num === undefined) return "0";
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
@@ -145,7 +150,7 @@ function PostCard({ post, profileName, rank }: { post: FKPost; profileName: stri
 }
 
 export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange }: TopContentTabProps) {
-  const [selectedProfileId, setSelectedProfileId] = useState<string>("");
+  const [selectedProfileId, setSelectedProfileId] = useState<string>("__all__");
   const [filterNetwork, setFilterNetwork] = useState<FKNetwork | "all">("all");
   const [sortBy, setSortBy] = useState<SortBy>("engagement");
   const [searchQuery, setSearchQuery] = useState("");
@@ -155,21 +160,53 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
     ? profiles 
     : profiles.filter(p => p.network === filterNetwork);
 
-  const selectedProfile = filteredProfiles.find(p => p.id === selectedProfileId) || filteredProfiles[0];
+  const isAllProfiles = selectedProfileId === "__all__";
+  const selectedProfile = isAllProfiles 
+    ? undefined 
+    : (filteredProfiles.find(p => p.id === selectedProfileId) || filteredProfiles[0]);
 
   // Reset selection when filter changes and current selection is filtered out
   useEffect(() => {
-    if (selectedProfileId && !filteredProfiles.find(p => p.id === selectedProfileId)) {
-      setSelectedProfileId(filteredProfiles[0]?.id || "");
+    if (selectedProfileId !== "__all__" && selectedProfileId && !filteredProfiles.find(p => p.id === selectedProfileId)) {
+      setSelectedProfileId("__all__");
     }
   }, [filterNetwork, filteredProfiles, selectedProfileId]);
   
+  // Fetch posts for single profile (when not "all")
   const { 
-    data: posts = [], 
-    isLoading: postsLoading, 
-    refetch,
-    isFetching 
+    data: singleProfilePosts = [], 
+    isLoading: singlePostsLoading, 
+    refetch: refetchSingle,
+    isFetching: isFetchingSingle 
   } = useFetchProfilePosts(selectedProfile);
+
+  // Fetch posts for ALL profiles when "all" is selected
+  const allProfileQueries = useFetchMultipleProfilePosts(
+    isAllProfiles ? filteredProfiles : []
+  );
+
+  const allProfilesPosts: FKPostWithProfile[] = useMemo(() => {
+    if (!isAllProfiles) return [];
+    return allProfileQueries.flatMap(q => q.posts);
+  }, [isAllProfiles, allProfileQueries]);
+
+  const allProfilesLoading = isAllProfiles && allProfileQueries.some(q => q.isLoading);
+  const allProfilesFetching = isAllProfiles && allProfileQueries.some(q => q.isFetching);
+
+  // Select the appropriate posts based on mode
+  const posts: FKPostWithProfile[] = isAllProfiles 
+    ? allProfilesPosts 
+    : singleProfilePosts.map(p => ({ ...p, profile_id: selectedProfile?.profile_id }));
+  const postsLoading = isAllProfiles ? allProfilesLoading : singlePostsLoading;
+  const isFetching = isAllProfiles ? allProfilesFetching : isFetchingSingle;
+
+  const refetch = () => {
+    if (isAllProfiles) {
+      allProfileQueries.forEach(q => q.refetch());
+    } else {
+      refetchSingle();
+    }
+  };
 
   // Filter posts by date range and search query
   const filteredPosts = useMemo(() => {
@@ -262,9 +299,10 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
           <span className="text-sm font-medium">Perfil:</span>
           <ProfileSelectGrouped
             profiles={profiles}
-            value={selectedProfileId || selectedProfile?.id || ""}
+            value={selectedProfileId}
             onValueChange={setSelectedProfileId}
             filterNetwork={filterNetwork}
+            showAllOption={true}
           />
         </div>
 
@@ -298,7 +336,10 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar por palabras clave en el contenido..."
+          placeholder={isAllProfiles 
+            ? "Buscar por palabras clave en todos los perfiles..." 
+            : "Buscar por palabras clave en el contenido..."
+          }
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-10"
@@ -317,9 +358,16 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Flame className="h-5 w-5 text-orange-500" />
-                Contenido Top de @{selectedProfile?.profile_id}
+                {isAllProfiles 
+                  ? `Contenido Top de Todos los Perfiles` 
+                  : `Contenido Top de @${selectedProfile?.profile_id}`
+                }
               </CardTitle>
               <CardDescription>
+                {isAllProfiles 
+                  ? `Comparando ${filteredProfiles.length} perfiles - ` 
+                  : ""
+                }
                 Los posts con mejor engagement ordenados por {
                   sortBy === "engagement" ? "total de interacciones" :
                   sortBy === "likes" ? "likes" :
@@ -345,18 +393,27 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
           ) : sortedPosts.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <FileText className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p>No hay posts disponibles para este perfil.</p>
-              <p className="text-sm mt-1">
-                Haz clic en "Actualizar" para obtener los posts más recientes.
+              <p>
+                {searchQuery 
+                  ? `No se encontraron posts con "${searchQuery}".`
+                  : isAllProfiles 
+                    ? "No hay posts disponibles. Haz clic en 'Actualizar' para cargar."
+                    : "No hay posts disponibles para este perfil."
+                }
               </p>
+              {!searchQuery && (
+                <p className="text-sm mt-1">
+                  Haz clic en "Actualizar" para obtener los posts más recientes.
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
               {sortedPosts.map((post, index) => (
                 <PostCard 
-                  key={post.id || index} 
+                  key={post.id || `${post.profile_id}-${index}`} 
                   post={post} 
-                  profileName={selectedProfile?.profile_id || ""} 
+                  profileName={post.profile_id || selectedProfile?.profile_id || ""} 
                   rank={index + 1}
                 />
               ))}
@@ -366,4 +423,20 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
       </Card>
     </div>
   );
+}
+
+// Hook to fetch posts from multiple profiles
+function useFetchMultipleProfilePosts(profiles: FKProfile[]) {
+  const queries = profiles.map(profile => {
+    const query = useFetchProfilePosts(profile);
+    return {
+      ...query,
+      posts: (query.data || []).map(post => ({
+        ...post,
+        profile_id: profile.profile_id
+      }))
+    };
+  });
+  
+  return queries;
 }

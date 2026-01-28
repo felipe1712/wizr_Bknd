@@ -1,5 +1,6 @@
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FKProfile, FKNetwork, getNetworkLabel } from "@/hooks/useFanpageKarma";
+import { Users } from "lucide-react";
 
 interface ProfileSelectGroupedProps {
   profiles: FKProfile[];
@@ -8,6 +9,7 @@ interface ProfileSelectGroupedProps {
   placeholder?: string;
   className?: string;
   filterNetwork?: FKNetwork | "all";
+  showAllOption?: boolean;
 }
 
 export function ProfileSelectGrouped({ 
@@ -16,7 +18,8 @@ export function ProfileSelectGrouped({
   onValueChange, 
   placeholder = "Selecciona un perfil",
   className = "w-72",
-  filterNetwork = "all"
+  filterNetwork = "all",
+  showAllOption = false
 }: ProfileSelectGroupedProps) {
   // Filter by network if specified
   const filteredProfiles = filterNetwork === "all" 
@@ -35,6 +38,18 @@ export function ProfileSelectGrouped({
 
   const networks = Object.keys(groupedByNetwork) as FKNetwork[];
 
+  const allOption = showAllOption ? (
+    <SelectItem value="__all__">
+      <div className="flex items-center gap-2">
+        <Users className="h-4 w-4 text-primary" />
+        <span className="font-medium">Todos los perfiles</span>
+        <span className="text-muted-foreground text-xs">
+          ({filteredProfiles.length})
+        </span>
+      </div>
+    </SelectItem>
+  ) : null;
+
   // If only one network, show flat list
   if (networks.length <= 1 && filteredProfiles.length > 0) {
     return (
@@ -43,6 +58,7 @@ export function ProfileSelectGrouped({
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
+          {allOption}
           {filteredProfiles.map((profile) => (
             <SelectItem key={profile.id} value={profile.id}>
               <div className="flex items-center gap-2">
@@ -66,6 +82,7 @@ export function ProfileSelectGrouped({
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent className="max-h-80">
+        {allOption}
         {networks.map((network) => (
           <SelectGroup key={network}>
             <SelectLabel className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground bg-muted/50 -mx-1 px-3 py-1.5">
