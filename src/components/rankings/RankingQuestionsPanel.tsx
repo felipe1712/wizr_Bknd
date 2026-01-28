@@ -223,13 +223,13 @@ export function RankingQuestionsPanel({ profiles, kpis, isLoading, onAskAI }: Ra
             <Button
               key={q.id}
               variant={selectedQuestion?.id === q.id ? "default" : "outline"}
-              className="justify-start h-auto py-3 px-4 text-left"
+              className="justify-start h-auto py-3 px-4 text-left whitespace-normal"
               onClick={() => handleQuestionClick(q)}
               disabled={isLoading}
             >
-              <span className="mr-2">{q.icon}</span>
-              <span className="flex-1 text-sm">{q.question}</span>
-              <ChevronRight className="h-4 w-4 opacity-50" />
+              <span className="mr-2 flex-shrink-0">{q.icon}</span>
+              <span className="flex-1 text-sm text-left break-words">{q.question}</span>
+              <ChevronRight className="h-4 w-4 opacity-50 flex-shrink-0 ml-2" />
             </Button>
           ))}
         </div>
