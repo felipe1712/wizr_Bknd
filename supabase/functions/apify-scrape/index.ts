@@ -21,10 +21,10 @@ const ACTOR_IDS: Record<string, string> = {
   instagram: "apify/instagram-hashtag-scraper",
   // Instagram profile scraper for username-based searches (scrapes posts from specific profiles)
   instagram_profile: "apify/instagram-profile-scraper",
-  // YouTube: streamers/youtube-scraper (Maintained by Apify, $5/1000 videos, supports Videos + Shorts)
-  youtube: "streamers/youtube-scraper",
-  // YouTube Shorts only (deprecated - streamers/youtube-scraper handles both now)
-  youtube_shorts: "streamers/youtube-scraper",
+  // YouTube: scraper_one/youtube-search-scraper (better results quality, sorted by upload_date)
+  youtube: "scraper_one/youtube-search-scraper",
+  // YouTube Shorts: same actor, handles search queries
+  youtube_shorts: "scraper_one/youtube-search-scraper",
   // Reddit: lite variant for less restrictions
   reddit: "trudax/reddit-scraper-lite",
   // LinkedIn: harvestapi/linkedin-post-search (no cookies required, $2/1000 results)
@@ -272,23 +272,21 @@ serve(async (req) => {
         
       case "youtube":
       case "youtube_shorts":
-        // streamers/youtube-scraper - Maintained by Apify, $5/1000 videos
-        // Supports both regular videos AND Shorts in a single run!
-        // Uses 'searchQueries' (array), 'maxResults' (videos), 'maxResultsShorts' (shorts)
-        // OPTIMIZED: Keep results low to prevent slow crawling (was causing 76+ page crawls)
-        const youtubeResultsCount = Math.min(maxResults, 30); // Cap at 30 videos for speed
+        // scraper_one/youtube-search-scraper - Good results quality
+        // Uses 'search_query' (string), 'max_results', 'sort_by' (upload_date for newest first)
+        const youtubeResultsCount = Math.min(maxResults, 50);
         if (channelUrl) {
-          // For channel URLs, use startUrls with the channel URL
+          // For channel URLs, use channel_url parameter
           input = {
-            startUrls: [{ url: channelUrl }],
-            maxResults: youtubeResultsCount,
-            maxResultsShorts: Math.min(15, Math.ceil(youtubeResultsCount / 2)), // Cap shorts too
+            channel_url: channelUrl,
+            max_results: youtubeResultsCount,
+            sort_by: "upload_date", // Newest first
           };
         } else if (query) {
           input = {
-            searchQueries: [query],
-            maxResults: youtubeResultsCount,
-            maxResultsShorts: Math.min(15, Math.ceil(youtubeResultsCount / 2)), // Cap shorts for speed
+            search_query: query,
+            max_results: youtubeResultsCount,
+            sort_by: "upload_date", // Newest first
           };
         }
         break;
