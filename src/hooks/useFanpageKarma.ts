@@ -296,8 +296,15 @@ export function useSyncFKProfile() {
             followerGrowth = extractValue('channel_subscribers_growth');
             engagement = extractValue('channel_video_interaction');
             postsPerDay = extractValue('channel_videos_per_day');
-            performanceIndex = null; // YouTube doesn't have performance index
-          } else if (['instagram', 'tiktok', 'twitter', 'threads'].includes(profile.network)) {
+            performanceIndex = null;
+          } else if (profile.network === 'tiktok') {
+            // TikTok uses tiktoker_* prefix
+            followers = extractValue('tiktoker_fans') || extractValue('tiktoker_followers') || extractValue('tiktoker_followers_count');
+            followerGrowth = extractValue('tiktoker_followers_growth_percent');
+            engagement = extractValue('tiktoker_post_engagement') || extractValue('tiktoker_engagement');
+            postsPerDay = extractValue('tiktoker_post_count_per_day') || extractValue('tiktoker_video_count_per_day');
+            performanceIndex = extractValue('tiktoker_performance_index');
+          } else if (['instagram', 'twitter', 'threads'].includes(profile.network)) {
             // These networks use profile_* prefix
             followers = extractValue('profile_followers');
             followerGrowth = extractValue('profile_followers_growth_percent');
@@ -407,7 +414,14 @@ export function useSyncAllProfiles() {
             engagement = extractValue('channel_video_interaction');
             postsPerDay = extractValue('channel_videos_per_day');
             performanceIndex = null;
-          } else if (['instagram', 'tiktok', 'twitter', 'threads'].includes(profile.network)) {
+          } else if (profile.network === 'tiktok') {
+            // TikTok uses tiktoker_* prefix
+            followers = extractValue('tiktoker_fans') || extractValue('tiktoker_followers') || extractValue('tiktoker_followers_count');
+            followerGrowth = extractValue('tiktoker_followers_growth_percent');
+            engagement = extractValue('tiktoker_post_engagement') || extractValue('tiktoker_engagement');
+            postsPerDay = extractValue('tiktoker_post_count_per_day') || extractValue('tiktoker_video_count_per_day');
+            performanceIndex = extractValue('tiktoker_performance_index');
+          } else if (['instagram', 'twitter', 'threads'].includes(profile.network)) {
             // These networks use profile_* prefix
             followers = extractValue('profile_followers');
             followerGrowth = extractValue('profile_followers_growth_percent');
