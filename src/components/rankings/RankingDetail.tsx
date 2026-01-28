@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { format as formatDate } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -32,9 +33,14 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
   const [aiInitialQuestion, setAiInitialQuestion] = useState<string>("");
   const [rankingFilterNetwork, setRankingFilterNetwork] = useState<FKNetwork | "all">("all");
 
+  // Get the applied date range (only changes when Apply is clicked)
+  const dateRange = getDateRangeFromPreset(appliedPreset, appliedCustomRange);
+  const periodStart = formatDate(dateRange.from, "yyyy-MM-dd");
+  const periodEnd = formatDate(dateRange.to, "yyyy-MM-dd");
+
   const { data: profiles = [], isLoading: loadingProfiles } = useFKProfilesByRanking(ranking.id);
   const profileIds = profiles.map((p) => p.id);
-  const { data: kpis = [], isLoading: loadingKPIs } = useFKProfileKPIs(profileIds);
+  const { data: kpis = [], isLoading: loadingKPIs } = useFKProfileKPIs(profileIds, periodStart, periodEnd);
   const { data: allKpis = [], isLoading: loadingAllKpis } = useFKAllKPIs(profileIds);
 
   const syncedCount = profiles.filter((p) => p.last_synced_at).length;
@@ -48,9 +54,6 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
     setAppliedPreset(datePreset);
     setAppliedCustomRange(customDateRange);
   };
-
-  // Get the applied date range (only changes when Apply is clicked)
-  const dateRange = getDateRangeFromPreset(appliedPreset, appliedCustomRange);
 
   return (
     <div className="space-y-6">
