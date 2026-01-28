@@ -992,8 +992,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       const { error } = await supabase
         .from("mentions")
         .upsert(mentions, { 
-          onConflict: "project_id,url",
-          ignoreDuplicates: false // Update existing records
+          onConflict: "project_id,url"
         });
 
       if (error) throw error;
