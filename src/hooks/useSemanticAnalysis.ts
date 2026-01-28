@@ -49,9 +49,9 @@ export function useSemanticAnalysis(projectId: string | undefined) {
   const queryClient = useQueryClient();
   const [cachedResult, setCachedResult] = useState<SemanticAnalysisResult | null>(null);
 
-  // Mantener el payload chico para evitar fallos de red ("Failed to fetch") en algunos navegadores.
-  const MAX_MENTIONS_FOR_ANALYSIS = 40;
-  const MAX_TEXT_CHARS = 450;
+  // Muestreo estratificado: hasta 60 menciones balanceadas por fecha, fuente y sentimiento
+  const MAX_STRATIFIED_SAMPLE = 60;
+  const MAX_TEXT_CHARS = 350; // Reducido para permitir más menciones
 
   const truncate = (value: string | null | undefined, max = MAX_TEXT_CHARS) => {
     if (!value) return null;
@@ -60,23 +60,82 @@ export function useSemanticAnalysis(projectId: string | undefined) {
     return `${s.slice(0, max)}…`;
   };
 
+  /**
+   * Muestreo estratificado: selecciona menciones representativas
+   * distribuyendo por fecha, fuente y sentimiento
+   */
+  const stratifiedSample = (mentions: Mention[], targetSize: number): Mention[] => {
+    if (mentions.length <= targetSize) return mentions;
+
+    // 1. Agrupar por semana
+    const byWeek = new Map<string, Mention[]>();
+    mentions.forEach((m) => {
+      const date = m.published_at ? new Date(m.published_at) : new Date(m.created_at);
+      const weekKey = `${date.getFullYear()}-W${Math.ceil((date.getDate() + new Date(date.getFullYear(), date.getMonth(), 1).getDay()) / 7)}`;
+      if (!byWeek.has(weekKey)) byWeek.set(weekKey, []);
+      byWeek.get(weekKey)!.push(m);
+    });
+
+    // 2. Dentro de cada semana, agrupar por fuente
+    const stratifiedGroups: Mention[][] = [];
+    byWeek.forEach((weekMentions) => {
+      const bySource = new Map<string, Mention[]>();
+      weekMentions.forEach((m) => {
+        const source = m.source_domain || "unknown";
+        if (!bySource.has(source)) bySource.set(source, []);
+        bySource.get(source)!.push(m);
+      });
+      bySource.forEach((sourceMentions) => {
+        // 3. Dentro de cada fuente, agrupar por sentimiento
+        const bySentiment = new Map<string, Mention[]>();
+        sourceMentions.forEach((m) => {
+          const sent = m.sentiment || "unanalyzed";
+          if (!bySentiment.has(sent)) bySentiment.set(sent, []);
+          bySentiment.get(sent)!.push(m);
+        });
+        bySentiment.forEach((sentMentions) => stratifiedGroups.push(sentMentions));
+      });
+    });
+
+    // 4. Selección round-robin de cada grupo
+    const selected: Mention[] = [];
+    const groupIndices = stratifiedGroups.map(() => 0);
+    let groupIdx = 0;
+    
+    while (selected.length < targetSize) {
+      const group = stratifiedGroups[groupIdx];
+      const idx = groupIndices[groupIdx];
+      if (idx < group.length) {
+        selected.push(group[idx]);
+        groupIndices[groupIdx]++;
+      }
+      groupIdx = (groupIdx + 1) % stratifiedGroups.length;
+      
+      // Si ya recorrimos todos los grupos sin añadir nada, terminamos
+      if (groupIndices.every((i, gi) => i >= stratifiedGroups[gi].length)) break;
+    }
+
+    return selected;
+  };
+
   const analyzeMutation = useMutation({
     mutationFn: async (mentions: Mention[]): Promise<SemanticAnalysisResult> => {
       if (!mentions.length) {
         throw new Error("No hay menciones para analizar");
       }
 
-      const mentionsLimited = mentions.slice(0, MAX_MENTIONS_FOR_ANALYSIS);
+      // Aplicar muestreo estratificado
+      const sampledMentions = stratifiedSample(mentions, MAX_STRATIFIED_SAMPLE);
 
-      if (mentions.length > mentionsLimited.length) {
+      if (mentions.length > sampledMentions.length) {
         toast({
-          title: "Análisis parcial",
-          description: `Para evitar errores de envío, se analizarán ${mentionsLimited.length} de ${mentions.length} menciones (las más recientes).`,
+          title: "Muestreo estratificado aplicado",
+          description: `Se seleccionaron ${sampledMentions.length} menciones representativas de ${mentions.length} totales (balanceadas por fecha, fuente y sentimiento).`,
         });
       }
 
       // Prepare mentions for analysis (only send necessary fields)
-      const mentionsForAnalysis = mentionsLimited.map((m) => ({
+      const mentionsForAnalysis = sampledMentions.map((m) => ({
         id: m.id,
         title: truncate(m.title),
         description: truncate(m.description),
@@ -98,7 +157,7 @@ export function useSemanticAnalysis(projectId: string | undefined) {
       const result: SemanticAnalysisResult = {
         ...data.analysis,
         analyzedAt: new Date(),
-        mentionCount: mentionsLimited.length,
+        mentionCount: sampledMentions.length,
       };
 
       return result;
