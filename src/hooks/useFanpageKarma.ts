@@ -299,7 +299,12 @@ export function useSyncFKProfile() {
             performanceIndex = null;
           } else if (profile.network === 'tiktok') {
             // TikTok uses tiktoker_* prefix
-            followers = extractValue('tiktoker_profile_follower_count');
+            followers =
+              extractValue('tiktoker_profile_follower_count') ||
+              extractValue('tiktoker_followers') ||
+              extractValue('tiktoker_followers_count') ||
+              extractValue('tiktoker_fans') ||
+              extractValue('tiktoker_fans_count');
             followerGrowth = extractValue('tiktoker_followers_growth_percent');
             engagement = extractValue('tiktoker_post_engagement') || extractValue('tiktoker_engagement');
             postsPerDay = extractValue('tiktoker_post_count_per_day') || extractValue('tiktoker_video_count_per_day');
@@ -416,7 +421,12 @@ export function useSyncAllProfiles() {
             performanceIndex = null;
           } else if (profile.network === 'tiktok') {
             // TikTok uses tiktoker_* prefix
-            followers = extractValue('tiktoker_profile_follower_count');
+            followers =
+              extractValue('tiktoker_profile_follower_count') ||
+              extractValue('tiktoker_followers') ||
+              extractValue('tiktoker_followers_count') ||
+              extractValue('tiktoker_fans') ||
+              extractValue('tiktoker_fans_count');
             followerGrowth = extractValue('tiktoker_followers_growth_percent');
             engagement = extractValue('tiktoker_post_engagement') || extractValue('tiktoker_engagement');
             postsPerDay = extractValue('tiktoker_post_count_per_day') || extractValue('tiktoker_video_count_per_day');

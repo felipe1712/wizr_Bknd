@@ -62,18 +62,18 @@ export function RankingDateFilter({
 }: RankingDateFilterProps) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
-  const [initialPreset] = useState(preset);
-  const [initialCustomRange] = useState(customRange);
+  const [appliedPreset, setAppliedPreset] = useState<DateRangePreset>(preset);
+  const [appliedCustomRange, setAppliedCustomRange] = useState<DateRange | undefined>(customRange);
 
   // Track if there are unsaved changes
   useEffect(() => {
-    const presetChanged = preset !== initialPreset;
+    const presetChanged = preset !== appliedPreset;
     const customRangeChanged = preset === "custom" && (
-      customRange?.from?.getTime() !== initialCustomRange?.from?.getTime() ||
-      customRange?.to?.getTime() !== initialCustomRange?.to?.getTime()
+      customRange?.from?.getTime() !== appliedCustomRange?.from?.getTime() ||
+      customRange?.to?.getTime() !== appliedCustomRange?.to?.getTime()
     );
     setHasChanges(presetChanged || customRangeChanged);
-  }, [preset, customRange, initialPreset, initialCustomRange]);
+  }, [preset, customRange, appliedPreset, appliedCustomRange]);
 
   const handlePresetChange = (value: string) => {
     onPresetChange(value as DateRangePreset);
@@ -92,9 +92,12 @@ export function RankingDateFilter({
   };
 
   const handleApply = () => {
-    setHasChanges(false);
+    setAppliedPreset(preset);
+    setAppliedCustomRange(customRange);
     onApply?.();
   };
+
+  const canApply = hasChanges && (preset !== "custom" || (!!customRange?.from && !!customRange?.to));
 
   return (
     <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg border">
@@ -155,6 +158,7 @@ export function RankingDateFilter({
         onClick={handleApply}
         size="sm"
         className="ml-auto"
+        disabled={!canApply}
       >
         <Check className="h-4 w-4 mr-1" />
         Aplicar
