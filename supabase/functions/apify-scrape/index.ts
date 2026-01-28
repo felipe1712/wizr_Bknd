@@ -269,21 +269,24 @@ serve(async (req) => {
         break;
         
       case "youtube":
-        // scraper_one/youtube-search-scraper - uses 'query' and 'resultsCount' parameters
-        // sortBy options: "relevance" (default), "upload_date", "view_count", "rating"
+        // scraper_one/youtube-search-scraper - correct parameter names per Apify docs:
+        // sortType options: "relevance" (default), "date", "views", "rating"
+        // uploadDate options: "lastHour", "today", "thisWeek", "thisMonth", "thisYear"
         if (channelUrl) {
           // For channel URLs, search by channel name extracted from URL
           const channelName = channelUrl.replace(/.*@/, "").replace(/.*\/channel\//, "").replace(/.*\/c\//, "");
           input = {
             query: channelName,
             resultsCount: maxResults,
-            sortBy: "upload_date", // Sort by newest first for monitoring
+            sortType: "date", // Sort by newest first for monitoring
+            uploadDate: "thisWeek", // Only videos from last 7 days
           };
         } else if (query) {
           input = {
             query: query,
             resultsCount: maxResults,
-            sortBy: "upload_date", // Sort by newest first for monitoring
+            sortType: "date", // Sort by newest first for monitoring
+            uploadDate: "thisWeek", // Only videos from last 7 days
           };
         }
         break;
