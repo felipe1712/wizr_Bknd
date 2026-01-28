@@ -40,7 +40,6 @@ const analysisViews = [
   { title: "Influenciadores", url: "/dashboard/influenciadores", icon: Users, tourId: "nav-influenciadores" },
   { title: "Tendencias", url: "/dashboard/tendencias", icon: TrendingUp, tourId: "nav-tendencias" },
   { title: "Reportes", url: "/dashboard/reportes", icon: FileBarChart, tourId: "nav-reportes" },
-  { title: "Fichas", url: "/dashboard/fichas", icon: FileText, tourId: "nav-fichas" },
 ];
 
 const benchmarkingItems = [
