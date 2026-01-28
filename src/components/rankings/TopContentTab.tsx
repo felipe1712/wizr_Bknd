@@ -224,10 +224,15 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
 
   // Handler for triggering the search in "all profiles" mode
   const handleAllProfilesSearch = () => {
-    if (pendingSearchQuery.trim()) {
-      setSearchQuery(pendingSearchQuery);
-      setAllProfilesSearchTriggered(true);
-    }
+    setSearchQuery(pendingSearchQuery);
+    setAllProfilesSearchTriggered(true);
+  };
+
+  // Handler for loading ALL posts without keyword filter
+  const handleLoadAllPosts = () => {
+    setPendingSearchQuery("");
+    setSearchQuery("");
+    setAllProfilesSearchTriggered(true);
   };
 
   // Filter posts by date range and search query
@@ -362,11 +367,11 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Escribe una palabra clave para buscar en todos los perfiles..."
+                placeholder="Buscar por palabra clave (opcional)..."
                 value={pendingSearchQuery}
                 onChange={(e) => setPendingSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && pendingSearchQuery.trim()) {
+                  if (e.key === 'Enter') {
                     handleAllProfilesSearch();
                   }
                 }}
@@ -375,7 +380,8 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
             </div>
             <Button 
               onClick={handleAllProfilesSearch}
-              disabled={!pendingSearchQuery.trim() || isFetching}
+              disabled={isFetching}
+              variant="outline"
             >
               {isFetching ? (
                 <>
@@ -389,14 +395,36 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
                 </>
               )}
             </Button>
+            <Button 
+              onClick={handleLoadAllPosts}
+              disabled={isFetching}
+            >
+              {isFetching && !pendingSearchQuery.trim() ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Cargando...
+                </>
+              ) : (
+                <>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Ver todo
+                </>
+              )}
+            </Button>
           </div>
-          {allProfilesSearchTriggered && searchQuery && (
+          {allProfilesSearchTriggered && (
             <div className="flex items-center gap-2 text-sm">
-              <Badge variant="outline">
-                Buscando: "{searchQuery}"
-              </Badge>
+              {searchQuery ? (
+                <Badge variant="outline">
+                  Filtro: "{searchQuery}"
+                </Badge>
+              ) : (
+                <Badge variant="secondary">
+                  Mostrando todos los posts
+                </Badge>
+              )}
               <span className="text-muted-foreground">
-                {sortedPosts.length} resultados en {filteredProfiles.length} perfiles
+                {sortedPosts.length} posts de {filteredProfiles.length} perfiles
               </span>
               <Button 
                 variant="ghost" 
