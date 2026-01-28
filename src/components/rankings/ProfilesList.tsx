@@ -23,7 +23,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { RefreshCw, Trash2, Users, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
-import { FKProfile, getNetworkLabel, useDeleteFKProfile, useSyncFKProfile, FKNetwork } from "@/hooks/useFanpageKarma";
+import { FKProfile, getNetworkLabel, useDeleteFKProfile, useSyncFKProfile, useSyncAllProfiles, FKNetwork } from "@/hooks/useFanpageKarma";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -40,14 +40,16 @@ const NETWORK_COLORS: Record<FKNetwork, string> = {
 interface ProfilesListProps {
   profiles: FKProfile[];
   isLoading: boolean;
-  projectId: string;
+  rankingId?: string;
+  projectId?: string;
 }
 
-export function ProfilesList({ profiles, isLoading, projectId }: ProfilesListProps) {
+export function ProfilesList({ profiles, isLoading, rankingId, projectId }: ProfilesListProps) {
   const [syncingId, setSyncingId] = useState<string | null>(null);
   
   const deleteProfile = useDeleteFKProfile();
   const syncProfile = useSyncFKProfile();
+  const syncAllProfiles = useSyncAllProfiles();
 
   const handleSync = async (profile: FKProfile) => {
     setSyncingId(profile.id);
@@ -59,15 +61,7 @@ export function ProfilesList({ profiles, isLoading, projectId }: ProfilesListPro
   };
 
   const handleSyncAll = async () => {
-    for (const profile of profiles) {
-      setSyncingId(profile.id);
-      try {
-        await syncProfile.mutateAsync({ profile });
-      } catch {
-        // Continue with next profile
-      }
-    }
-    setSyncingId(null);
+    await syncAllProfiles.mutateAsync({ profiles });
   };
 
   const groupedProfiles = profiles.reduce((acc, profile) => {
@@ -123,9 +117,9 @@ export function ProfilesList({ profiles, isLoading, projectId }: ProfilesListPro
             variant="outline" 
             size="sm" 
             onClick={handleSyncAll}
-            disabled={syncingId !== null}
+            disabled={syncAllProfiles.isPending || syncingId !== null}
           >
-            {syncingId !== null ? (
+            {syncAllProfiles.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <RefreshCw className="mr-2 h-4 w-4" />
@@ -218,7 +212,7 @@ export function ProfilesList({ profiles, isLoading, projectId }: ProfilesListPro
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
                             <AlertDialogAction
-                              onClick={() => deleteProfile.mutate({ profileId: profile.id, projectId })}
+                              onClick={() => deleteProfile.mutate({ profileId: profile.id, rankingId })}
                               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             >
                               Eliminar
