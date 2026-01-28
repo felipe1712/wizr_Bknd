@@ -20,6 +20,7 @@ import { SocialMediaSearch } from "@/components/fuentes/SocialMediaSearch";
 import { SocialHistoryTab } from "@/components/fuentes/SocialHistoryTab";
 import { GoogleNewsSearch } from "@/components/fuentes/GoogleNewsSearch";
 import { CommentsAnalysisTab } from "@/components/fuentes/CommentsAnalysisTab";
+import { MentionsHubTab } from "@/components/fuentes/MentionsHubTab";
 
 import wizrLogoIcon from "@/assets/wizr-logo-icon.png";
 import { cn } from "@/lib/utils";
@@ -58,7 +59,7 @@ import { format, formatDistanceToNow, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 
 type SearchMode = "manual" | "entities";
-type ViewMode = "search" | "google-news" | "social" | "social-history" | "comments" | "history";
+type ViewMode = "hub" | "search" | "google-news" | "social" | "social-history" | "comments" | "history";
 type SearchSource = "news" | "social";
 
 const ITEMS_PER_PAGE = 10;
@@ -95,12 +96,13 @@ const FuentesPage = () => {
     isSaving,
     searchResultsToMentions,
     updateMention,
+    deleteMention,
   } = useMentions(selectedProject?.id, { isArchived: false });
   const { data: stats } = useMentionStats(selectedProject?.id);
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  const [viewMode, setViewMode] = useState<ViewMode>("search");
+  const [viewMode, setViewMode] = useState<ViewMode>("hub");
   const [searchMode, setSearchMode] = useState<SearchMode>("entities");
   const [searchQuery, setSearchQuery] = useState("");
   const [timeRange, setTimeRange] = useState<"hour" | "day" | "week" | "month">("day");
@@ -517,6 +519,11 @@ const FuentesPage = () => {
       {/* Main Tabs */}
       <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
         <TabsList className="flex-wrap h-auto gap-1">
+          <TabsTrigger value="hub" className="gap-2 bg-primary/10 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <Database className="h-4 w-4" />
+            Todas las Menciones
+            <Badge variant="secondary" className="ml-1 text-xs">{mentions.length}</Badge>
+          </TabsTrigger>
           <TabsTrigger value="search" className="gap-2">
             <Newspaper className="h-4 w-4" />
             Medios
@@ -539,9 +546,20 @@ const FuentesPage = () => {
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-2">
             <History className="h-4 w-4" />
-            Historial ({mentions.length})
+            Historial Guardado
           </TabsTrigger>
         </TabsList>
+
+        {/* Hub Tab - All Mentions */}
+        <TabsContent value="hub" className="space-y-4 mt-4">
+          <MentionsHubTab
+            mentions={mentions}
+            entities={entities}
+            isLoading={mentionsLoading}
+            onUpdateMention={updateMention}
+            onDeleteMention={deleteMention}
+          />
+        </TabsContent>
 
         {/* Search Tab */}
         <TabsContent value="search" className="space-y-4 mt-4">
