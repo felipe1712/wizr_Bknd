@@ -246,6 +246,10 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
   const [runId, setRunId] = useState<string | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [results, setResults] = useState<SocialSearchResult[]>([]);
+  const [pollingStartTime, setPollingStartTime] = useState<number | null>(null);
+  
+  // Maximum polling duration: 3 minutes (180 seconds) to prevent infinite loops
+  const MAX_POLLING_DURATION_MS = 180000;
   
   // YouTube combined search: track both video and shorts runs
   const [youtubeParallelRuns, setYoutubeParallelRuns] = useState<{
@@ -340,7 +344,46 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       });
   };
 
-  const checkJobStatus = useCallback(async (jobRunId: string, filterKw?: string) => {
+  const checkJobStatus = useCallback(async (jobRunId: string, filterKw?: string, startTime?: number) => {
+    // Track polling start time
+    const pollingStart = startTime || pollingStartTime || Date.now();
+    if (!startTime && !pollingStartTime) {
+      setPollingStartTime(pollingStart);
+    }
+    
+    // Check for timeout (3 minutes max)
+    const elapsedMs = Date.now() - pollingStart;
+    if (elapsedMs > MAX_POLLING_DURATION_MS) {
+      console.warn(`Polling timeout after ${Math.round(elapsedMs / 1000)}s for run ${jobRunId}`);
+      setJobStatus("failed");
+      setIsSearching(false);
+      setPollingStartTime(null);
+      
+      // Update job status in database
+      if (currentJobId) {
+        try {
+          await updateJob({
+            id: currentJobId,
+            updates: {
+              status: "failed",
+              completed_at: new Date().toISOString(),
+              error_message: `Tiempo de espera agotado (${Math.round(MAX_POLLING_DURATION_MS / 1000)}s). El actor de Apify tardó demasiado.`,
+            },
+          });
+          refetchJobs();
+        } catch (updateError) {
+          console.error("Error updating job status:", updateError);
+        }
+      }
+      
+      toast({
+        title: "Tiempo agotado",
+        description: `La búsqueda tardó más de ${Math.round(MAX_POLLING_DURATION_MS / 60000)} minutos. Intenta con menos resultados.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
       // Pass filterKeyword to backend for TikTok exact-match filtering
       const result = await apifyApi.checkStatus(jobRunId, platform, filterKw);
@@ -356,6 +399,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         setProgress(100);
         setProgressMessage("¡Completado!");
         setIsSearching(false); // Stop the spinner
+        setPollingStartTime(null); // Reset polling timer
         // Results are now pre-normalized by the backend
         let processed = processBackendResults((data.items || []) as SocialSearchResult[]);
         
@@ -459,6 +503,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       } else if (data.status === "FAILED" || data.status === "ABORTED" || data.status === "TIMED-OUT") {
         setJobStatus("failed");
         setIsSearching(false); // Stop the spinner on failure
+        setPollingStartTime(null); // Reset polling timer
 
         const failureDetail = (data as any)?.error
           ? `${data.status}: ${(data as any).error}`
@@ -494,24 +539,30 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         const estimatedProgress = Math.min(90, Math.max(pagesLoaded * 10, itemsFound * 2));
         setProgress(estimatedProgress);
         
-        // Show meaningful progress message
+        // Calculate remaining time
+        const remainingMs = MAX_POLLING_DURATION_MS - elapsedMs;
+        const remainingSecs = Math.ceil(remainingMs / 1000);
+        const timeWarning = remainingSecs < 60 ? ` (${remainingSecs}s restantes)` : "";
+        
+        // Show meaningful progress message with time remaining if running low
         if (itemsFound > 0) {
-          setProgressMessage(`Extrayendo datos... ${itemsFound} items encontrados`);
+          setProgressMessage(`Extrayendo datos... ${itemsFound} items encontrados${timeWarning}`);
         } else if (pagesLoaded > 0) {
-          setProgressMessage(`Procesando... ${pagesLoaded} páginas cargadas`);
+          setProgressMessage(`Procesando... ${pagesLoaded} páginas cargadas${timeWarning}`);
         } else {
-          setProgressMessage("Iniciando extracción...");
+          setProgressMessage(`Iniciando extracción...${timeWarning}`);
         }
         
         // Faster polling: 2 seconds instead of 3 for more responsive UX
-        setTimeout(() => checkJobStatus(jobRunId, filterKw), 2000);
+        setTimeout(() => checkJobStatus(jobRunId, filterKw, pollingStart), 2000);
       }
     } catch (error) {
       console.error("Error checking job status:", error);
       setJobStatus("failed");
       setIsSearching(false); // Stop the spinner on error
+      setPollingStartTime(null); // Reset polling timer
     }
-  }, [platform, config.label, toast, currentJobId, updateJob, saveResults, refetchJobs, dateFilterEnabled, dateFrom, dateTo]);
+  }, [platform, config.label, toast, currentJobId, updateJob, saveResults, refetchJobs, dateFilterEnabled, dateFrom, dateTo, pollingStartTime, MAX_POLLING_DURATION_MS]);
 
   // YouTube parallel status checker for combined Videos + Shorts search
   const checkYouTubeParallelStatus = useCallback(async (
@@ -719,7 +770,9 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           });
           
           // Start polling for status (use standard flow - actor returns both videos & shorts)
-          setTimeout(() => checkJobStatus(data.runId!, searchValue), 3000);
+          const startTime = Date.now();
+          setPollingStartTime(startTime);
+          setTimeout(() => checkJobStatus(data.runId!, searchValue, startTime), 3000);
         } else {
           throw new Error(data.error || "Error al iniciar la búsqueda de YouTube");
         }
@@ -764,7 +817,9 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           const filterKw = (platform === "instagram" && searchType === "hashtag" && captionFilter.trim())
             ? captionFilter.trim()
             : searchValue;
-          setTimeout(() => checkJobStatus(data.runId!, filterKw), 3000);
+          const startTime = Date.now();
+          setPollingStartTime(startTime);
+          setTimeout(() => checkJobStatus(data.runId!, filterKw, startTime), 3000);
         } else {
           throw new Error(data.error || "Error al iniciar la búsqueda");
         }

@@ -275,19 +275,20 @@ serve(async (req) => {
         // streamers/youtube-scraper - Maintained by Apify, $5/1000 videos
         // Supports both regular videos AND Shorts in a single run!
         // Uses 'searchQueries' (array), 'maxResults' (videos), 'maxResultsShorts' (shorts)
-        const youtubeResultsCount = Math.max(maxResults * 2, 50);
+        // OPTIMIZED: Keep results low to prevent slow crawling (was causing 76+ page crawls)
+        const youtubeResultsCount = Math.min(maxResults, 30); // Cap at 30 videos for speed
         if (channelUrl) {
           // For channel URLs, use startUrls with the channel URL
           input = {
             startUrls: [{ url: channelUrl }],
             maxResults: youtubeResultsCount,
-            maxResultsShorts: Math.ceil(youtubeResultsCount / 2),
+            maxResultsShorts: Math.min(15, Math.ceil(youtubeResultsCount / 2)), // Cap shorts too
           };
         } else if (query) {
           input = {
             searchQueries: [query],
             maxResults: youtubeResultsCount,
-            maxResultsShorts: Math.ceil(youtubeResultsCount / 2), // Also fetch Shorts!
+            maxResultsShorts: Math.min(15, Math.ceil(youtubeResultsCount / 2)), // Cap shorts for speed
           };
         }
         break;
