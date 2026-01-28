@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.analyze-narratives]
 verify_jwt = false
+
+[functions.generate-smart-report]
+verify_jwt = false

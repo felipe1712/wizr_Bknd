@@ -3,15 +3,18 @@ import { useProject } from "@/contexts/ProjectContext";
 import { useReportData } from "@/hooks/useReportData";
 import { useSemanticAnalysis, SemanticAnalysisResult } from "@/hooks/useSemanticAnalysis";
 import { useMentions } from "@/hooks/useMentions";
+import { useEntities } from "@/hooks/useEntities";
 import { generatePDFReport, ChartImages } from "@/lib/reports/pdfGenerator";
 import { generateExcelReport } from "@/lib/reports/excelGenerator";
 import { ChartRenderer, ChartRendererHandle } from "@/components/reports/ChartRenderer";
 import { DateRangeSelector, DateRangeConfig, calculateDateRange } from "@/components/reports/DateRangeSelector";
+import { SmartReportGenerator } from "@/components/reports/SmartReportGenerator";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   FileBarChart,
   FileSpreadsheet,
@@ -25,6 +28,7 @@ import {
   CheckCircle2,
   AlertCircle,
   BarChart3,
+  Sparkles,
 } from "lucide-react";
 
 const ReportesPage = () => {
@@ -43,12 +47,15 @@ const ReportesPage = () => {
   const dateRange = useMemo(() => calculateDateRange(dateConfig), [dateConfig]);
 
   const { mentions } = useMentions(selectedProject?.id, { isArchived: false });
+  const { entities } = useEntities(selectedProject?.id);
   const { analyze, isAnalyzing, result: latestSemanticResult } = useSemanticAnalysis(selectedProject?.id);
   const { reportData, isLoading, error } = useReportData(
     selectedProject?.id,
     dateRange,
     semanticResult || latestSemanticResult
   );
+
+  const entityNames = useMemo(() => entities.map(e => e.nombre), [entities]);
 
   // Prepare chart data
   const sentimentData = reportData ? [
@@ -156,7 +163,7 @@ const ReportesPage = () => {
         <div>
           <h1 className="text-2xl font-bold">Reportes</h1>
           <p className="text-muted-foreground">
-            Genera y exporta informes completos del proyecto {selectedProject.nombre}
+            Genera y exporta informes del proyecto {selectedProject.nombre}
           </p>
         </div>
 
@@ -173,13 +180,50 @@ const ReportesPage = () => {
         </Alert>
       )}
 
-      {/* Report Data Summary */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : reportData && (
-        <>
+      {/* Main Tabs */}
+      <Tabs defaultValue="smart" className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="smart" className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            Inteligentes
+          </TabsTrigger>
+          <TabsTrigger value="traditional" className="flex items-center gap-2">
+            <FileBarChart className="h-4 w-4" />
+            Tradicionales
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Smart Reports Tab */}
+        <TabsContent value="smart" className="mt-6">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <SmartReportGenerator
+              mentions={mentions}
+              projectName={selectedProject.nombre}
+              projectAudience={selectedProject.audiencia}
+              projectObjective={selectedProject.objetivo}
+              entityNames={entityNames}
+              dateRange={{
+                start: dateRange.startDate.toISOString(),
+                end: dateRange.endDate.toISOString(),
+                label: dateRange.label,
+              }}
+            />
+          )}
+        </TabsContent>
+
+        {/* Traditional Reports Tab */}
+        <TabsContent value="traditional" className="mt-6 space-y-6">
+          {/* Report Data Summary */}
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : reportData && (
+            <>
           {/* Data Overview Cards */}
           <div className="grid gap-4 md:grid-cols-4">
             <Card>
@@ -479,6 +523,8 @@ const ReportesPage = () => {
           </Card>
         </>
       )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
