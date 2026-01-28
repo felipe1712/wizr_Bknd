@@ -254,21 +254,31 @@ export function useSyncFKProfile() {
       if (error) throw error;
       if (!data.success) throw new Error(data.error || "Error al obtener KPIs");
 
-      // Store the KPIs
+      // Store the KPIs - extract values from Fanpage Karma response structure
       const kpiData = data.data || {};
+      
+      // Fanpage Karma returns metrics as objects with { title, value, formatted_value }
+      const extractValue = (key: string): number | null => {
+        const metric = kpiData[key];
+        if (metric && typeof metric === 'object' && 'value' in metric) {
+          return metric.value;
+        }
+        return null;
+      };
+
       const { error: insertError } = await supabase
         .from("fk_profile_kpis")
         .upsert({
           fk_profile_id: profile.id,
           period_start: startDate.toISOString().split("T")[0],
           period_end: endDate.toISOString().split("T")[0],
-          followers: kpiData.fans || kpiData.followers || null,
-          follower_growth_percent: kpiData.fansGrowth || kpiData.followerGrowth || null,
-          engagement_rate: kpiData.interactionRate || kpiData.engagementRate || null,
-          posts_per_day: kpiData.postsPerDay || null,
-          reach_per_day: kpiData.reachPerDay || null,
-          impressions_per_interaction: kpiData.impressionsPerInteraction || null,
-          page_performance_index: kpiData.pagePerformanceIndex || null,
+          followers: extractValue('page_follower') || extractValue('page_fans'),
+          follower_growth_percent: extractValue('page_fans_growth_percent'),
+          engagement_rate: extractValue('page_engagement') || extractValue('page_post_interaction'),
+          posts_per_day: extractValue('page_posts_per_day'),
+          reach_per_day: null, // Not available in standard response
+          impressions_per_interaction: null,
+          page_performance_index: extractValue('page_performance_index'),
           raw_data: kpiData,
           fetched_at: new Date().toISOString(),
         }, { onConflict: "fk_profile_id,period_start,period_end" });
@@ -327,19 +337,29 @@ export function useSyncAllProfiles() {
           if (!data.success) throw new Error(data.error || "Error al obtener KPIs");
 
           const kpiData = data.data || {};
+          
+          // Fanpage Karma returns metrics as objects with { title, value, formatted_value }
+          const extractValue = (key: string): number | null => {
+            const metric = kpiData[key];
+            if (metric && typeof metric === 'object' && 'value' in metric) {
+              return metric.value;
+            }
+            return null;
+          };
+
           await supabase
             .from("fk_profile_kpis")
             .upsert({
               fk_profile_id: profile.id,
               period_start: startDate.toISOString().split("T")[0],
               period_end: endDate.toISOString().split("T")[0],
-              followers: kpiData.fans || kpiData.followers || null,
-              follower_growth_percent: kpiData.fansGrowth || kpiData.followerGrowth || null,
-              engagement_rate: kpiData.interactionRate || kpiData.engagementRate || null,
-              posts_per_day: kpiData.postsPerDay || null,
-              reach_per_day: kpiData.reachPerDay || null,
-              impressions_per_interaction: kpiData.impressionsPerInteraction || null,
-              page_performance_index: kpiData.pagePerformanceIndex || null,
+              followers: extractValue('page_follower') || extractValue('page_fans'),
+              follower_growth_percent: extractValue('page_fans_growth_percent'),
+              engagement_rate: extractValue('page_engagement') || extractValue('page_post_interaction'),
+              posts_per_day: extractValue('page_posts_per_day'),
+              reach_per_day: null,
+              impressions_per_interaction: null,
+              page_performance_index: extractValue('page_performance_index'),
               raw_data: kpiData,
               fetched_at: new Date().toISOString(),
             }, { onConflict: "fk_profile_id,period_start,period_end" });
