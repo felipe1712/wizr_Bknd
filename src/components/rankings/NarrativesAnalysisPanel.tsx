@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   BookOpen, 
@@ -19,7 +20,8 @@ import {
   Target,
   Users,
   GitCompare,
-  Lightbulb
+  Lightbulb,
+  Search
 } from "lucide-react";
 import { FKProfile, useFetchProfilePosts, FKPost, FKNetwork, getNetworkLabel } from "@/hooks/useFanpageKarma";
 import { supabase } from "@/integrations/supabase/client";
@@ -94,19 +96,29 @@ const getSentimentIcon = (sentiment: string) => {
 export function NarrativesAnalysisPanel({ profiles, isLoading: profilesLoading, dateRange }: NarrativesAnalysisPanelProps) {
   const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(new Set());
   const [filterNetwork, setFilterNetwork] = useState<FKNetwork | "all">("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [comparativeResult, setComparativeResult] = useState<ComparativeResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [profilePosts, setProfilePosts] = useState<Map<string, FKPost[]>>(new Map());
   const [activeProfileTab, setActiveProfileTab] = useState<string>("");
 
-  // Filter profiles by network
-  const filteredProfiles = useMemo(() => 
-    filterNetwork === "all" 
+  // Filter profiles by network and search query
+  const filteredProfiles = useMemo(() => {
+    let filtered = filterNetwork === "all" 
       ? profiles 
-      : profiles.filter(p => p.network === filterNetwork),
-    [profiles, filterNetwork]
-  );
+      : profiles.filter(p => p.network === filterNetwork);
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(p => 
+        p.profile_id.toLowerCase().includes(query) ||
+        (p.display_name && p.display_name.toLowerCase().includes(query))
+      );
+    }
+    
+    return filtered;
+  }, [profiles, filterNetwork, searchQuery]);
 
   // Selected profiles data
   const selectedProfiles = useMemo(() => 
@@ -314,6 +326,21 @@ export function NarrativesAnalysisPanel({ profiles, isLoading: profilesLoading, 
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Search Input */}
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar perfil... (ej: dep, cultura, deporte)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+            {searchQuery && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                {filteredProfiles.length} resultado{filteredProfiles.length !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
           <ScrollArea className="h-48">
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {filteredProfiles.map((profile) => {
