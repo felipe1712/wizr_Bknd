@@ -261,7 +261,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     shortsResults: SocialSearchResult[];
   } | null>(null);
   
-  // Date filter state
+  // Date filter state - disabled by default for YouTube (API doesn't support date filtering)
   const [dateFilterEnabled, setDateFilterEnabled] = useState(false);
   const [dateFrom, setDateFrom] = useState<Date | undefined>(subDays(new Date(), 7));
   const [dateTo, setDateTo] = useState<Date | undefined>(new Date());
@@ -1347,44 +1347,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         {/* Completed Status with Filter Stats */}
         {jobStatus === "completed" && results.length > 0 && (
           <div className="space-y-2">
-            {/* Soft Filter Warning for YouTube */}
-            {usedSoftFilter && platform === "youtube" && dateFilterEnabled && lastStrictDateDiscard && (
-              <div className="flex items-start gap-3 p-3 rounded-lg border bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900">
-                <Info className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                    No hay resultados en el rango seleccionado
-                  </p>
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                    Se encontraron {results.length} resultados pero ninguno entre{" "}
-                    <span className="font-medium">{format(dateFrom!, "d MMM yyyy", { locale: es })}</span> y{" "}
-                    <span className="font-medium">{format(dateTo!, "d MMM yyyy", { locale: es })}</span>.
-                    {lastStrictDateDiscard.minDateIso && lastStrictDateDiscard.maxDateIso && (
-                      <span>
-                        {" "}Fechas disponibles:{" "}
-                        <span className="font-medium">
-                          {format(new Date(lastStrictDateDiscard.minDateIso), "d MMM yyyy", { locale: es })}
-                        </span>
-                        {" "}–{" "}
-                        <span className="font-medium">
-                          {format(new Date(lastStrictDateDiscard.maxDateIso), "d MMM yyyy", { locale: es })}
-                        </span>
-                      </span>
-                    )}
-                  </p>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="mt-2 h-7 text-xs"
-                    onClick={() => setDateFilterEnabled(false)}
-                  >
-                    Desactivar filtro de fecha
-                  </Button>
-                </div>
-              </div>
-            )}
-            
-            {/* Success message */}
+            {/* Success message - simple and clean */}
             <div className="flex items-center gap-3 p-3 rounded-lg border bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
               <div className="flex-1">
@@ -1392,11 +1355,9 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
                   ¡Búsqueda completada!
                 </p>
                 <p className="text-xs text-green-600 dark:text-green-400">
-                  {rawResultsCount > 0 && rawResultsCount !== results.length && !usedSoftFilter
+                  {rawResultsCount > 0 && rawResultsCount !== results.length
                     ? `${results.length} resultados relevantes de ${rawResultsCount} extraídos (filtrado por keywords)`
-                    : usedSoftFilter
-                      ? `${results.length} resultados de YouTube (sin filtro de fecha aplicado)`
-                      : `${results.length} resultados obtenidos de ${config.label}`
+                    : `${results.length} resultados de ${config.label}`
                   }
                 </p>
               </div>
