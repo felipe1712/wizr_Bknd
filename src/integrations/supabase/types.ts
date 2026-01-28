@@ -163,6 +163,44 @@ export type Database = {
           },
         ]
       }
+      auto_save_configs: {
+        Row: {
+          created_at: string
+          id: string
+          is_enabled: boolean
+          min_relevance_score: number
+          project_id: string
+          required_keywords: string[]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          min_relevance_score?: number
+          project_id: string
+          required_keywords?: string[]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          min_relevance_score?: number
+          project_id?: string
+          required_keywords?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auto_save_configs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       entities: {
         Row: {
           activo: boolean

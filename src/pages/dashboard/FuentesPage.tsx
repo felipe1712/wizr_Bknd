@@ -22,6 +22,8 @@ import { GoogleNewsSearch } from "@/components/fuentes/GoogleNewsSearch";
 import { CommentsAnalysisTab } from "@/components/fuentes/CommentsAnalysisTab";
 import { MentionsHubTab } from "@/components/fuentes/MentionsHubTab";
 import { SavedMentionsBadge } from "@/components/fuentes/SavedMentionsBadge";
+import { AutoSaveConfigPanel } from "@/components/fuentes/AutoSaveConfigPanel";
+import { useAutoSaveConfig } from "@/hooks/useAutoSaveConfig";
 
 import wizrLogoIcon from "@/assets/wizr-logo-icon.png";
 import { cn } from "@/lib/utils";
@@ -102,6 +104,7 @@ const FuentesPage = () => {
     isAnalyzing,
   } = useMentions(selectedProject?.id, { isArchived: false });
   const { data: stats } = useMentionStats(selectedProject?.id);
+  const { shouldAutoSave, isEnabled: autoSaveEnabled } = useAutoSaveConfig(selectedProject?.id);
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -277,6 +280,38 @@ const FuentesPage = () => {
     }
   };
 
+  /**
+   * Auto-save results that match the configured rules
+   */
+  const handleAutoSaveResults = useCallback((searchResults: SearchResult[]) => {
+    if (!selectedProject || !autoSaveEnabled || searchResults.length === 0) return;
+
+    const toSave: SearchResult[] = [];
+    
+    searchResults.forEach((result) => {
+      const text = [result.title, result.description].filter(Boolean).join(" ");
+      const { shouldSave } = shouldAutoSave(text, result.matchedKeywords || []);
+      
+      if (shouldSave) {
+        toSave.push(result);
+      }
+    });
+
+    if (toSave.length > 0) {
+      const mentionData = searchResultsToMentions(toSave, selectedProject.id);
+      saveManyMentions(mentionData);
+      toast({
+        title: "Auto-guardado",
+        description: `Se guardaron automáticamente ${toSave.length} de ${searchResults.length} resultados relevantes`,
+      });
+    } else {
+      toast({
+        title: "Auto-guardado",
+        description: `Ningún resultado cumplió con las reglas configuradas (0 de ${searchResults.length})`,
+      });
+    }
+  }, [selectedProject, autoSaveEnabled, shouldAutoSave, searchResultsToMentions, saveManyMentions, toast]);
+
   const handleManualSearch = useCallback(async () => {
     if (!searchQuery.trim()) {
       toast({
@@ -300,6 +335,8 @@ const FuentesPage = () => {
           title: "Búsqueda completada",
           description: `Se encontraron ${response.data.length} resultados`,
         });
+        // Trigger auto-save if enabled
+        handleAutoSaveResults(response.data);
       } else {
         toast({
           title: "Error en la búsqueda",
@@ -319,7 +356,7 @@ const FuentesPage = () => {
     } finally {
       setIsSearching(false);
     }
-  }, [searchQuery, timeRange, toast]);
+  }, [searchQuery, timeRange, toast, handleAutoSaveResults]);
 
   const handleEntitySearch = useCallback(async () => {
     if (selectedEntityIds.size === 0) {
@@ -357,6 +394,8 @@ const FuentesPage = () => {
           title: "Búsqueda completada",
           description: `Se encontraron ${response.data.length} menciones para ${selectedEntities.length} entidad(es)`,
         });
+        // Trigger auto-save if enabled
+        handleAutoSaveResults(response.data);
       } else {
         toast({
           title: "Error en la búsqueda",
@@ -376,7 +415,7 @@ const FuentesPage = () => {
     } finally {
       setIsSearching(false);
     }
-  }, [entities, selectedEntityIds, timeRange, toast]);
+  }, [entities, selectedEntityIds, timeRange, toast, handleAutoSaveResults]);
 
   const handleSearch = () => {
     if (searchMode === "manual") {
@@ -392,6 +431,7 @@ const FuentesPage = () => {
     const mentionData = searchResultsToMentions(results, selectedProject.id);
     saveManyMentions(mentionData);
   };
+
 
   const handleMarkAsRead = (mentionId: string) => {
     updateMention({ id: mentionId, is_read: true });
@@ -518,6 +558,9 @@ const FuentesPage = () => {
           </Card>
         </div>
       )}
+
+      {/* Auto-Save Configuration */}
+      <AutoSaveConfigPanel projectId={selectedProject?.id} />
 
       {/* Main Tabs */}
       <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
