@@ -184,8 +184,25 @@ export function NarrativesAnalysisPanel({ profiles, isLoading: profilesLoading, 
         });
 
         if (error) throw error;
-        if (data.success && data.posts) {
-          newPosts.set(profile.id, data.posts);
+        
+        // Fanpage Karma returns { success, data: { posts: [...] } }
+        const postsData = data?.data?.posts || data?.posts || [];
+        if (data.success && postsData.length > 0) {
+          // Normalize posts structure from Fanpage Karma response
+          const normalizedPosts: FKPost[] = postsData.map((post: any) => ({
+            id: post.id,
+            url: post.link || post.url,
+            title: post.title,
+            message: post.message || post.text || post.caption || post.description || "",
+            content_type: post.type || "post",
+            image_url: post.image,
+            published_at: post.date,
+            likes: post.kpi?.page_posts_likes_count?.value || post.likes || 0,
+            comments: post.kpi?.page_posts_comments_count?.value || post.comments || 0,
+            shares: post.kpi?.page_posts_shares_count?.value || post.shares || 0,
+            engagement: post.kpi?.page_total_engagement_count?.value || post.engagement || 0,
+          }));
+          newPosts.set(profile.id, normalizedPosts);
         }
       } catch (err) {
         console.error(`Error fetching posts for ${profile.profile_id}:`, err);
