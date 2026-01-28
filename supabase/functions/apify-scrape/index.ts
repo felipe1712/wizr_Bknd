@@ -198,9 +198,10 @@ serve(async (req) => {
           
           console.log(`Instagram tagged posts search for: ${cleanedTaggedUser}`);
           
+          // apify/instagram-profile-scraper requires 'usernames' array, not 'directUrls'
           input = {
-            directUrls: [`https://www.instagram.com/${cleanedTaggedUser}/`],
-            resultsLimit: Math.min(maxResults, 100), // Get more for tagged posts
+            usernames: [cleanedTaggedUser],
+            resultsLimit: Math.min(maxResults, 100),
             resultsType: "taggedPosts", // Get posts where this account is tagged
           };
         }
