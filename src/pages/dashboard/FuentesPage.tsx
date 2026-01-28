@@ -519,37 +519,62 @@ const FuentesPage = () => {
 
       {/* Main Tabs */}
       <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-        <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="hub" className="gap-2 bg-primary/10 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-            <Database className="h-4 w-4" />
-            Todas las Menciones
-            <Badge variant="secondary" className="ml-1 text-xs">{mentions.length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="search" className="gap-2">
-            <Newspaper className="h-4 w-4" />
-            Medios
-          </TabsTrigger>
-          <TabsTrigger value="google-news" className="gap-2">
-            <Globe className="h-4 w-4" />
-            Google News
-          </TabsTrigger>
-          <TabsTrigger value="social" className="gap-2">
-            <MessageCircle className="h-4 w-4" />
-            Redes Sociales
-          </TabsTrigger>
-          <TabsTrigger value="social-history" className="gap-2">
-            <Database className="h-4 w-4" />
-            Historial Redes
-          </TabsTrigger>
-          <TabsTrigger value="comments" className="gap-2">
-            <MessageCircle className="h-4 w-4" />
-            Comentarios
-          </TabsTrigger>
-          <TabsTrigger value="history" className="gap-2">
-            <History className="h-4 w-4" />
-            Historial Guardado
-          </TabsTrigger>
-        </TabsList>
+        <div className="border-b">
+          <ScrollArea className="w-full whitespace-nowrap">
+            <TabsList className="inline-flex h-11 w-max items-center justify-start gap-1 bg-transparent p-1">
+              {/* Main Hub Tab */}
+              <TabsTrigger 
+                value="hub" 
+                className="gap-1.5 px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+              >
+                <Database className="h-4 w-4" />
+                <span className="hidden sm:inline">Menciones</span>
+                {mentions.length > 0 && (
+                  <Badge 
+                    variant="secondary" 
+                    className="ml-1 h-5 px-1.5 text-[10px] font-semibold data-[state=active]:bg-primary-foreground/20"
+                  >
+                    {mentions.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              
+              {/* Divider */}
+              <div className="mx-1 h-5 w-px bg-border" />
+              
+              {/* Capture Section */}
+              <TabsTrigger value="search" className="gap-1.5 px-3">
+                <Newspaper className="h-4 w-4" />
+                <span className="hidden sm:inline">Medios</span>
+              </TabsTrigger>
+              <TabsTrigger value="google-news" className="gap-1.5 px-3">
+                <Globe className="h-4 w-4" />
+                <span className="hidden sm:inline">News</span>
+              </TabsTrigger>
+              <TabsTrigger value="social" className="gap-1.5 px-3">
+                <MessageCircle className="h-4 w-4" />
+                <span className="hidden sm:inline">Social</span>
+              </TabsTrigger>
+              <TabsTrigger value="comments" className="gap-1.5 px-3">
+                <MessageCircle className="h-4 w-4 opacity-70" />
+                <span className="hidden sm:inline">Comentarios</span>
+              </TabsTrigger>
+              
+              {/* Divider */}
+              <div className="mx-1 h-5 w-px bg-border" />
+              
+              {/* History Section */}
+              <TabsTrigger value="social-history" className="gap-1.5 px-3 text-muted-foreground data-[state=active]:text-foreground">
+                <History className="h-4 w-4" />
+                <span className="hidden sm:inline">Historial Social</span>
+              </TabsTrigger>
+              <TabsTrigger value="history" className="gap-1.5 px-3 text-muted-foreground data-[state=active]:text-foreground">
+                <Archive className="h-4 w-4" />
+                <span className="hidden sm:inline">Guardado</span>
+              </TabsTrigger>
+            </TabsList>
+          </ScrollArea>
+        </div>
 
         {/* Hub Tab - All Mentions */}
         <TabsContent value="hub" className="space-y-4 mt-4">
