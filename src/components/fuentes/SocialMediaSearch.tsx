@@ -122,7 +122,7 @@ interface SocialSearchResult {
   };
   hashtags?: string[];
   mentions?: string[];
-  raw?: Record<string, unknown>;
+  raw?: Record<string, unknown> & { _isShort?: boolean; _durationSeconds?: number };
 }
 
 interface AggregateMetrics {
@@ -1228,86 +1228,86 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           )}
         </div>
 
-        {/* Date Filter Section */}
-        <div className="flex flex-wrap items-end gap-3 p-3 rounded-lg border bg-muted/30">
-          <div className="flex items-center gap-2">
-            <Button
-              variant={dateFilterEnabled ? "default" : "outline"}
-              size="sm"
-              onClick={() => setDateFilterEnabled(!dateFilterEnabled)}
-              className="gap-2"
-            >
-              <Filter className="h-4 w-4" />
-              Filtrar por fecha
-            </Button>
+        {/* Date Filter Section - Hidden for YouTube since it has native filters */}
+        {platform !== "youtube" && (
+          <div className="flex flex-wrap items-end gap-3 p-3 rounded-lg border bg-muted/30">
+            <div className="flex items-center gap-2">
+              <Button
+                variant={dateFilterEnabled ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateFilterEnabled(!dateFilterEnabled)}
+                className="gap-2"
+              >
+                <Filter className="h-4 w-4" />
+                Filtrar por fecha
+              </Button>
+            </div>
+            
+            {dateFilterEnabled && (
+              <>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Desde</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "w-[130px] justify-start text-left font-normal",
+                          !dateFrom && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateFrom ? format(dateFrom, "d MMM yyyy", { locale: es }) : "Inicio"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-popover border shadow-lg z-50" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={dateFrom}
+                        onSelect={setDateFrom}
+                        disabled={(date) => date > new Date()}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                        locale={es}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Hasta</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "w-[130px] justify-start text-left font-normal",
+                          !dateTo && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateTo ? format(dateTo, "d MMM yyyy", { locale: es }) : "Fin"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-popover border shadow-lg z-50" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={dateTo}
+                        onSelect={setDateTo}
+                        disabled={(date) => date > new Date()}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                        locale={es}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </>
+            )}
           </div>
-          
-          {dateFilterEnabled && (
-            <>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Desde</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={cn(
-                        "w-[130px] justify-start text-left font-normal",
-                        !dateFrom && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateFrom ? format(dateFrom, "d MMM yyyy", { locale: es }) : "Inicio"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-popover border shadow-lg z-50" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dateFrom}
-                      onSelect={setDateFrom}
-                      disabled={(date) => date > new Date()}
-                      initialFocus
-                      className={cn("p-3 pointer-events-auto")}
-                      locale={es}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Hasta</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={cn(
-                        "w-[130px] justify-start text-left font-normal",
-                        !dateTo && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateTo ? format(dateTo, "d MMM yyyy", { locale: es }) : "Fin"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-popover border shadow-lg z-50" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dateTo}
-                      onSelect={setDateTo}
-                      disabled={(date) => date > new Date()}
-                      initialFocus
-                      className={cn("p-3 pointer-events-auto")}
-                      locale={es}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              
-              {/* Badge removed: strict filtering is now applied at fetch time */}
-            </>
-          )}
-        </div>
+        )}
 
         {/* Action Buttons */}
         <div className="flex gap-2">
@@ -1539,15 +1539,22 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
                             {result.title || result.description || "Sin contenido"}
                           </p>
 
-                          {/* Content type badge */}
-                          {result.contentType && result.contentType !== "post" && (
+                          {/* Content type badge - with YouTube Short detection */}
+                          {(result.contentType && result.contentType !== "post") || (result.platform === "youtube" && result.raw?._isShort) ? (
                             <Badge variant="outline" className="text-xs">
-                              {result.contentType === "video" ? "📹 Video" : 
-                               result.contentType === "image" ? "📷 Imagen" : 
-                               result.contentType === "article" ? "📰 Artículo" : 
-                               result.contentType === "thread" ? "🧵 Hilo" : result.contentType}
+                              {result.platform === "youtube" && result.raw?._isShort 
+                                ? "🎬 Short" 
+                                : result.contentType === "video" 
+                                  ? "📹 Video" 
+                                  : result.contentType === "image" 
+                                    ? "📷 Imagen" 
+                                    : result.contentType === "article" 
+                                      ? "📰 Artículo" 
+                                      : result.contentType === "thread" 
+                                        ? "🧵 Hilo" 
+                                        : result.contentType}
                             </Badge>
-                          )}
+                          ) : null}
 
                           {/* Metrics */}
                           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">

@@ -448,8 +448,24 @@ function normalizeYouTube(item: Record<string, unknown>, index: number): Normali
     (channelId ? `https://youtube.com/channel/${channelId}` : "")
   );
 
+  // Detect if this is a YouTube Short
+  // 1. Check if URL contains "/shorts/"
+  // 2. Check if duration is < 60 seconds (Shorts are max 60s)
+  // 3. Check for explicit isShort flag from some actors
+  const videoUrl = String(get(item, "url") || "");
+  const durationSeconds = Number(get(item, "duration") || get(item, "lengthSeconds") || get(item, "durationSeconds") || 0);
+  const isShort = Boolean(
+    get(item, "isShort") || 
+    get(item, "isShorts") ||
+    videoUrl.includes("/shorts/") ||
+    (durationSeconds > 0 && durationSeconds <= 60)
+  );
+
+  const videoId = String(get(item, "id") || get(item, "videoId") || "");
+  const finalUrl = videoUrl || (videoId ? `https://youtube.com/watch?v=${videoId}` : "");
+
   return {
-    id: `youtube-${get(item, "id") || get(item, "videoId") || index}-${Date.now()}`,
+    id: `youtube-${videoId || index}-${Date.now()}`,
     platform: "youtube",
     title: title,
     description: description,
@@ -482,15 +498,16 @@ function normalizeYouTube(item: Record<string, unknown>, index: number): Normali
       get(item, "date") || 
       get(item, "uploadDate")
     ),
-    url: String(get(item, "url") || (get(item, "id") ? `https://youtube.com/watch?v=${get(item, "id")}` : "")),
+    url: finalUrl,
+    // Use "video" type but mark shorts in raw data for UI to display badge
     contentType: "video",
     media: {
       type: "video",
-      url: String(get(item, "url") || ""),
+      url: finalUrl,
       thumbnailUrl: String(get(item, "thumbnailUrl") || get(item, "thumbnail") || ""),
     },
     hashtags: (get(item, "hashtags") as string[]) || extractHashtags(description),
-    raw: item,
+    raw: { ...item, _isShort: isShort, _durationSeconds: durationSeconds },
   };
 }
 
