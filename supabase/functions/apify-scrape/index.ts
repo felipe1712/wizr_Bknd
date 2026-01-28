@@ -270,17 +270,20 @@ serve(async (req) => {
         
       case "youtube":
         // scraper_one/youtube-search-scraper - uses 'query' and 'resultsCount' parameters
+        // sortBy options: "relevance" (default), "upload_date", "view_count", "rating"
         if (channelUrl) {
           // For channel URLs, search by channel name extracted from URL
           const channelName = channelUrl.replace(/.*@/, "").replace(/.*\/channel\//, "").replace(/.*\/c\//, "");
           input = {
             query: channelName,
             resultsCount: maxResults,
+            sortBy: "upload_date", // Sort by newest first for monitoring
           };
         } else if (query) {
           input = {
             query: query,
             resultsCount: maxResults,
+            sortBy: "upload_date", // Sort by newest first for monitoring
           };
         }
         break;
