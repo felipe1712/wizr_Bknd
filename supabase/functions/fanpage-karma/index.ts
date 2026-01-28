@@ -10,14 +10,14 @@ const FANPAGE_KARMA_API_BASE = "https://app.fanpagekarma.com/api/v1";
 
 interface ProfileKPIRequest {
   action: "kpi";
-  network: "facebook" | "instagram" | "youtube" | "linkedin" | "tiktok" | "threads";
+  network: "facebook" | "instagram" | "youtube" | "linkedin" | "tiktok" | "threads" | "twitter";
   profileId: string;
   period?: string; // Format: YYYY-MM-DD_YYYY-MM-DD
 }
 
 interface ProfilePostsRequest {
   action: "posts";
-  network: "facebook" | "instagram" | "youtube" | "linkedin" | "tiktok" | "threads";
+  network: "facebook" | "instagram" | "youtube" | "linkedin" | "tiktok" | "threads" | "twitter";
   profileId: string;
   period?: string;
 }

@@ -271,38 +271,40 @@ export function useSyncFKProfile() {
       // Store the KPIs - extract values from Fanpage Karma response structure
       const kpiData = data.data || {};
       
-      // Fanpage Karma returns metrics as objects with { title, value, formatted_value }
-      // Field names differ between Facebook (page_*) and Instagram (profile_*)
-      const extractValue = (key: string): number | null => {
-        const metric = kpiData[key];
-        if (metric && typeof metric === 'object' && 'value' in metric) {
-          return metric.value;
-        }
-        return null;
-      };
+          // Fanpage Karma returns metrics as objects with { title, value, formatted_value }
+          // Field names differ by network:
+          // - Facebook/LinkedIn: page_* (page_follower, page_engagement, page_posts_per_day)
+          // - Instagram/TikTok/Twitter/YouTube/Threads: profile_* (profile_followers, profile_engagement)
+          const extractValue = (key: string): number | null => {
+            const metric = kpiData[key];
+            if (metric && typeof metric === 'object' && 'value' in metric) {
+              return metric.value;
+            }
+            return null;
+          };
 
-      // Map the correct field names based on network
-      const isInstagram = profile.network === 'instagram';
-      
-      const followers = isInstagram 
-        ? extractValue('profile_followers') 
-        : (extractValue('page_follower') || extractValue('page_fans'));
-      
-      const followerGrowth = isInstagram
-        ? extractValue('profile_followers_growth_percent')
-        : extractValue('page_fans_growth_percent');
-      
-      const engagement = isInstagram
-        ? extractValue('profile_engagement') || extractValue('profile_media_interaction')
-        : (extractValue('page_engagement') || extractValue('page_post_interaction'));
-      
-      const postsPerDay = isInstagram
-        ? extractValue('profile_media_per_day')
-        : extractValue('page_posts_per_day');
-      
-      const performanceIndex = isInstagram
-        ? extractValue('profile_performance_index')
-        : extractValue('page_performance_index');
+          // Networks that use "profile_*" field naming (vs "page_*" for Facebook/LinkedIn)
+          const usesProfilePrefix = ['instagram', 'tiktok', 'twitter', 'youtube', 'threads'].includes(profile.network);
+          
+          const followers = usesProfilePrefix 
+            ? extractValue('profile_followers') 
+            : (extractValue('page_follower') || extractValue('page_fans'));
+          
+          const followerGrowth = usesProfilePrefix
+            ? extractValue('profile_followers_growth_percent')
+            : extractValue('page_fans_growth_percent');
+          
+          const engagement = usesProfilePrefix
+            ? (extractValue('profile_engagement') || extractValue('profile_media_interaction') || extractValue('profile_post_interaction'))
+            : (extractValue('page_engagement') || extractValue('page_post_interaction'));
+          
+          const postsPerDay = usesProfilePrefix
+            ? (extractValue('profile_posts_per_day') || extractValue('profile_media_per_day') || extractValue('profile_videos_per_day'))
+            : extractValue('page_posts_per_day');
+          
+          const performanceIndex = usesProfilePrefix
+            ? extractValue('profile_performance_index')
+            : extractValue('page_performance_index');
 
       const { error: insertError } = await supabase
         .from("fk_profile_kpis")
@@ -385,28 +387,28 @@ export function useSyncAllProfiles() {
             return null;
           };
 
-           // Map the correct field names based on network (FB page_* vs IG profile_*)
-           const isInstagram = profile.network === 'instagram';
+          // Networks that use "profile_*" field naming (vs "page_*" for Facebook/LinkedIn)
+          const usesProfilePrefix = ['instagram', 'tiktok', 'twitter', 'youtube', 'threads'].includes(profile.network);
 
-           const followers = isInstagram
-             ? extractValue('profile_followers')
-             : (extractValue('page_follower') || extractValue('page_fans'));
+          const followers = usesProfilePrefix
+            ? extractValue('profile_followers')
+            : (extractValue('page_follower') || extractValue('page_fans'));
 
-           const followerGrowth = isInstagram
-             ? extractValue('profile_followers_growth_percent')
-             : extractValue('page_fans_growth_percent');
+          const followerGrowth = usesProfilePrefix
+            ? extractValue('profile_followers_growth_percent')
+            : extractValue('page_fans_growth_percent');
 
-           const engagement = isInstagram
-             ? (extractValue('profile_engagement') || extractValue('profile_media_interaction'))
-             : (extractValue('page_engagement') || extractValue('page_post_interaction'));
+          const engagement = usesProfilePrefix
+            ? (extractValue('profile_engagement') || extractValue('profile_media_interaction') || extractValue('profile_post_interaction'))
+            : (extractValue('page_engagement') || extractValue('page_post_interaction'));
 
-           const postsPerDay = isInstagram
-             ? extractValue('profile_media_per_day')
-             : extractValue('page_posts_per_day');
+          const postsPerDay = usesProfilePrefix
+            ? (extractValue('profile_posts_per_day') || extractValue('profile_media_per_day') || extractValue('profile_videos_per_day'))
+            : extractValue('page_posts_per_day');
 
-           const performanceIndex = isInstagram
-             ? extractValue('profile_performance_index')
-             : extractValue('page_performance_index');
+          const performanceIndex = usesProfilePrefix
+            ? extractValue('profile_performance_index')
+            : extractValue('page_performance_index');
 
            const { error: upsertError } = await supabase
             .from("fk_profile_kpis")
