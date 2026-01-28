@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useQueries } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,7 @@ import {
   Search
 } from "lucide-react";
 import { FKProfile, useFetchProfilePosts, FKPost, FKNetwork } from "@/hooks/useFanpageKarma";
+import { supabase } from "@/integrations/supabase/client";
 import { format, isWithinInterval } from "date-fns";
 import { es } from "date-fns/locale";
 import { NetworkFilter } from "./NetworkFilter";
@@ -425,18 +427,87 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
   );
 }
 
-// Hook to fetch posts from multiple profiles
+// Hook to fetch posts from multiple profiles using useQueries (proper React Query pattern)
 function useFetchMultipleProfilePosts(profiles: FKProfile[]) {
-  const queries = profiles.map(profile => {
-    const query = useFetchProfilePosts(profile);
-    return {
-      ...query,
-      posts: (query.data || []).map(post => ({
-        ...post,
-        profile_id: profile.profile_id
-      }))
-    };
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(endDate.getDate() - 28);
+  const period = `${startDate.toISOString().split("T")[0]}_${endDate.toISOString().split("T")[0]}`;
+
+  const queries = useQueries({
+    queries: profiles.map(profile => ({
+      queryKey: ["fk-posts-multi", profile.id],
+      queryFn: async (): Promise<FKPostWithProfile[]> => {
+        const { data, error } = await supabase.functions.invoke("fanpage-karma", {
+          body: {
+            action: "posts",
+            network: profile.network,
+            profileId: profile.profile_id,
+            period,
+          },
+        });
+
+        if (error) throw error;
+        if (!data.success) throw new Error(data.error || "Error al obtener posts");
+
+        const rawData = data.data || {};
+        const postsData = Array.isArray(rawData) ? rawData : (rawData.posts || []);
+        
+        return postsData.slice(0, 100).map((post: Record<string, unknown>, index: number) => {
+          const kpi = (post.kpi as Record<string, { title?: string; value?: number; formatted_value?: string }>) || {};
+          
+          const extractKpiValue = (key: string): number => {
+            const metric = kpi[key];
+            if (metric && typeof metric === 'object' && 'value' in metric) {
+              return Number(metric.value) || 0;
+            }
+            return 0;
+          };
+          
+          const likes = extractKpiValue('page_posts_likes_count') || 
+                        extractKpiValue('profile_post_likes_count') ||
+                        extractKpiValue('page_posts_reactions') ||
+                        Number(post.likes) || 0;
+                        
+          const comments = extractKpiValue('page_posts_comments_count') || 
+                           extractKpiValue('profile_post_comments_count') ||
+                           Number(post.comments) || 0;
+                           
+          const shares = extractKpiValue('page_posts_shares_count') || 
+                         extractKpiValue('profile_post_shares_count') ||
+                         Number(post.shares) || 0;
+                         
+          const totalEngagement = extractKpiValue('page_total_engagement_count') ||
+                                  extractKpiValue('profile_total_engagement_count') ||
+                                  (likes + comments + shares);
+          
+          return {
+            id: (post.id as string) || `${profile.id}-${index}`,
+            url: (post.link as string) || (post.url as string) || undefined,
+            title: (post.title as string) || undefined,
+            message: (post.message as string) || (post.description as string) || undefined,
+            content_type: (post.type as string) || (post.content_type as string) || 'post',
+            image_url: (post.image as string) || (post.picture as string) || undefined,
+            published_at: (post.date as string) || (post.created_time as string) || undefined,
+            likes,
+            comments,
+            shares,
+            engagement: totalEngagement,
+            profile_id: profile.profile_id,
+          };
+        });
+      },
+      enabled: profiles.length > 0,
+      staleTime: 5 * 60 * 1000,
+    })),
   });
-  
-  return queries;
+
+  // Transform useQueries result to match expected format
+  return queries.map((query, idx) => ({
+    ...query,
+    posts: query.data || [],
+    refetch: query.refetch,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+  }));
 }
