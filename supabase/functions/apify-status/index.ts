@@ -522,9 +522,22 @@ function normalizeLinkedIn(item: Record<string, unknown>, index: number): Normal
 
 function normalizeYouTube(item: Record<string, unknown>, index: number): NormalizedResult {
   // Handle both streamers/youtube-scraper and scrapesmith/free-youtube-search-scraper formats
+  // Also handle scraper_one/youtube-search-scraper which uses 'descriptionSnippet'
   const channel = item.channel as Record<string, unknown> | undefined;
   const title = String(get(item, "title") || get(item, "text") || "");
-  const description = String(get(item, "description") || get(item, "descriptionSnippet") || get(item, "text") || title);
+  
+  // Build comprehensive description from all available text fields
+  // Some scrapers return 'descriptionSnippet' (truncated) and others return full 'description'
+  const descSnippet = String(get(item, "descriptionSnippet") || "");
+  const fullDesc = String(get(item, "description") || "");
+  const textField = String(get(item, "text") || "");
+  
+  // Prefer full description, but combine all text for better keyword matching
+  // The descriptionSnippet often contains the keyword even when the title doesn't
+  const description = fullDesc || descSnippet || textField || title;
+  
+  // Store all text variants for better search/filtering (stored in raw for debugging)
+  const allTextForSearch = `${title} ${descSnippet} ${fullDesc}`.trim();
   
   const metrics = {
     likes: Number(get(item, "likes") || get(item, "likeCount") || 0),
@@ -553,6 +566,7 @@ function normalizeYouTube(item: Record<string, unknown>, index: number): Normali
     id: `youtube-${videoId || index}-${Date.now()}`,
     platform: "youtube",
     title: title,
+    // Use combined description for display AND for keyword filtering
     description: description,
     author: {
       name: channelName,
@@ -572,7 +586,8 @@ function normalizeYouTube(item: Record<string, unknown>, index: number): Normali
       thumbnailUrl: String(get(item, "thumbnailUrl") || get(item, "thumbnail") || ""),
     },
     hashtags: (get(item, "hashtags") as string[]) || extractHashtags(description),
-    raw: item,
+    // Store raw item with searchable text for debugging
+    raw: { ...item, _searchableText: allTextForSearch },
   };
 }
 
