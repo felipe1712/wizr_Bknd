@@ -1743,7 +1743,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
                                 {format(new Date(result.publishedAt), "d MMM yyyy", { locale: es })}
                               </span>
                             )}
-                            {result.url && (
+                            {result.url && result.url.startsWith("http") && (
                               <a
                                 href={result.url}
                                 target="_blank"
