@@ -211,19 +211,17 @@ serve(async (req) => {
           actorId = ACTOR_IDS.instagram_profile;
           
           // Split usernames by comma for multiple profiles
-          const usernames = username.split(",").map(u => cleanIGTerm(u)).filter(Boolean);
+          const cleanedUsernames = username.split(",").map(u => cleanIGTerm(u)).filter(Boolean);
           
-          if (usernames.length === 0) {
+          if (cleanedUsernames.length === 0) {
             throw new Error("Instagram requires at least one valid username.");
           }
           
-          console.log(`Instagram profile search for usernames: ${JSON.stringify(usernames)}`);
+          console.log(`Instagram profile search for usernames: ${JSON.stringify(cleanedUsernames)}`);
           
-          // Build URLs for each profile
-          const directUrls = usernames.map(u => `https://www.instagram.com/${u}/`);
-          
+          // apify/instagram-profile-scraper requires 'usernames' array, not 'directUrls'
           input = {
-            directUrls: directUrls,
+            usernames: cleanedUsernames,
             resultsLimit: Math.min(maxResults, 50),
             resultsType: "posts", // Get posts from profiles
           };
