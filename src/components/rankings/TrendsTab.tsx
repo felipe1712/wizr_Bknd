@@ -1,0 +1,246 @@
+import { useMemo, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { TrendingUp } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
+import { FKProfile, FKProfileKPI } from "@/hooks/useFanpageKarma";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+
+type MetricType = "followers" | "engagement_rate" | "follower_growth_percent" | "posts_per_day";
+
+interface TrendsTabProps {
+  profiles: FKProfile[];
+  kpis: FKProfileKPI[];
+  isLoading: boolean;
+}
+
+const METRIC_OPTIONS: { value: MetricType; label: string }[] = [
+  { value: "followers", label: "Seguidores" },
+  { value: "engagement_rate", label: "Engagement Rate" },
+  { value: "follower_growth_percent", label: "Crecimiento %" },
+  { value: "posts_per_day", label: "Posts por día" },
+];
+
+const LINE_COLORS = [
+  "hsl(var(--primary))",
+  "hsl(210, 70%, 50%)",
+  "hsl(340, 70%, 50%)",
+  "hsl(150, 70%, 40%)",
+  "hsl(45, 90%, 50%)",
+  "hsl(280, 70%, 50%)",
+  "hsl(0, 70%, 50%)",
+  "hsl(180, 70%, 40%)",
+];
+
+const formatValue = (value: number | null, metric: MetricType): string => {
+  if (value === null || value === undefined) return "-";
+  if (metric === "followers") {
+    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+    return value.toLocaleString();
+  }
+  return `${value.toFixed(2)}%`;
+};
+
+export function TrendsTab({ profiles, kpis, isLoading }: TrendsTabProps) {
+  const [selectedMetric, setSelectedMetric] = useState<MetricType>("engagement_rate");
+  const [selectedProfiles, setSelectedProfiles] = useState<string[]>([]);
+
+  // Group KPIs by date and profile
+  const chartData = useMemo(() => {
+    if (kpis.length === 0 || profiles.length === 0) return [];
+
+    // Create a map of dates to profile values
+    const dateMap = new Map<string, Record<string, number | null>>();
+
+    // Filter to selected profiles or use all if none selected
+    const profilesToShow = selectedProfiles.length > 0 
+      ? profiles.filter(p => selectedProfiles.includes(p.id))
+      : profiles.slice(0, 5); // Default to first 5 profiles
+
+    const profileIds = new Set(profilesToShow.map(p => p.id));
+
+    kpis.forEach((kpi) => {
+      if (!profileIds.has(kpi.fk_profile_id)) return;
+      
+      const dateKey = kpi.period_end;
+      if (!dateMap.has(dateKey)) {
+        dateMap.set(dateKey, {});
+      }
+      
+      const profile = profiles.find(p => p.id === kpi.fk_profile_id);
+      if (profile) {
+        const profileName = profile.display_name || profile.profile_id;
+        dateMap.get(dateKey)![profileName] = kpi[selectedMetric];
+      }
+    });
+
+    // Convert to array and sort by date
+    return Array.from(dateMap.entries())
+      .map(([date, values]) => ({
+        date,
+        formattedDate: format(new Date(date), "dd MMM", { locale: es }),
+        ...values,
+      }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [kpis, profiles, selectedMetric, selectedProfiles]);
+
+  const displayProfiles = useMemo(() => {
+    if (selectedProfiles.length > 0) {
+      return profiles.filter(p => selectedProfiles.includes(p.id));
+    }
+    return profiles.slice(0, 5);
+  }, [profiles, selectedProfiles]);
+
+  const toggleProfile = (profileId: string) => {
+    setSelectedProfiles(prev => {
+      if (prev.includes(profileId)) {
+        return prev.filter(id => id !== profileId);
+      }
+      if (prev.length >= 8) return prev; // Max 8 profiles
+      return [...prev, profileId];
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-[400px] w-full" />
+      </div>
+    );
+  }
+
+  if (profiles.length === 0 || kpis.length === 0) {
+    return (
+      <Card className="py-12">
+        <CardContent className="text-center">
+          <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium mb-2">Sin datos históricos</h3>
+          <p className="text-muted-foreground max-w-md mx-auto">
+            Sincroniza los perfiles varias veces en diferentes fechas para ver la evolución de las métricas.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Controls */}
+      <div className="flex flex-wrap gap-4 items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium">Métrica:</span>
+          <Select value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as MetricType)}>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {METRIC_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Profile selection */}
+      <div className="flex flex-wrap gap-2">
+        <span className="text-sm text-muted-foreground mr-2 self-center">Perfiles:</span>
+        {profiles.map((profile, index) => {
+          const isSelected = selectedProfiles.length === 0 
+            ? index < 5 
+            : selectedProfiles.includes(profile.id);
+          return (
+            <Badge
+              key={profile.id}
+              variant={isSelected ? "default" : "outline"}
+              className="cursor-pointer transition-colors"
+              onClick={() => toggleProfile(profile.id)}
+            >
+              @{profile.profile_id}
+            </Badge>
+          );
+        })}
+      </div>
+
+      {/* Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Evolución de {METRIC_OPTIONS.find(m => m.value === selectedMetric)?.label}
+          </CardTitle>
+          <CardDescription>
+            Comparativa histórica de métricas entre perfiles seleccionados
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[400px]">
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={chartData}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="formattedDate" 
+                    stroke="hsl(var(--muted-foreground))"
+                    tick={{ fontSize: 11 }}
+                  />
+                  <YAxis 
+                    stroke="hsl(var(--muted-foreground))"
+                    tickFormatter={(v) => formatValue(v, selectedMetric)}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--popover))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "var(--radius)",
+                    }}
+                    formatter={(value: number) => [formatValue(value, selectedMetric), ""]}
+                  />
+                  <Legend />
+                  {displayProfiles.map((profile, index) => {
+                    const name = profile.display_name || profile.profile_id;
+                    return (
+                      <Line
+                        key={profile.id}
+                        type="monotone"
+                        dataKey={name}
+                        stroke={LINE_COLORS[index % LINE_COLORS.length]}
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 6 }}
+                        connectNulls
+                      />
+                    );
+                  })}
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground">
+                No hay suficientes datos para mostrar tendencias
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

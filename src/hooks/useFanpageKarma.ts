@@ -37,6 +37,20 @@ export interface FKProfileKPI {
   fetched_at: string;
 }
 
+export interface FKPost {
+  id?: string;
+  url?: string;
+  title?: string;
+  message?: string;
+  content_type?: string;
+  image_url?: string;
+  published_at?: string;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  engagement?: number;
+}
+
 export interface BatchProfileInput {
   network: FKNetwork;
   profiles: string; // newline-separated profile IDs
@@ -394,5 +408,81 @@ export function useSyncAllProfiles() {
     onError: (error: Error) => {
       toast.error(`Error general: ${error.message}`);
     },
+  });
+}
+
+export function useFetchProfilePosts(profile: FKProfile | undefined) {
+  return useQuery({
+    queryKey: ["fk-posts", profile?.id],
+    queryFn: async (): Promise<FKPost[]> => {
+      if (!profile) return [];
+
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - 28);
+
+      const period = `${startDate.toISOString().split("T")[0]}_${endDate.toISOString().split("T")[0]}`;
+
+      const { data, error } = await supabase.functions.invoke("fanpage-karma", {
+        body: {
+          action: "posts",
+          network: profile.network,
+          profileId: profile.profile_id,
+          period,
+        },
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || "Error al obtener posts");
+
+      const postsData = data.data || [];
+      
+      // Transform Fanpage Karma posts format
+      return postsData.slice(0, 10).map((post: Record<string, unknown>, index: number) => {
+        const extractValue = (key: string): unknown => {
+          const metric = post[key];
+          if (metric && typeof metric === 'object' && 'value' in (metric as object)) {
+            return (metric as { value: unknown }).value;
+          }
+          return metric;
+        };
+
+        return {
+          id: `${profile.id}-${index}`,
+          url: extractValue('post_link') as string || extractValue('url') as string,
+          title: extractValue('post_title') as string,
+          message: extractValue('post_message') as string || extractValue('message') as string,
+          content_type: extractValue('post_type') as string || extractValue('content_type') as string,
+          image_url: extractValue('post_picture') as string || extractValue('image') as string,
+          published_at: extractValue('post_created') as string || extractValue('created_time') as string,
+          likes: Number(extractValue('post_likes')) || 0,
+          comments: Number(extractValue('post_comments')) || 0,
+          shares: Number(extractValue('post_shares')) || 0,
+          engagement: Number(extractValue('post_interaction')) || 0,
+        };
+      });
+    },
+    enabled: !!profile,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+// Hook to get all historical KPIs for trend analysis
+export function useFKAllKPIs(profileIds: string[]) {
+  return useQuery({
+    queryKey: ["fk-all-kpis", profileIds],
+    queryFn: async () => {
+      if (profileIds.length === 0) return [];
+
+      const { data, error } = await supabase
+        .from("fk_profile_kpis")
+        .select("*")
+        .in("fk_profile_id", profileIds)
+        .order("period_end", { ascending: true });
+
+      if (error) throw error;
+      return data as FKProfileKPI[];
+    },
+    enabled: profileIds.length > 0,
   });
 }
