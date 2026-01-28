@@ -210,13 +210,19 @@ serve(async (req) => {
           
           console.log(`Fetching posts: ${profile.network}/${profile.profile_id} for ${yesterdayStr}`);
           
-          const postsResponse = await fetch(postsUrl);
-          const postsText = await postsResponse.text();
-          
-          if (postsResponse.ok && postsText.trim().endsWith('}')) {
-            const sanitizedPostsText = postsText.trim().replace(/:\s*NaN\s*(,|})/g, ': null$1');
-            const postsData = JSON.parse(sanitizedPostsText);
-            const posts: PostData[] = postsData.data || [];
+           const postsResponse = await fetch(postsUrl);
+           const postsText = await postsResponse.text();
+           const trimmedPostsText = postsText.trim();
+           
+           // Fanpage Karma may return valid JSON ending in either '}' (object) or ']' (array).
+           // We only want to skip clearly truncated responses.
+           const looksComplete =
+             trimmedPostsText.endsWith("}") || trimmedPostsText.endsWith("]");
+
+           if (postsResponse.ok && looksComplete) {
+             const sanitizedPostsText = trimmedPostsText.replace(/:\s*NaN\s*(,|})/g, ': null$1');
+             const postsData = JSON.parse(sanitizedPostsText);
+             const posts: PostData[] = postsData.data || [];
             
             if (posts.length > 0) {
               // Find post with highest engagement
@@ -262,7 +268,9 @@ serve(async (req) => {
             } else {
               console.log(`No posts found for ${profile.profile_id} on ${yesterdayStr}`);
             }
-          }
+           } else if (!looksComplete) {
+             console.warn(`Posts response looked truncated for ${profile.profile_id} (${profile.network})`);
+           }
         } catch (postErr) {
           console.error(`Error fetching posts for ${profile.profile_id}:`, postErr);
           // Don't fail the whole sync if posts fail
