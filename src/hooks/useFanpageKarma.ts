@@ -373,10 +373,47 @@ export function useSyncFKProfile() {
 
       if (insertError) throw insertError;
 
-      // Update last_synced_at
+      // Extract display_name from metadata if available
+      const metadata = data.metadata || {};
+      let displayName: string | null = null;
+      let avatarUrl: string | null = null;
+      
+      // Fanpage Karma returns profile name in metadata
+      if (metadata.name) {
+        displayName = metadata.name;
+      } else if (metadata.title) {
+        displayName = metadata.title;
+      } else if (metadata.profile_name) {
+        displayName = metadata.profile_name;
+      } else if (metadata.page_name) {
+        displayName = metadata.page_name;
+      } else if (metadata.channel_name) {
+        displayName = metadata.channel_name;
+      }
+      
+      // Try to get avatar from metadata
+      if (metadata.image) {
+        avatarUrl = metadata.image;
+      } else if (metadata.picture) {
+        avatarUrl = metadata.picture;
+      } else if (metadata.avatar) {
+        avatarUrl = metadata.avatar;
+      }
+
+      // Update last_synced_at and display_name if found
+      const updateData: Record<string, unknown> = { 
+        last_synced_at: new Date().toISOString() 
+      };
+      if (displayName && displayName !== profile.profile_id) {
+        updateData.display_name = displayName;
+      }
+      if (avatarUrl) {
+        updateData.avatar_url = avatarUrl;
+      }
+      
       await supabase
         .from("fk_profiles")
-        .update({ last_synced_at: new Date().toISOString() })
+        .update(updateData)
         .eq("id", profile.id);
 
       return { profile, kpiData };
@@ -496,9 +533,44 @@ export function useSyncAllProfiles() {
            // IMPORTANT: upsert can fail silently unless we check the returned error
            if (upsertError) throw upsertError;
 
+          // Extract display_name from metadata if available
+          const metadata = data.metadata || {};
+          let displayName: string | null = null;
+          let avatarUrl: string | null = null;
+          
+          if (metadata.name) {
+            displayName = metadata.name;
+          } else if (metadata.title) {
+            displayName = metadata.title;
+          } else if (metadata.profile_name) {
+            displayName = metadata.profile_name;
+          } else if (metadata.page_name) {
+            displayName = metadata.page_name;
+          } else if (metadata.channel_name) {
+            displayName = metadata.channel_name;
+          }
+          
+          if (metadata.image) {
+            avatarUrl = metadata.image;
+          } else if (metadata.picture) {
+            avatarUrl = metadata.picture;
+          } else if (metadata.avatar) {
+            avatarUrl = metadata.avatar;
+          }
+
+          const updateData: Record<string, unknown> = { 
+            last_synced_at: new Date().toISOString() 
+          };
+          if (displayName && displayName !== profile.profile_id) {
+            updateData.display_name = displayName;
+          }
+          if (avatarUrl) {
+            updateData.avatar_url = avatarUrl;
+          }
+
           await supabase
             .from("fk_profiles")
-            .update({ last_synced_at: new Date().toISOString() })
+            .update(updateData)
             .eq("id", profile.id);
 
           results.success++;
