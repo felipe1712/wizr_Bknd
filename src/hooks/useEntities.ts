@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-export type EntityType = "persona" | "marca" | "institucion";
+export type EntityType = "persona" | "marca" | "institucion" | "tema" | "evento";
 
 export interface Entity {
   id: string;

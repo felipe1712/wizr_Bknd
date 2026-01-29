@@ -24,7 +24,7 @@ import { X, Plus } from "lucide-react";
 
 const entitySchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido").max(100),
-  tipo: z.enum(["persona", "marca", "institucion"]),
+  tipo: z.enum(["persona", "marca", "institucion", "tema", "evento"]),
   descripcion: z.string().max(500).optional(),
 });
 
@@ -36,7 +36,7 @@ interface EntityFormProps {
   onSubmit: (data: EntityFormData & { palabras_clave: string[]; aliases: string[] }) => void;
   initialData?: {
     nombre: string;
-    tipo: "persona" | "marca" | "institucion";
+    tipo: "persona" | "marca" | "institucion" | "tema" | "evento";
     descripcion?: string;
     palabras_clave: string[];
     aliases: string[];
@@ -99,6 +99,8 @@ export function EntityForm({
     persona: "Persona",
     marca: "Marca",
     institucion: "Institución",
+    tema: "Tema / Asunto",
+    evento: "Evento",
   };
 
   return (
@@ -129,7 +131,7 @@ export function EntityForm({
             <Label htmlFor="tipo">Tipo *</Label>
             <Select
               value={form.watch("tipo")}
-              onValueChange={(value: "persona" | "marca" | "institucion") =>
+              onValueChange={(value: "persona" | "marca" | "institucion" | "tema" | "evento") =>
                 form.setValue("tipo", value)
               }
             >

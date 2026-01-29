@@ -25,14 +25,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MoreHorizontal, Pencil, Trash2, User, Building2, Briefcase } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, User, Building2, Briefcase, Tag, Calendar } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 
 export interface Entity {
   id: string;
   nombre: string;
-  tipo: "persona" | "marca" | "institucion";
+  tipo: "persona" | "marca" | "institucion" | "tema" | "evento";
   descripcion: string | null;
   palabras_clave: string[];
   aliases: string[];
@@ -61,6 +61,16 @@ const tipoConfig = {
   institucion: {
     label: "Institución",
     icon: Building2,
+    variant: "outline" as const,
+  },
+  tema: {
+    label: "Tema",
+    icon: Tag,
+    variant: "secondary" as const,
+  },
+  evento: {
+    label: "Evento",
+    icon: Calendar,
     variant: "outline" as const,
   },
 };

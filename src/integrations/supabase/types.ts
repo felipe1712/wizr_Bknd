@@ -941,7 +941,7 @@ export type Database = {
       alert_status: "active" | "paused" | "triggered"
       alert_type: "sentiment_negative" | "mention_spike" | "keyword_match"
       app_role: "admin" | "analista" | "director"
-      entity_type: "persona" | "marca" | "institucion"
+      entity_type: "persona" | "marca" | "institucion" | "tema" | "evento"
       project_type: "monitoreo" | "investigacion" | "crisis" | "benchmark"
       sensitivity_level: "bajo" | "medio" | "alto" | "critico"
       temporal_scope:
@@ -1080,7 +1080,7 @@ export const Constants = {
       alert_status: ["active", "paused", "triggered"],
       alert_type: ["sentiment_negative", "mention_spike", "keyword_match"],
       app_role: ["admin", "analista", "director"],
-      entity_type: ["persona", "marca", "institucion"],
+      entity_type: ["persona", "marca", "institucion", "tema", "evento"],
       project_type: ["monitoreo", "investigacion", "crisis", "benchmark"],
       sensitivity_level: ["bajo", "medio", "alto", "critico"],
       temporal_scope: [
