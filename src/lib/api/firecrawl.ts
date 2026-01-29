@@ -61,12 +61,19 @@ export interface EntityForSearch {
 
 /**
  * Build a search query from entity data
- * Uses a simple, direct search query to maximize results
+ * Uses keywords for better search relevance, falling back to entity name
  */
 export function buildEntitySearchQuery(entity: EntityForSearch): string {
-  // Simple approach: just use the entity name with "noticias" for news context
-  // Complex boolean queries often return fewer or no results
-  return `"${entity.nombre}" noticias`;
+  // Priority: Use keywords if available (more specific), otherwise use entity name
+  if (entity.palabras_clave && entity.palabras_clave.length > 0) {
+    // Join keywords with spaces for a broader search
+    const keywordsQuery = entity.palabras_clave.join(" ");
+    return `${keywordsQuery} noticias`;
+  }
+  
+  // Fallback to entity name with aliases
+  const terms = [entity.nombre, ...entity.aliases].filter(Boolean);
+  return `${terms[0]} noticias`;
 }
 
 /**
