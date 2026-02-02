@@ -27,6 +27,7 @@ import ReportesPage from "./pages/dashboard/ReportesPage";
 import ProjectsPage from "./pages/dashboard/ProjectsPage";
 import ConfiguracionPage from "./pages/dashboard/ConfiguracionPage";
 import RankingsPage from "./pages/dashboard/RankingsPage";
+import DashboardHomePage from "./pages/dashboard/DashboardHomePage";
 
 import { Loader2 } from "lucide-react";
 
@@ -45,7 +46,7 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (user) {
-    return <Navigate to="/dashboard/panorama" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;
@@ -117,7 +118,8 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/dashboard/panorama" replace />} />
+        <Route index element={<DashboardHomePage />} />
+        <Route path="inicio" element={<DashboardHomePage />} />
         <Route path="panorama" element={<PanoramaPage />} />
         <Route path="semantica" element={<SemanticaPage />} />
         <Route path="comparativa" element={<ComparativaPage />} />

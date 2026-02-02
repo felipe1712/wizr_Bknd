@@ -7,6 +7,7 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import ProjectSelector from "@/components/layout/ProjectSelector";
 import { WelcomeModal } from "@/components/onboarding/WelcomeModal";
 import { TourGuide } from "@/components/onboarding/TourGuide";
+import { WorkflowProgressBar } from "@/components/workflow/WorkflowProgressBar";
 import { LogOut, User, Plus } from "lucide-react";
 
 const DashboardContent = () => {
@@ -42,6 +43,12 @@ const DashboardContent = () => {
               <div className="h-6 w-px bg-border" />
               <div data-tour="project-selector">
                 <ProjectSelector />
+              </div>
+              <div className="hidden md:block">
+                <div className="h-6 w-px bg-border" />
+              </div>
+              <div className="hidden md:block" data-tour="workflow-progress">
+                <WorkflowProgressBar compact />
               </div>
             </div>
 

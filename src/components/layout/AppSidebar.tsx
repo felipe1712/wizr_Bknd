@@ -8,11 +8,10 @@ import {
   TrendingUp,
   Database,
   FileBarChart,
-  FileText,
   FolderOpen,
   Settings,
   Trophy,
-  Target,
+  Home,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import wizrIcon from "@/assets/wizr-icon-transparent.png";
@@ -30,6 +29,8 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+
+const homeItem = { title: "Inicio", url: "/dashboard", icon: Home, tourId: "nav-inicio" };
 
 const analysisViews = [
   { title: "Fuentes", url: "/dashboard/fuentes", icon: Database, tourId: "nav-fuentes" },
@@ -83,8 +84,33 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="px-2 py-4">
-        {/* Analysis Views */}
+        {/* Home / Dashboard */}
         <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem data-tour={homeItem.tourId}>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location.pathname === "/dashboard" || location.pathname === "/dashboard/inicio"}
+                  tooltip={collapsed ? homeItem.title : undefined}
+                >
+                  <NavLink
+                    to={homeItem.url}
+                    end
+                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                  >
+                    <homeItem.icon className="h-5 w-5 shrink-0" />
+                    {!collapsed && <span>{homeItem.title}</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Analysis Views */}
+        <SidebarGroup className="mt-2">
           <SidebarGroupLabel className="px-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
             {!collapsed ? "Análisis" : ""}
           </SidebarGroupLabel>
