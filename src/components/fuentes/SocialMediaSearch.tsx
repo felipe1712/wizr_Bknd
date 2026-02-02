@@ -994,6 +994,28 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     }
   };
 
+  // Sanitize JSON to remove invalid Unicode surrogate pairs that cause PostgreSQL errors
+  const sanitizeJsonForDb = <T,>(obj: T): T => {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj === "string") {
+      // Remove unpaired surrogate characters (they break PostgreSQL JSON parsing)
+      // Surrogates: High \uD800-\uDBFF, Low \uDC00-\uDFFF
+      // We remove any high surrogate not followed by low, or lone low surrogates
+      return obj.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "") as T;
+    }
+    if (Array.isArray(obj)) {
+      return obj.map(sanitizeJsonForDb) as T;
+    }
+    if (typeof obj === "object") {
+      const result: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(obj)) {
+        result[key] = sanitizeJsonForDb(value);
+      }
+      return result as T;
+    }
+    return obj;
+  };
+
   const handleSaveResults = async () => {
     // Only save results that are NOT marked as discarded
     const resultsToSave = filteredResults.filter(r => curationState[r.id] !== "discarded");
@@ -1012,12 +1034,12 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       const mentions = resultsToSave.map((result, idx) => ({
         project_id: projectId,
         url: result.url || `https://${platform}.com/post/${result.id}-${idx}`,
-        title: result.title || result.description?.substring(0, 200) || "Sin título",
-        description: result.description,
+        title: sanitizeJsonForDb(result.title || result.description?.substring(0, 200) || "Sin título"),
+        description: sanitizeJsonForDb(result.description),
         source_domain: platform,
         published_at: result.publishedAt,
         matched_keywords: [searchValue],
-        raw_metadata: JSON.parse(JSON.stringify({
+        raw_metadata: sanitizeJsonForDb({
           platform,
           author: result.author?.name || null,
           authorUrl: result.author?.url || null,
@@ -1033,7 +1055,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           hashtags: result.hashtags || [],
           mentions: result.mentions || [],
           curationStatus: curationState[result.id] || "pending", // Track curation status
-        })),
+        }),
       }));
 
       // Deduplicate mentions by (project_id + url) to prevent "ON CONFLICT DO UPDATE command cannot affect row a second time" error
