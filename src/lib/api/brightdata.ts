@@ -98,7 +98,8 @@ export const brightdataApi = {
     maxResults?: number;
     searchType?: string;
   }): Promise<BrightDataResponse<ScrapeStartResponse>> {
-    const result = await invokeEdgeFunction<ScrapeStartResponse>("brightdata-scrape", params, 45000);
+    // Increase timeout to 90 seconds - Bright Data API can be slow
+    const result = await invokeEdgeFunction<ScrapeStartResponse>("brightdata-scrape", params, 90000);
 
     if (result.success && result.data) {
       return {
