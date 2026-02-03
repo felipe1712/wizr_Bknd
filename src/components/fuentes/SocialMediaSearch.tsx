@@ -1071,6 +1071,8 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           : platform;
 
         const result = await brightdataApi.startScrape({
+          // Let backend persist run_id/dataset_id even if client times out
+          jobId: job.id,
           platform: effectivePlatform,
           query: (searchType === "query" || searchType === "comments") ? searchValue : undefined,
           username: searchType === "username" ? searchValue.replace("@", "") : undefined,
@@ -1087,7 +1089,55 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         });
 
         if (!result.success || !result.data) {
-          throw new Error(result.error || "Error al iniciar la búsqueda con Bright Data");
+          // If the browser timed out, the backend may still have started the job.
+          const msg = result.error || "Error al iniciar la búsqueda con Bright Data";
+          if (msg.toLowerCase().includes("tiempo de espera agotado")) {
+            setProgress(10);
+            setProgressMessage("Iniciando búsqueda (Bright Data puede tardar en responder)...");
+            // Give backend a moment to persist run_id, then refetch and resume polling.
+            setTimeout(async () => {
+              try {
+                await refetchJobs();
+                const { data } = await supabase
+                  .from("social_scrape_jobs")
+                  .select("run_id, dataset_id, status")
+                  .eq("id", job.id)
+                  .maybeSingle();
+
+                if (data?.run_id) {
+                  setRunId(data.run_id);
+                  const startTime = Date.now();
+                  setPollingStartTime(startTime);
+                  setTimeout(() => checkBrightDataStatus(data.run_id!, startTime), 3000);
+                  return;
+                }
+
+                // If still no run_id, mark as failed (real start likely didn't happen)
+                await updateJob({
+                  id: job.id,
+                  updates: {
+                    status: "failed",
+                    completed_at: new Date().toISOString(),
+                    error_message: msg,
+                  },
+                });
+                setJobStatus("failed");
+                setIsSearching(false);
+                toast({
+                  title: "Error",
+                  description: msg,
+                  variant: "destructive",
+                });
+              } catch (e) {
+                console.error("Error recovering Bright Data job after timeout:", e);
+                setJobStatus("failed");
+                setIsSearching(false);
+              }
+            }, 5000);
+            return;
+          }
+
+          throw new Error(msg);
         }
 
         const data = result.data;

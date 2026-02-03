@@ -43,6 +43,8 @@ function getDatasetId(platform: string, searchType: string): string | null {
 
 interface ScrapeRequest {
   platform: "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "youtube_shorts" | "reddit" | "reddit_comments";
+  // Optional: allows server-side persistence of run_id/dataset_id even if client times out
+  jobId?: string;
   query?: string;
   username?: string;
   hashtag?: string;
@@ -60,6 +62,37 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  async function updateSocialScrapeJob(jobId: string, updates: Record<string, unknown>) {
+    try {
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+      const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+      if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+        console.warn("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY; cannot persist job updates");
+        return;
+      }
+
+      const url = `${SUPABASE_URL}/rest/v1/social_scrape_jobs?id=eq.${encodeURIComponent(jobId)}`;
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn("Failed to persist social_scrape_jobs update:", res.status, text);
+      }
+    } catch (e) {
+      console.warn("Error persisting social_scrape_jobs update:", e);
+    }
+  }
+
   try {
     const BRIGHTDATA_API_KEY = Deno.env.get("BRIGHTDATA_API_KEY");
     if (!BRIGHTDATA_API_KEY) {
@@ -67,6 +100,7 @@ serve(async (req) => {
     }
 
     const { 
+      jobId,
       platform, 
       query, 
       username, 
@@ -156,6 +190,18 @@ serve(async (req) => {
     
     if (!snapshotId) {
       throw new Error("No snapshot_id returned from Bright Data");
+    }
+
+    // Persist run_id/dataset_id server-side (prevents client-timeout from losing snapshot_id)
+    if (jobId) {
+      await updateSocialScrapeJob(jobId, {
+        run_id: snapshotId,
+        dataset_id: datasetId,
+        status: "running",
+        // keep metadata minimal; front-end may override/extend
+        metadata: { provider: "brightdata" },
+        updated_at: new Date().toISOString(),
+      });
     }
 
     return new Response(
