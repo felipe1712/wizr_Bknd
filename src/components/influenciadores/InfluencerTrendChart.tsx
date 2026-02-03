@@ -40,24 +40,13 @@ export function InfluencerTrendChart({ data, domains, labels, mentions = [] }: I
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [clickData, setClickData] = useState<ClickData | null>(null);
 
-  // Handle click on a data point
-  const handleChartClick = (chartData: any) => {
-    if (chartData && chartData.activePayload && chartData.activePayload.length > 0) {
-      const payload = chartData.activePayload[0];
-      const date = payload.payload.date;
-      const domain = payload.dataKey;
+  // Handle click on a specific dot - this is the correct way to identify which source was clicked
+  const handleDotClick = (domain: string, payload: any) => {
+    if (payload?.date) {
       const domainLabel = labels?.[domain] ?? domain;
-      
-      setClickData({ date, domain, domainLabel });
+      setClickData({ date: payload.date, domain, domainLabel });
       setDrawerOpen(true);
     }
-  };
-
-  // Handle click on a specific dot
-  const handleDotClick = (domain: string, date: string) => {
-    const domainLabel = labels?.[domain] ?? domain;
-    setClickData({ date, domain, domainLabel });
-    setDrawerOpen(true);
   };
 
   if (data.length === 0 || domains.length === 0) {
@@ -86,7 +75,7 @@ export function InfluencerTrendChart({ data, domains, labels, mentions = [] }: I
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={data} onClick={handleChartClick} style={{ cursor: "pointer" }}>
+            <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis
                 dataKey="date"
@@ -121,15 +110,13 @@ export function InfluencerTrendChart({ data, domains, labels, mentions = [] }: I
                   name={labels?.[domain] ?? domain}
                   stroke={COLORS[index % COLORS.length]}
                   strokeWidth={2}
-                  dot={{ r: 3, cursor: "pointer" }}
+                  dot={{ r: 4, cursor: "pointer", strokeWidth: 2 }}
                   activeDot={{
-                    r: 6,
+                    r: 7,
                     cursor: "pointer",
+                    strokeWidth: 2,
                     onClick: (_: any, event: any) => {
-                      const payload = event?.payload;
-                      if (payload?.date) {
-                        handleDotClick(domain, payload.date);
-                      }
+                      handleDotClick(domain, event?.payload);
                     },
                   }}
                 />
