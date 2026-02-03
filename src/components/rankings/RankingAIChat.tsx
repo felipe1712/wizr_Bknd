@@ -177,9 +177,10 @@ INSTRUCCIONES DE FORMATO:
         </div>
       </CardHeader>
       
-      <CardContent className="flex-1 flex flex-col p-4 pt-0 gap-4">
+      <CardContent className="flex-1 flex flex-col p-4 pt-0 gap-4 overflow-hidden">
         {/* Messages area */}
-        <ScrollArea ref={scrollRef} className="flex-1 pr-4">
+        <ScrollArea ref={scrollRef} className="flex-1 w-full">
+          <div className="pr-4">
           {messages.length === 0 ? (
             <div className="space-y-4">
               <div className="text-center py-8">
@@ -207,11 +208,11 @@ INSTRUCCIONES DE FORMATO:
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4 w-full">
               {messages.map((message) => (
                 <div
                   key={message.id}
-                   className={`flex gap-3 min-w-0 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                  className={`flex gap-3 w-full ${message.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   {message.role === "assistant" && (
                     <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -219,16 +220,17 @@ INSTRUCCIONES DE FORMATO:
                     </div>
                   )}
                   <div
-                     className={`rounded-lg px-4 py-3 max-w-[85%] overflow-hidden min-w-0 ${
+                    className={`rounded-lg px-4 py-3 overflow-hidden ${
                       message.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted"
+                        ? "bg-primary text-primary-foreground max-w-[85%]"
+                        : "bg-muted flex-1 max-w-[calc(100%-3rem)]"
                     }`}
+                    style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                   >
                     {message.role === "user" ? (
-                      <p className="text-sm break-words whitespace-pre-wrap overflow-wrap-anywhere">{message.content}</p>
+                      <p className="text-sm whitespace-pre-wrap" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{message.content}</p>
                     ) : (
-                       <div className="prose prose-sm dark:prose-invert max-w-none overflow-hidden min-w-0 ai-markdown [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&>p]:my-2 [&>ul]:my-2 [&>ul]:pl-4 [&>li]:my-0.5 [&_strong]:font-semibold">
+                      <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&>p]:my-2 [&>ul]:my-2 [&>ul]:pl-4 [&>li]:my-0.5 [&_strong]:font-semibold" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                         <ReactMarkdown>{message.content}</ReactMarkdown>
                       </div>
                     )}
@@ -256,6 +258,7 @@ INSTRUCCIONES DE FORMATO:
               )}
             </div>
           )}
+          </div>
         </ScrollArea>
 
         {/* Input area */}
