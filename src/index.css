@@ -59,6 +59,13 @@ Wizr Brand: Purple (#5A2FBA), Orange (#FF6B35), with light theme as default.
     --wizr-orange: 16 100% 60%;
     --wizr-dark: 250 30% 15%;
     --wizr-light: 0 0% 98%;
+
+    /* Charts */
+    --chart-1: 260 60% 45%; /* violet */
+    --chart-2: 16 100% 60%; /* orange */
+    --chart-3: 200 85% 45%; /* cyan */
+    --chart-4: 150 65% 40%; /* green */
+    --chart-5: 330 70% 55%; /* magenta */
   }
 
   .dark {
@@ -110,6 +117,13 @@ Wizr Brand: Purple (#5A2FBA), Orange (#FF6B35), with light theme as default.
     --wizr-orange: 16 100% 55%;
     --wizr-dark: 250 25% 10%;
     --wizr-light: 0 0% 98%;
+
+    /* Charts */
+    --chart-1: 260 70% 55%; /* violet */
+    --chart-2: 16 100% 55%; /* orange */
+    --chart-3: 200 90% 55%; /* cyan */
+    --chart-4: 150 70% 50%; /* green */
+    --chart-5: 330 75% 60%; /* magenta */
   }
 }
 
