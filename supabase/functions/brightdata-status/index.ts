@@ -39,6 +39,112 @@ interface NormalizedResult {
   raw: Record<string, unknown>;
 }
 
+// Parse TikTok create_time (Unix timestamp in seconds or milliseconds)
+function parseTikTokDate(raw: Record<string, unknown>): string {
+  const createTime = raw.create_time || raw.createTime || raw.timestamp;
+  
+  if (typeof createTime === "number") {
+    // Detect if it's seconds (10 digits) or milliseconds (13 digits)
+    const ts = createTime > 1e12 ? createTime : createTime * 1000;
+    return new Date(ts).toISOString();
+  }
+  
+  if (typeof createTime === "string") {
+    // Try parsing as ISO date first
+    const parsed = new Date(createTime);
+    if (!isNaN(parsed.getTime())) return parsed.toISOString();
+    
+    // Try parsing as numeric string (Unix timestamp)
+    const numericTs = parseInt(createTime, 10);
+    if (!isNaN(numericTs)) {
+      const ts = numericTs > 1e12 ? numericTs : numericTs * 1000;
+      return new Date(ts).toISOString();
+    }
+  }
+  
+  return "";
+}
+
+// Parse YouTube relative date strings ("2 weeks ago", "3 days ago")
+function parseYouTubeDate(raw: Record<string, unknown>): { date: string; confidence: "high" | "medium" | "low" } {
+  // First try standard date fields
+  const dateFields = ["upload_date", "published_at", "date", "uploadDate", "publishedAt"];
+  for (const field of dateFields) {
+    const val = raw[field];
+    if (typeof val === "string" && val) {
+      const parsed = new Date(val);
+      if (!isNaN(parsed.getTime())) {
+        return { date: parsed.toISOString(), confidence: "high" };
+      }
+    }
+    if (typeof val === "number") {
+      const ts = val > 1e12 ? val : val * 1000;
+      return { date: new Date(ts).toISOString(), confidence: "high" };
+    }
+  }
+  
+  // Try relative time parsing
+  const relativeFields = ["interpolatedTimestamp", "upload_date", "date", "published"];
+  for (const field of relativeFields) {
+    const val = raw[field];
+    if (typeof val === "string" && val.includes("ago")) {
+      const result = parseRelativeTime(val);
+      if (result) return result;
+    }
+  }
+  
+  return { date: "", confidence: "low" };
+}
+
+// Parse relative time strings like "2 weeks ago", "3 days ago"
+function parseRelativeTime(text: string): { date: string; confidence: "high" | "medium" | "low" } | null {
+  const now = new Date();
+  const lowerText = text.toLowerCase().trim();
+  
+  // Match patterns like "X hours/days/weeks/months/years ago"
+  const match = lowerText.match(/(\d+)\s*(second|minute|hour|day|week|month|year)s?\s*ago/i);
+  if (!match) return null;
+  
+  const value = parseInt(match[1], 10);
+  const unit = match[2].toLowerCase();
+  
+  let confidence: "high" | "medium" | "low" = "medium";
+  const result = new Date(now);
+  
+  switch (unit) {
+    case "second":
+      result.setSeconds(result.getSeconds() - value);
+      confidence = "high";
+      break;
+    case "minute":
+      result.setMinutes(result.getMinutes() - value);
+      confidence = "high";
+      break;
+    case "hour":
+      result.setHours(result.getHours() - value);
+      confidence = "high";
+      break;
+    case "day":
+      result.setDate(result.getDate() - value);
+      confidence = "high";
+      break;
+    case "week":
+      result.setDate(result.getDate() - (value * 7));
+      confidence = "medium";
+      break;
+    case "month":
+      result.setMonth(result.getMonth() - value);
+      confidence = "medium";
+      break;
+    case "year":
+      result.setFullYear(result.getFullYear() - value);
+      confidence = "low";
+      break;
+  }
+  
+  return { date: result.toISOString(), confidence };
+}
+
 // Normalize Bright Data results to match our unified format
 function normalizeResults(items: unknown[], platform: string): NormalizedResult[] {
   return items.map((item: unknown, index: number) => {
@@ -162,6 +268,8 @@ function normalizeResults(items: unknown[], platform: string): NormalizedResult[
         break;
 
       case "tiktok":
+        // TikTok uses Unix timestamps (seconds or ms) - parse correctly
+        const tiktokDate = parseTikTokDate(raw);
         normalized = {
           id: getId(),
           platform: "tiktok",
@@ -181,18 +289,20 @@ function normalizeResults(items: unknown[], platform: string): NormalizedResult[
             shares: getNumber("shares", "share_count", "shares_count"),
             views: getNumber("views", "play_count", "view_count"),
           },
-          publishedAt: getText("create_time", "timestamp", "date") || new Date().toISOString(),
+          publishedAt: tiktokDate || new Date().toISOString(),
           url: getText("url", "video_url", "webVideoUrl"),
           contentType: "video",
           hashtags: (raw.hashtags as string[]) || (raw.challenges as string[]) || [],
           mentions: (raw.mentions as string[]) || [],
-          raw,
+          raw: { ...raw, _dateSource: tiktokDate ? "parsed" : "fallback" },
         };
         break;
 
       case "youtube":
       case "youtube_shorts":
         const isShort = raw.is_short || (raw.duration && (raw.duration as number) <= 60);
+        // YouTube may have relative dates ("2 weeks ago") - parse with confidence
+        const ytDateResult = parseYouTubeDate(raw);
         normalized = {
           id: getId(),
           platform: isShort ? "youtube_shorts" : "youtube",
@@ -212,12 +322,17 @@ function normalizeResults(items: unknown[], platform: string): NormalizedResult[
             shares: 0,
             views: getNumber("views", "view_count"),
           },
-          publishedAt: getText("upload_date", "published_at", "date") || new Date().toISOString(),
+          publishedAt: ytDateResult.date || new Date().toISOString(),
           url: getText("url", "video_url") || `https://youtube.com/watch?v=${getId()}`,
           contentType: "video",
           hashtags: (raw.tags as string[]) || [],
           mentions: [],
-          raw: { ...raw, _isShort: isShort },
+          raw: { 
+            ...raw, 
+            _isShort: isShort,
+            _dateConfidence: ytDateResult.confidence,
+            _dateIsRelative: ytDateResult.date !== "" && ytDateResult.confidence !== "high"
+          },
         };
         break;
 
