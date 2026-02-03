@@ -10,12 +10,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useSocialScrapeJobs } from "@/hooks/useSocialScrapeJobs";
 import { apifyApi } from "@/lib/api/apify";
+import { brightdataApi } from "@/lib/api/brightdata";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 import { 
   Search, 
   RefreshCw, 
@@ -40,10 +42,15 @@ import {
   EyeOff,
   Filter,
   Copy,
+  Zap,
+  FlaskConical,
 } from "lucide-react";
 import { format, subDays, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { toZonedTime, formatInTimeZone } from "date-fns-tz";
+
+// Data providers
+type DataProvider = "apify" | "brightdata";
 
 // Mexico City timezone (Central Mexico)
 const MEXICO_TIMEZONE = "America/Mexico_City";
@@ -260,6 +267,9 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [results, setResults] = useState<SocialSearchResult[]>([]);
   const [pollingStartTime, setPollingStartTime] = useState<number | null>(null);
+  
+  // Data provider toggle - Apify (stable) vs Bright Data (experimental)
+  const [dataProvider, setDataProvider] = useState<DataProvider>("apify");
   
   // Maximum polling duration: 3 minutes (180 seconds) to prevent infinite loops
   const MAX_POLLING_DURATION_MS = 180000;
@@ -864,6 +874,159 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     }
   }, [currentJobId, updateJob, saveResults, refetchJobs, dateFilterEnabled, dateFrom, dateTo, toast]);
 
+  // Bright Data status checker
+  const checkBrightDataStatus = useCallback(async (
+    snapshotId: string,
+    startTime: number,
+  ) => {
+    // Check for timeout
+    const elapsedMs = Date.now() - startTime;
+    if (elapsedMs > MAX_POLLING_DURATION_MS) {
+      console.warn(`Bright Data polling timeout after ${Math.round(elapsedMs / 1000)}s`);
+      setJobStatus("failed");
+      setIsSearching(false);
+      setPollingStartTime(null);
+      
+      if (currentJobId) {
+        try {
+          await updateJob({
+            id: currentJobId,
+            updates: {
+              status: "failed",
+              completed_at: new Date().toISOString(),
+              error_message: `Tiempo de espera agotado`,
+            },
+          });
+          refetchJobs();
+        } catch (updateError) {
+          console.error("Error updating job status:", updateError);
+        }
+      }
+      
+      toast({
+        title: "Tiempo agotado",
+        description: "La búsqueda con Bright Data tardó demasiado.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const result = await brightdataApi.checkStatus(snapshotId, platform);
+
+      if (!result.success || !result.data) {
+        throw new Error(result.error || "Error al verificar estado");
+      }
+
+      const data = result.data;
+
+      if (data.status === "completed") {
+        setJobStatus("completed");
+        setProgress(100);
+        setProgressMessage("¡Completado!");
+        setIsSearching(false);
+        setPollingStartTime(null);
+
+        const processed = processBackendResults((data.items || []) as SocialSearchResult[], platform);
+        setRawResultsCount(data.rawCount || processed.length);
+        setFilteredResultsCount(processed.length);
+        setKeywordFilteredCount(processed.length);
+        setResults(processed);
+
+        // Save to database
+        if (currentJobId && processed.length > 0) {
+          try {
+            await updateJob({
+              id: currentJobId,
+              updates: {
+                status: "completed",
+                completed_at: new Date().toISOString(),
+                results_count: processed.length,
+                metadata: { provider: "brightdata" },
+              },
+            });
+            
+            await saveResults({
+              jobId: currentJobId,
+              results: processed.map((r) => ({
+                platform: r.platform,
+                external_id: r.id,
+                title: r.title || "",
+                description: r.description || "",
+                author_name: r.author?.name || "",
+                author_username: r.author?.username || "",
+                author_url: r.author?.url || "",
+                author_avatar_url: r.author?.avatarUrl,
+                author_verified: r.author?.verified,
+                author_followers: r.author?.followers,
+                likes: r.metrics?.likes || 0,
+                comments: r.metrics?.comments || 0,
+                shares: r.metrics?.shares || 0,
+                views: r.metrics?.views,
+                engagement: r.metrics?.engagement,
+                published_at: r.publishedAt,
+                url: r.url || "",
+                content_type: r.contentType || "post",
+                hashtags: r.hashtags,
+                mentions: r.mentions,
+                raw_data: JSON.parse(JSON.stringify(r.raw || {})),
+              })),
+            });
+            
+            refetchJobs();
+          } catch (saveError) {
+            console.error("Error saving to database:", saveError);
+          }
+        }
+
+        toast({
+          title: "Búsqueda completada (Bright Data)",
+          description: `Se encontraron ${processed.length} resultados en ${config.label}`,
+        });
+      } else if (data.status === "failed") {
+        setJobStatus("failed");
+        setIsSearching(false);
+        setPollingStartTime(null);
+
+        if (currentJobId) {
+          try {
+            await updateJob({
+              id: currentJobId,
+              updates: {
+                status: "failed",
+                completed_at: new Date().toISOString(),
+                error_message: data.error || "Error desconocido",
+              },
+            });
+            refetchJobs();
+          } catch (updateError) {
+            console.error("Error updating job status:", updateError);
+          }
+        }
+
+        toast({
+          title: "Error en la búsqueda",
+          description: data.error || "Error con Bright Data",
+          variant: "destructive",
+        });
+      } else {
+        // Still running
+        const remainingMs = MAX_POLLING_DURATION_MS - elapsedMs;
+        const remainingSecs = Math.ceil(remainingMs / 1000);
+        const timeWarning = remainingSecs < 60 ? ` (${remainingSecs}s restantes)` : "";
+        setProgressMessage(`Extrayendo datos con Bright Data...${timeWarning}`);
+        setProgress(Math.min(80, 20 + (elapsedMs / MAX_POLLING_DURATION_MS) * 60));
+        
+        setTimeout(() => checkBrightDataStatus(snapshotId, startTime), 3000);
+      }
+    } catch (error) {
+      console.error("Error checking Bright Data status:", error);
+      setJobStatus("failed");
+      setIsSearching(false);
+      setPollingStartTime(null);
+    }
+  }, [platform, config.label, toast, currentJobId, updateJob, saveResults, refetchJobs, MAX_POLLING_DURATION_MS]);
+
   const handleSearch = async () => {
     if (!searchValue.trim()) {
       toast({
@@ -877,7 +1040,8 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     setIsSearching(true);
     setJobStatus("running");
     setProgress(5);
-    setProgressMessage("Conectando con " + config.label + "...");
+    const providerLabel = dataProvider === "brightdata" ? "Bright Data" : "Apify";
+    setProgressMessage(`Conectando con ${config.label} (${providerLabel})...`);
     setResults([]);
     setCurrentJobId(null);
     setRawResultsCount(0);
@@ -898,8 +1062,62 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       
       setCurrentJobId(job.id);
 
-      // YOUTUBE SEARCH: streamers/youtube-scraper handles BOTH videos AND shorts in one run
-      if (platform === "youtube") {
+      // =====================================================
+      // BRIGHT DATA FLOW
+      // =====================================================
+      if (dataProvider === "brightdata") {
+        const effectivePlatform = (platform === "reddit" && searchType === "comments") 
+          ? "reddit_comments" 
+          : platform;
+
+        const result = await brightdataApi.startScrape({
+          platform: effectivePlatform,
+          query: (searchType === "query" || searchType === "comments") ? searchValue : undefined,
+          username: searchType === "username" ? searchValue.replace("@", "") : undefined,
+          hashtag: searchType === "hashtag" ? searchValue.replace("#", "") : undefined,
+          companyUrl: searchType === "companyUrl" ? searchValue : undefined,
+          channelUrl: searchType === "channelUrl" ? searchValue : undefined,
+          subreddit: searchType === "subreddit" ? searchValue.replace("r/", "") : undefined,
+          taggedUsername: searchType === "taggedPosts" ? searchValue.replace("@", "") : undefined,
+          captionFilter: (platform === "instagram" && searchType === "hashtag" && captionFilter.trim()) 
+            ? captionFilter.trim() 
+            : undefined,
+          maxResults,
+          searchType,
+        });
+
+        if (!result.success || !result.data) {
+          throw new Error(result.error || "Error al iniciar la búsqueda con Bright Data");
+        }
+
+        const data = result.data;
+
+        if (data.success && data.runId) {
+          setRunId(data.runId);
+          setProgress(10);
+          
+          await updateJob({
+            id: job.id,
+            updates: {
+              run_id: data.runId,
+              dataset_id: data.datasetId,
+              status: "running",
+              metadata: { provider: "brightdata" },
+            },
+          });
+          
+          const startTime = Date.now();
+          setPollingStartTime(startTime);
+          setTimeout(() => checkBrightDataStatus(data.runId!, startTime), 3000);
+        } else {
+          throw new Error(data.error || "Error al iniciar la búsqueda con Bright Data");
+        }
+      }
+      // =====================================================
+      // APIFY FLOW (original)
+      // =====================================================
+      else if (platform === "youtube") {
+        // YOUTUBE SEARCH: streamers/youtube-scraper handles BOTH videos AND shorts in one run
         setProgressMessage("Buscando videos y shorts...");
         
         // Determine valid YouTube upload date filter
@@ -1194,6 +1412,43 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
             </div>
           </CollapsibleContent>
         </Collapsible>
+        
+        {/* Data Provider Toggle - Experimental Feature */}
+        <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+          <div className="flex items-center gap-2">
+            <FlaskConical className="h-4 w-4 text-muted-foreground" />
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="provider-toggle" className="text-sm font-medium cursor-pointer">
+                  Proveedor de datos
+                </Label>
+                <Badge variant={dataProvider === "brightdata" ? "default" : "secondary"} className="text-xs">
+                  {dataProvider === "brightdata" ? "Experimental" : "Estable"}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {dataProvider === "apify" 
+                  ? "Apify: Proveedor actual, estable y probado" 
+                  : "Bright Data: Nuevo proveedor en pruebas, mayor cobertura potencial"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={cn("text-xs", dataProvider === "apify" ? "font-medium" : "text-muted-foreground")}>
+              Apify
+            </span>
+            <Switch
+              id="provider-toggle"
+              checked={dataProvider === "brightdata"}
+              onCheckedChange={(checked) => setDataProvider(checked ? "brightdata" : "apify")}
+              disabled={isSearching}
+            />
+            <span className={cn("text-xs", dataProvider === "brightdata" ? "font-medium" : "text-muted-foreground")}>
+              Bright Data
+            </span>
+          </div>
+        </div>
+        
         {/* Platform Selection */}
         <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
           {(Object.keys(PLATFORM_CONFIG) as SelectablePlatform[]).map((plat) => {

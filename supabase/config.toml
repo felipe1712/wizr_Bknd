@@ -47,3 +47,9 @@ verify_jwt = false
 
 [functions.scheduled-unified-search]
 verify_jwt = false
+
+[functions.brightdata-scrape]
+verify_jwt = false
+
+[functions.brightdata-status]
+verify_jwt = false
