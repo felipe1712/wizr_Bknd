@@ -91,22 +91,25 @@ serve(async (req) => {
 
     // Build input payload - ONLY TikTok and YouTube keyword search
     let inputPayload: Record<string, unknown>[] = [];
+    let discoverBy = "keyword"; // Default for keyword search
 
     switch (platform) {
       case "tiktok":
-        // TikTok uses 'search_keyword' parameter (from Bright Data dashboard)
-        if (hashtag) {
-          inputPayload = [{ search_keyword: hashtag.replace(/^#/, ""), num_of_posts: maxResults }];
-        } else if (query) {
-          inputPayload = [{ search_keyword: query, num_of_posts: maxResults }];
-        }
-        break;
+        // TikTok - need to confirm exact field names from curl example
+        // For now, skip TikTok until we have the correct format
+        throw new Error("TikTok via Bright Data is being configured. Please use Apify for now.");
 
       case "youtube":
       case "youtube_shorts":
-        // YouTube uses 'keyword' parameter with optional date filters
+        // YouTube uses 'keyword' parameter based on the curl example
         if (query) {
-          inputPayload = [{ keyword: query, num_of_posts: maxResults }];
+          inputPayload = [{ 
+            keyword: query, 
+            num_of_posts: String(maxResults), // API expects string
+            start_date: "",
+            end_date: "",
+            country: ""
+          }];
         }
         break;
 
@@ -120,18 +123,19 @@ serve(async (req) => {
 
     console.log(`Bright Data scrape: platform=${platform}, dataset=${datasetId}, inputs=${JSON.stringify(inputPayload)}`);
 
-    // Trigger async scrape via Bright Data API
-    const triggerResponse = await fetch(
-      `https://api.brightdata.com/datasets/v3/trigger?dataset_id=${datasetId}&include_errors=true`,
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${BRIGHTDATA_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(inputPayload),
-      }
-    );
+    // Trigger scrape via Bright Data API using the correct endpoint format
+    // Based on curl example: /datasets/v3/scrape?dataset_id=X&type=discover_new&discover_by=keyword
+    const apiUrl = `https://api.brightdata.com/datasets/v3/scrape?dataset_id=${datasetId}&notify=false&include_errors=true&type=discover_new&discover_by=${discoverBy}`;
+    
+    const triggerResponse = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${BRIGHTDATA_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      // Wrap inputs in {"input": [...]} as shown in the curl example
+      body: JSON.stringify({ input: inputPayload }),
+    });
 
     if (!triggerResponse.ok) {
       const errorText = await triggerResponse.text();
