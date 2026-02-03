@@ -18,6 +18,11 @@ interface FkProfile {
   display_name: string | null;
 }
 
+interface PostKPI {
+  value?: number;
+  formatted_value?: string;
+}
+
 interface PostData {
   url?: string;
   link?: string;
@@ -37,6 +42,75 @@ interface PostData {
   date?: string;
   created_time?: string;
   published_at?: string;
+  kpi?: {
+    page_posts_likes_count?: PostKPI;
+    page_posts_comments_count?: PostKPI;
+    page_posts_shares_count?: PostKPI;
+    page_total_engagement_count?: PostKPI;
+    page_video_posts_views_count?: PostKPI;
+    [key: string]: PostKPI | undefined;
+  };
+}
+
+// Parse Fanpage Karma date format: "Mon Feb 02 20:00:00 UTC 2026"
+function parseFKDate(dateStr: string): string | null {
+  if (!dateStr) return null;
+  
+  // If already ISO format, extract date part
+  if (dateStr.includes("T") && dateStr.includes("-")) {
+    return dateStr.split("T")[0];
+  }
+  
+  // Parse FK format: "Mon Feb 02 20:00:00 UTC 2026" or similar
+  // The month names and format vary, so we use Date parsing
+  try {
+    // Replace any truncated timezone (like "U" for UTC)
+    let normalized = dateStr.replace(/\s+U$/, " UTC").replace(/\s+UT$/, " UTC");
+    
+    const parsed = new Date(normalized);
+    if (!isNaN(parsed.getTime())) {
+      // Format as YYYY-MM-DD
+      const year = parsed.getUTCFullYear();
+      const month = String(parsed.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(parsed.getUTCDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+  } catch {
+    // Fall through
+  }
+  
+  // Last resort: try to extract year-month-day pattern from any format
+  const isoMatch = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return isoMatch[0];
+  }
+  
+  return null;
+}
+
+// Extract metrics from post (handles both root-level and nested kpi structure)
+function extractPostMetrics(post: PostData): { likes: number; comments: number; shares: number; views: number; engagement: number } {
+  let likes = post.likes || 0;
+  let comments = post.comments || 0;
+  let shares = post.shares || 0;
+  let views = post.views || 0;
+  let engagement = post.engagement || post.interactions || 0;
+  
+  // If metrics are nested in kpi object
+  if (post.kpi) {
+    likes = post.kpi.page_posts_likes_count?.value ?? likes;
+    comments = post.kpi.page_posts_comments_count?.value ?? comments;
+    shares = post.kpi.page_posts_shares_count?.value ?? shares;
+    views = post.kpi.page_video_posts_views_count?.value ?? views;
+    engagement = post.kpi.page_total_engagement_count?.value ?? engagement;
+  }
+  
+  // Calculate engagement if not provided
+  if (!engagement) {
+    engagement = likes + comments + shares;
+  }
+  
+  return { likes, comments, shares, views, engagement };
 }
 
 serve(async (req) => {
@@ -88,13 +162,14 @@ serve(async (req) => {
     const formatDate = (d: Date) => d.toISOString().split("T")[0];
     const period = `${formatDate(startDate)}_${formatDate(endDate)}`;
 
-    // Calculate yesterday's date for top posts
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = formatDate(yesterday);
-    const yesterdayPeriod = `${yesterdayStr}_${yesterdayStr}`;
+    // For top posts, we look at the last 7 days to increase probability of capturing data
+    const topPostsEndDate = new Date();
+    topPostsEndDate.setDate(topPostsEndDate.getDate() - 1); // yesterday
+    const topPostsStartDate = new Date();
+    topPostsStartDate.setDate(topPostsStartDate.getDate() - 7);
+    const topPostsPeriod = `${formatDate(topPostsStartDate)}_${formatDate(topPostsEndDate)}`;
 
-    const results: { profile: string; success: boolean; error?: string; topPost?: boolean }[] = [];
+    const results: { profile: string; success: boolean; error?: string; topPosts?: number }[] = [];
 
     // Process each profile
     for (const profile of profiles as FkProfile[]) {
@@ -210,80 +285,99 @@ serve(async (req) => {
           .update({ last_synced_at: new Date().toISOString() })
           .eq("id", profile.id);
 
-        // ============ FETCH TOP POST OF YESTERDAY ============
-        let topPostSaved = false;
+        // ============ FETCH TOP POSTS OF LAST 7 DAYS ============
+        let topPostsCount = 0;
         try {
-          const postsUrl = `${FANPAGE_KARMA_API_BASE}/${profile.network}/${encodeURIComponent(profile.profile_id)}/posts?token=${FANPAGE_KARMA_API_KEY}&period=${yesterdayPeriod}`;
+          const postsUrl = `${FANPAGE_KARMA_API_BASE}/${profile.network}/${encodeURIComponent(profile.profile_id)}/posts?token=${FANPAGE_KARMA_API_KEY}&period=${topPostsPeriod}`;
           
-          console.log(`Fetching posts: ${profile.network}/${profile.profile_id} for ${yesterdayStr}`);
+          console.log(`Fetching posts: ${profile.network}/${profile.profile_id} for ${topPostsPeriod}`);
           
-           const postsResponse = await fetch(postsUrl);
-           const postsText = await postsResponse.text();
-           const trimmedPostsText = postsText.trim();
+          const postsResponse = await fetch(postsUrl);
+          const postsText = await postsResponse.text();
+          const trimmedPostsText = postsText.trim();
+          
+          // Fanpage Karma may return valid JSON ending in either '}' (object) or ']' (array).
+          // We only want to skip clearly truncated responses.
+          const looksComplete =
+            trimmedPostsText.endsWith("}") || trimmedPostsText.endsWith("]");
+
+          if (postsResponse.ok && looksComplete) {
+            const sanitizedPostsText = trimmedPostsText.replace(/:\s*NaN\s*(,|})/g, ': null$1');
+            const postsData = JSON.parse(sanitizedPostsText);
+            // Handle both { data: { posts: [...] } } and { data: [...] } structures
+            const rawPosts = postsData.data?.posts || postsData.data || [];
+            const posts: PostData[] = Array.isArray(rawPosts) ? rawPosts : [];
            
-           // Fanpage Karma may return valid JSON ending in either '}' (object) or ']' (array).
-           // We only want to skip clearly truncated responses.
-           const looksComplete =
-             trimmedPostsText.endsWith("}") || trimmedPostsText.endsWith("]");
-
-           if (postsResponse.ok && looksComplete) {
-             const sanitizedPostsText = trimmedPostsText.replace(/:\s*NaN\s*(,|})/g, ': null$1');
-             const postsData = JSON.parse(sanitizedPostsText);
-             const posts: PostData[] = postsData.data || [];
-            
             if (posts.length > 0) {
-              // Find post with highest engagement
-              const topPost = posts.reduce((best: PostData | null, current: PostData) => {
-                const currentEngagement = current.engagement || current.interactions || 
-                  ((current.likes || 0) + (current.comments || 0) + (current.shares || 0));
-                const bestEngagement = best ? (best.engagement || best.interactions || 
-                  ((best.likes || 0) + (best.comments || 0) + (best.shares || 0))) : 0;
-                return currentEngagement > bestEngagement ? current : best;
-              }, null);
+              // Group posts by date
+              const postsByDate = new Map<string, PostData[]>();
+              
+              for (const post of posts) {
+                // Get date from post (handle FK's text format like "Mon Feb 02 20:00:00 UTC 2026")
+                const postDateRaw = post.date || post.created_time || post.published_at;
+                const postDate = parseFKDate(postDateRaw || "");
+                if (!postDate) continue;
+                
+                if (!postsByDate.has(postDate)) {
+                  postsByDate.set(postDate, []);
+                }
+                postsByDate.get(postDate)!.push(post);
+              }
+              
+              // For each date, save the top post
+              for (const [postDate, datePosts] of postsByDate) {
+                const topPost = datePosts.reduce((best: PostData | null, current: PostData) => {
+                  const currentMetrics = extractPostMetrics(current);
+                  const bestMetrics = best ? extractPostMetrics(best) : { engagement: 0 };
+                  return currentMetrics.engagement > bestMetrics.engagement ? current : best;
+                }, null);
 
-              if (topPost) {
-                const engagement = topPost.engagement || topPost.interactions || 
-                  ((topPost.likes || 0) + (topPost.comments || 0) + (topPost.shares || 0));
+                if (topPost) {
+                  const metrics = extractPostMetrics(topPost);
 
-                // Upsert top post (update if exists for same profile/network/date)
-                const { error: topPostError } = await supabase
-                  .from("fk_daily_top_posts")
-                  .upsert({
-                    fk_profile_id: profile.id,
-                    network: profile.network,
-                    post_date: yesterdayStr,
-                    post_url: topPost.url || topPost.link || null,
-                    post_content: topPost.content || topPost.text || topPost.message || topPost.description || null,
-                    post_image_url: topPost.image || topPost.picture || topPost.thumbnail || null,
-                    engagement: engagement,
-                    likes: topPost.likes || 0,
-                    comments: topPost.comments || 0,
-                    shares: topPost.shares || 0,
-                    views: topPost.views || 0,
-                    raw_data: topPost,
-                  }, {
-                    onConflict: 'fk_profile_id,network,post_date'
-                  });
+                  // Upsert top post (update if exists for same profile/network/date)
+                  const { error: topPostError } = await supabase
+                    .from("fk_daily_top_posts")
+                    .upsert({
+                      fk_profile_id: profile.id,
+                      network: profile.network,
+                      post_date: postDate,
+                      post_url: topPost.url || topPost.link || null,
+                      post_content: topPost.content || topPost.text || topPost.message || topPost.description || null,
+                      post_image_url: topPost.image || topPost.picture || topPost.thumbnail || null,
+                      engagement: metrics.engagement,
+                      likes: metrics.likes,
+                      comments: metrics.comments,
+                      shares: metrics.shares,
+                      views: metrics.views,
+                      raw_data: topPost,
+                    }, {
+                      onConflict: 'fk_profile_id,network,post_date'
+                    });
 
-                if (!topPostError) {
-                  topPostSaved = true;
-                  console.log(`Saved top post for ${profile.profile_id} (${profile.network}): ${engagement} engagement`);
-                } else {
-                  console.error(`Error saving top post for ${profile.profile_id}:`, topPostError.message);
+                  if (!topPostError) {
+                    topPostsCount++;
+                  } else {
+                    console.error(`Error saving top post for ${profile.profile_id} (${postDate}):`, topPostError.message);
+                  }
                 }
               }
+              
+              if (topPostsCount > 0) {
+                console.log(`Saved ${topPostsCount} top posts for ${profile.profile_id} (${profile.network})`);
+              }
             } else {
-              console.log(`No posts found for ${profile.profile_id} on ${yesterdayStr}`);
+              console.log(`No posts found for ${profile.profile_id} in the last 7 days`);
             }
-           } else if (!looksComplete) {
-             console.warn(`Posts response looked truncated for ${profile.profile_id} (${profile.network})`);
-           }
+          } else if (!looksComplete) {
+            console.warn(`Posts response looked truncated for ${profile.profile_id} (${profile.network})`);
+          }
         } catch (postErr) {
           console.error(`Error fetching posts for ${profile.profile_id}:`, postErr);
           // Don't fail the whole sync if posts fail
         }
         
-        results.push({ profile: profile.profile_id, success: true, topPost: topPostSaved });
+        results.push({ profile: profile.profile_id, success: true, topPosts: topPostsCount });
 
         // Small delay to avoid rate limiting
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -299,7 +393,7 @@ serve(async (req) => {
 
     const successful = results.filter((r) => r.success).length;
     const failed = results.filter((r) => !r.success).length;
-    const topPostsSaved = results.filter((r) => r.topPost).length;
+    const topPostsSaved = results.reduce((sum, r) => sum + (r.topPosts || 0), 0);
 
     console.log(`Scheduled sync complete: ${successful} success, ${failed} failed, ${topPostsSaved} top posts saved`);
 
