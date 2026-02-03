@@ -250,13 +250,15 @@ serve(async (req) => {
         if (profile.network === "facebook") {
           followers = extractValue("page_follower") || extractValue("page_fans");
           engagementRate = extractValue("page_engagement_rate") || extractValue("page_engagement");
-          followerGrowth = extractValue("page_follower_growth") || extractValue("page_fans_growth");
+          // FK uses page_fans_growth_percent (value is a decimal, e.g. 0.0076 for 0.76%)
+          followerGrowth = extractValue("page_fans_growth_percent") || extractValue("page_follower_growth") || extractValue("page_fans_growth");
           postsPerDay = extractValue("page_posts_per_day");
           ppi = extractValue("page_page_performance_index") || extractValue("page_ppi");
         } else if (profile.network === "instagram") {
           followers = extractValue("profile_followers") || extractValue("profile_follower");
           engagementRate = extractValue("profile_engagement") || extractValue("profile_engagement_rate");
-          followerGrowth = extractValue("profile_followers_growth") || extractValue("profile_follower_growth");
+          // FK uses profile_followers_growth_percent (value is a decimal, e.g. 0.0088 for 0.88%)
+          followerGrowth = extractValue("profile_followers_growth_percent") || extractValue("profile_followers_growth");
           postsPerDay = extractValue("profile_posts_per_day");
           ppi = extractValue("profile_page_performance_index") || extractValue("profile_ppi");
         } else if (profile.network === "tiktok") {
@@ -268,7 +270,8 @@ serve(async (req) => {
             extractValue("tiktoker_fans_count") ||
             extractValue("tiktoker_follower");
           engagementRate = extractValue("tiktoker_engagement") || extractValue("tiktoker_engagement_rate");
-          followerGrowth = extractValue("tiktoker_followers_growth") || extractValue("tiktoker_follower_growth");
+          // FK uses tiktoker_followers_growth_percent
+          followerGrowth = extractValue("tiktoker_followers_growth_percent") || extractValue("tiktoker_followers_growth");
           postsPerDay = extractValue("tiktoker_posts_per_day");
           ppi = extractValue("tiktoker_page_performance_index") || extractValue("tiktoker_ppi");
         } else if (profile.network === "youtube") {
@@ -285,7 +288,8 @@ serve(async (req) => {
           // Twitter/X uses profile_* prefix in Fanpage Karma
           followers = extractValue("profile_followers") || extractValue("profile_follower");
           engagementRate = extractValue("profile_engagement") || extractValue("profile_engagement_rate");
-          followerGrowth = extractValue("profile_followers_growth") || extractValue("profile_follower_growth");
+          // FK uses profile_followers_growth_percent
+          followerGrowth = extractValue("profile_followers_growth_percent") || extractValue("profile_followers_growth");
           postsPerDay = extractValue("profile_posts_per_day") || extractValue("profile_tweets_per_day");
           ppi = extractValue("profile_page_performance_index") || extractValue("profile_ppi");
         } else if (profile.network === "linkedin") {
@@ -296,25 +300,26 @@ serve(async (req) => {
           ppi = extractValue("page_page_performance_index") || extractValue("page_ppi");
         }
 
+        // Build the upsert payload
+        const kpiPayload = {
+          fk_profile_id: profile.id,
+          period_start: formatDate(startDate),
+          period_end: formatDate(endDate),
+          followers,
+          follower_growth_percent: followerGrowth,
+          engagement_rate: engagementRate,
+          posts_per_day: postsPerDay,
+          page_performance_index: ppi,
+          raw_data: kpiDataObj,
+          fetched_at: new Date().toISOString(),
+        };
+
         // Upsert KPI record (avoid duplicate key errors when re-running the sync)
         const { error: kpiUpsertError } = await supabase
           .from("fk_profile_kpis")
-          .upsert(
-            {
-              fk_profile_id: profile.id,
-              period_start: formatDate(startDate),
-              period_end: formatDate(endDate),
-              followers,
-              follower_growth_percent: followerGrowth,
-              engagement_rate: engagementRate,
-              posts_per_day: postsPerDay,
-              page_performance_index: ppi,
-              raw_data: kpiDataObj,
-            },
-            {
-              onConflict: "fk_profile_id,period_start,period_end",
-            }
-          );
+          .upsert(kpiPayload, {
+            onConflict: "fk_profile_id,period_start,period_end",
+          });
 
         if (kpiUpsertError) {
           // Don't block top posts just because KPI upsert failed for this profile
