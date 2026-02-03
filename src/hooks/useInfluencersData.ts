@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
-import { subDays } from "date-fns";
+import { format, subDays } from "date-fns";
 
 export interface InfluencerMetrics {
   domain: string;
@@ -205,7 +205,10 @@ export function useInfluencersData(
     const dailyMap = new Map<string, Record<string, number>>();
     for (let i = 0; i < timeRangeDays; i++) {
       const date = subDays(new Date(), timeRangeDays - 1 - i);
-      const dateStr = date.toISOString().split("T")[0];
+      // IMPORTANT: Use the same date key logic as the mention bucketing below.
+      // Using toISOString() can shift the day depending on timezone and cause
+      // mismatches (all zeros) when dailyMap doesn't contain the mention date key.
+      const dateStr = format(date, "yyyy-MM-dd");
       const initialData: Record<string, number> = {};
       topDomains.forEach((d) => {
         initialData[chartKeyByDomain[d]] = 0;
@@ -218,7 +221,7 @@ export function useInfluencersData(
       const domain = normalizeDomain(mention.source_domain || "unknown");
       if (!topDomains.includes(domain)) return;
 
-      const date = new Date(mention.created_at).toISOString().split("T")[0];
+      const date = format(new Date(mention.created_at), "yyyy-MM-dd");
       
       if (dailyMap.has(date)) {
         const dayData = dailyMap.get(date)!;
