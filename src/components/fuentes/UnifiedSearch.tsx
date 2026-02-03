@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { firecrawlApi, type EntityForSearch } from "@/lib/api/firecrawl";
 import { cn } from "@/lib/utils";
+import { deduplicateBatch, type DuplicateCandidate } from "@/lib/utils/semanticDedup";
 import {
   Search,
   Zap,
@@ -146,6 +147,24 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
   const [isRunning, setIsRunning] = useState(false);
   const [jobs, setJobs] = useState<SearchJob[]>([]);
   const [showDetails, setShowDetails] = useState(false);
+  const [existingMentions, setExistingMentions] = useState<DuplicateCandidate[]>([]);
+  const [duplicatesSkipped, setDuplicatesSkipped] = useState(0);
+
+  // Load existing mentions for semantic deduplication
+  useEffect(() => {
+    const loadExistingMentions = async () => {
+      const { data } = await supabase
+        .from("mentions")
+        .select("id, title, description, url")
+        .eq("project_id", projectId)
+        .limit(500);
+      
+      if (data) {
+        setExistingMentions(data);
+      }
+    };
+    loadExistingMentions();
+  }, [projectId]);
   
   // Calculate progress
   const progress = useMemo(() => {
@@ -250,6 +269,8 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
     setJobs(jobList);
 
     let totalSaved = 0;
+    let totalDuplicatesSkipped = 0;
+    const allExistingMentions = [...existingMentions];
 
     // Execute searches in parallel (batched)
     const updateJob = (jobId: string, updates: Partial<SearchJob>) => {
@@ -339,9 +360,9 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
           }
         }
 
-        // Save results to mentions table
+        // Save results to mentions table with semantic deduplication
         if (results.length > 0) {
-          const mentionsToSave = results.map(r => ({
+          const mentionsToCheck = results.map(r => ({
             project_id: projectId,
             url: r.url,
             title: r.title || null,
@@ -352,12 +373,28 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
             published_at: r.published_at || null,
           }));
 
-          const { error: saveError } = await supabase
-            .from("mentions")
-            .upsert(mentionsToSave, { onConflict: "project_id,url" });
+          // Apply semantic deduplication
+          const { unique, duplicates } = deduplicateBatch(
+            mentionsToCheck,
+            allExistingMentions,
+            0.7 // 70% similarity threshold
+          );
 
-          if (!saveError) {
-            totalSaved += mentionsToSave.length;
+          totalDuplicatesSkipped += duplicates.length;
+
+          if (unique.length > 0) {
+            const { error: saveError, data: savedData } = await supabase
+              .from("mentions")
+              .upsert(unique, { onConflict: "project_id,url" })
+              .select("id, title, description, url");
+
+            if (!saveError) {
+              totalSaved += unique.length;
+              // Add newly saved mentions to existing list for cross-job deduplication
+              if (savedData) {
+                allExistingMentions.push(...savedData);
+              }
+            }
           }
         }
 
@@ -375,6 +412,7 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
     await Promise.allSettled(promises);
 
     setIsRunning(false);
+    setDuplicatesSkipped(totalDuplicatesSkipped);
 
     // Calculate final stats
     const finalJobs = jobList;
@@ -384,11 +422,11 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
 
     toast({
       title: "Búsqueda completada",
-      description: `${totalFound} menciones encontradas. ${successCount} búsquedas exitosas${failedCount > 0 ? `, ${failedCount} fallidas` : ""}.`,
+      description: `${totalFound} menciones encontradas, ${totalSaved} guardadas${totalDuplicatesSkipped > 0 ? `, ${totalDuplicatesSkipped} duplicados omitidos` : ""}. ${successCount} búsquedas exitosas${failedCount > 0 ? `, ${failedCount} fallidas` : ""}.`,
     });
 
     onSearchComplete(totalFound, totalSaved);
-  }, [entities, selectedEntities, selectedPlatforms, timeRange, maxResultsPerPlatform, projectId, toast, onSearchComplete]);
+  }, [entities, selectedEntities, selectedPlatforms, timeRange, maxResultsPerPlatform, projectId, toast, onSearchComplete, existingMentions]);
 
   if (entities.length === 0) {
     return (

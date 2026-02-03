@@ -11,6 +11,7 @@ interface NotificationCardProps {
   notification: AlertNotification;
   onMarkAsRead: (id: string) => void;
   onDismiss: (id: string) => void;
+  compact?: boolean;
 }
 
 const severityConfig = {
@@ -38,6 +39,7 @@ export function NotificationCard({
   notification,
   onMarkAsRead,
   onDismiss,
+  compact = false,
 }: NotificationCardProps) {
   const severity = severityConfig[notification.severity] || severityConfig.warning;
   const Icon = severity.icon;
@@ -47,6 +49,42 @@ export function NotificationCard({
       onMarkAsRead(notification.id);
     }
   };
+
+  if (compact) {
+    return (
+      <div
+        className={cn(
+          "rounded-lg p-3 transition-all cursor-pointer hover:bg-accent/50",
+          !notification.is_read && "border-l-2 border-l-primary bg-accent/30",
+          severity.bg
+        )}
+        onClick={handleClick}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <Icon className={cn("h-3.5 w-3.5 shrink-0", severity.color)} />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium truncate">{notification.title}</p>
+              <p className="text-[10px] text-muted-foreground line-clamp-1">
+                {notification.message}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDismiss(notification.id);
+            }}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Card

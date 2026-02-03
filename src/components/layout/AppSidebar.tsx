@@ -3,9 +3,7 @@ import {
   LayoutDashboard,
   MessageSquareText,
   GitCompare,
-  Bell,
   Users,
-  TrendingUp,
   Database,
   FileBarChart,
   FolderOpen,
@@ -56,7 +54,7 @@ const analysisItems = [
     url: "/dashboard/panorama", 
     icon: LayoutDashboard, 
     tourId: "nav-panorama",
-    description: "Vista general de actividad y sentimiento"
+    description: "Vista general, tendencias y alertas unificadas"
   },
   { 
     title: "Semántica", 
@@ -79,23 +77,9 @@ const analysisItems = [
     tourId: "nav-influenciadores",
     description: "Fuentes con mayor impacto"
   },
-  { 
-    title: "Tendencias", 
-    url: "/dashboard/tendencias", 
-    icon: TrendingUp, 
-    tourId: "nav-tendencias",
-    description: "Evolución temporal de menciones"
-  },
 ];
 
 const outputItems = [
-  { 
-    title: "Alertas", 
-    url: "/dashboard/alertas", 
-    icon: Bell, 
-    tourId: "nav-alertas",
-    description: "Configurar notificaciones automáticas"
-  },
   { 
     title: "Reportes", 
     url: "/dashboard/reportes", 

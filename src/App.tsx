@@ -16,12 +16,10 @@ import ProjectSpecBuilder from "./pages/ProjectSpecBuilder";
 import NotFound from "./pages/NotFound";
 
 // Dashboard pages
-import PanoramaPage from "./pages/dashboard/PanoramaPage";
+import InsightsPage from "./pages/dashboard/InsightsPage";
 import SemanticaPage from "./pages/dashboard/SemanticaPage";
 import ComparativaPage from "./pages/dashboard/ComparativaPage";
-import AlertasPage from "./pages/dashboard/AlertasPage";
 import InfluenciadoresPage from "./pages/dashboard/InfluenciadoresPage";
-import TendenciasPage from "./pages/dashboard/TendenciasPage";
 import FuentesPage from "./pages/dashboard/FuentesPage";
 import ReportesPage from "./pages/dashboard/ReportesPage";
 import ProjectsPage from "./pages/dashboard/ProjectsPage";
@@ -120,14 +118,18 @@ const AppRoutes = () => {
       >
         <Route index element={<DashboardHomePage />} />
         <Route path="inicio" element={<DashboardHomePage />} />
-        <Route path="panorama" element={<PanoramaPage />} />
+        <Route path="panorama" element={<InsightsPage />} />
         <Route path="semantica" element={<SemanticaPage />} />
         <Route path="comparativa" element={<ComparativaPage />} />
-        <Route path="alertas" element={<AlertasPage />} />
         <Route path="influenciadores" element={<InfluenciadoresPage />} />
-        <Route path="tendencias" element={<TendenciasPage />} />
         <Route path="rankings" element={<RankingsPage />} />
         <Route path="fuentes" element={<FuentesPage />} />
+        <Route path="reportes" element={<ReportesPage />} />
+        <Route path="proyectos" element={<ProjectsPage />} />
+        <Route path="configuracion" element={<ConfiguracionPage />} />
+        {/* Legacy routes - redirect to new unified views */}
+        <Route path="tendencias" element={<InsightsPage />} />
+        <Route path="alertas" element={<InsightsPage />} />
         <Route path="reportes" element={<ReportesPage />} />
         <Route path="proyectos" element={<ProjectsPage />} />
         <Route path="configuracion" element={<ConfiguracionPage />} />
