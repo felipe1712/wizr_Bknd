@@ -598,8 +598,12 @@ type FacebookFastFailResult = {
 // Detects the common case where the run starts but immediately FAILS due to transient upstream 5xx.
 // We only use this to decide whether to auto-fallback to the next actor.
 async function detectFacebookFastFail(apiToken: string, runId: string): Promise<FacebookFastFailResult> {
-  // A few short polls (<= ~9s) to avoid delaying the UI too much.
-  const delays = [1500, 2500, 3500];
+  // A few short polls (<= ~10s) to avoid delaying the UI too much.
+  // NOTE: Sometimes Apify marks the run as FAILED before logs are fully available.
+  // In that case, we retry fetching logs briefly and still fall back if the run failed
+  // very quickly (strong signal of transient upstream blocks for Facebook).
+  const delays = [800, 1500, 2000, 2500, 3000];
+  const startedAt = Date.now();
 
   for (const d of delays) {
     await sleep(d);
@@ -615,18 +619,39 @@ async function detectFacebookFastFail(apiToken: string, runId: string): Promise<
 
       if (status === "FAILED" || status === "ABORTED" || status === "TIMED-OUT") {
         // Try to fetch last logs tail to identify 5xx cause.
-        const logTail = await fetchApifyLogTail(apiToken, runId);
+        const logTail = await fetchApifyLogTail(apiToken, runId, { retries: 3, retryDelayMs: 600 });
         const combined = `${logTail || ""}`.toLowerCase();
 
         // Match known transient upstream errors.
-        const is503 = combined.includes("status 503") || combined.includes("\n503") || combined.includes("http 503");
-        const is5xx = is503 || combined.includes("status 502") || combined.includes("status 500") || combined.includes("status 504");
+        const is503 =
+          combined.includes("status 503") ||
+          combined.includes("api request failed with status 503") ||
+          combined.includes("\n503") ||
+          combined.includes("http 503");
+        const is5xx =
+          is503 ||
+          combined.includes("status 502") ||
+          combined.includes("status 500") ||
+          combined.includes("status 504") ||
+          combined.includes("api request failed with status 5");
 
         if (is5xx) {
           return {
             isFastFail: true,
             statusCode: is503 ? 503 : 502,
             reason: `Run ${status} (exitCode=${exitCode ?? "n/a"}). ${logTail ? logTail.split("\n").slice(-6).join("\n") : ""}`,
+          };
+        }
+
+        // If logs are not available yet but the run failed very quickly, treat as fast-fail.
+        // This is primarily to improve reliability for Facebook blocks where the primary actor
+        // fails within seconds and the fallback actor typically succeeds.
+        const elapsedMs = Date.now() - startedAt;
+        if (!logTail && elapsedMs <= 12_000) {
+          return {
+            isFastFail: true,
+            statusCode: 503,
+            reason: `Run ${status} quickly (exitCode=${exitCode ?? "n/a"}) but logs not yet available; assuming transient upstream block and falling back.`,
           };
         }
 
@@ -641,18 +666,35 @@ async function detectFacebookFastFail(apiToken: string, runId: string): Promise<
   return { isFastFail: false };
 }
 
-async function fetchApifyLogTail(apiToken: string, runId: string): Promise<string | null> {
+async function fetchApifyLogTail(
+  apiToken: string,
+  runId: string,
+  opts?: { retries?: number; retryDelayMs?: number }
+): Promise<string | null> {
+  const retries = opts?.retries ?? 0;
+  const retryDelayMs = opts?.retryDelayMs ?? 500;
+
   try {
-    // Build log is usually enough for a diagnostic like "API request failed with status 503".
-    // We keep it small to reduce payload.
-    const res = await fetch(
-      `https://api.apify.com/v2/actor-runs/${encodeURIComponent(runId)}/log?token=${apiToken}&stream=false`
-    );
-    if (!res.ok) return null;
-    const text = await res.text();
-    // Tail last ~40 lines
-    const lines = text.split("\n");
-    return lines.slice(Math.max(0, lines.length - 40)).join("\n");
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      // Build log is usually enough for a diagnostic like "API request failed with status 503".
+      // We keep it small to reduce payload.
+      const res = await fetch(
+        `https://api.apify.com/v2/actor-runs/${encodeURIComponent(runId)}/log?token=${apiToken}&stream=false`
+      );
+      if (res.ok) {
+        const text = await res.text();
+        if (text && text.trim().length > 0) {
+          const lines = text.split("\n");
+          return lines.slice(Math.max(0, lines.length - 40)).join("\n");
+        }
+      }
+
+      if (attempt < retries) {
+        await sleep(retryDelayMs);
+      }
+    }
+
+    return null;
   } catch {
     return null;
   }
