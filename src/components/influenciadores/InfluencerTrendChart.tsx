@@ -5,6 +5,7 @@ import { DailyInfluencerData } from "@/hooks/useInfluencersData";
 interface InfluencerTrendChartProps {
   data: DailyInfluencerData[];
   domains: string[];
+  labels?: Record<string, string>;
 }
 
 const COLORS = [
@@ -15,7 +16,7 @@ const COLORS = [
   "hsl(var(--chart-5))",
 ];
 
-export function InfluencerTrendChart({ data, domains }: InfluencerTrendChartProps) {
+export function InfluencerTrendChart({ data, domains, labels }: InfluencerTrendChartProps) {
   if (data.length === 0 || domains.length === 0) {
     return (
       <Card>
@@ -72,7 +73,7 @@ export function InfluencerTrendChart({ data, domains }: InfluencerTrendChartProp
                 key={domain}
                 type="monotone"
                 dataKey={domain}
-                name={domain}
+                name={labels?.[domain] ?? domain}
                 stroke={COLORS[index % COLORS.length]}
                 strokeWidth={2}
                 dot={false}

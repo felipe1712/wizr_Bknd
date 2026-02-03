@@ -79,6 +79,7 @@ const InfluenciadoresPage = () => {
   const {
     influencers,
     topDomains,
+    topDomainLabels,
     dailyTrends,
     totalMentions,
     uniqueSources,
@@ -316,7 +317,7 @@ const InfluenciadoresPage = () => {
       ) : (
         <>
           {/* Trend chart */}
-          <InfluencerTrendChart data={dailyTrends} domains={topDomains} />
+          <InfluencerTrendChart data={dailyTrends} domains={topDomains} labels={topDomainLabels} />
 
           {/* Influencers display */}
           {viewMode === "cards" ? (

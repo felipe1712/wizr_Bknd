@@ -189,6 +189,17 @@ export function useInfluencersData(
     // Daily data for trend chart (top 5 domains)
     const topInfluencersList = influencers.slice(0, 5);
     const topDomains = topInfluencersList.map((i) => i.domain);
+
+    // Recharts treats dots in dataKey as nested paths (e.g. "msn.com" => msn.com),
+    // so we generate safe keys and keep labels separate.
+    const toChartKey = (d: string) => d.replace(/[^a-z0-9]/gi, "_");
+    const chartKeyByDomain: Record<string, string> = {};
+    const chartLabelByKey: Record<string, string> = {};
+    topDomains.forEach((d) => {
+      const key = toChartKey(d);
+      chartKeyByDomain[d] = key;
+      chartLabelByKey[key] = d;
+    });
     
     // Build daily map with all dates filled
     const dailyMap = new Map<string, Record<string, number>>();
@@ -196,7 +207,9 @@ export function useInfluencersData(
       const date = subDays(new Date(), timeRangeDays - 1 - i);
       const dateStr = date.toISOString().split("T")[0];
       const initialData: Record<string, number> = {};
-      topDomains.forEach(d => { initialData[d] = 0; });
+      topDomains.forEach((d) => {
+        initialData[chartKeyByDomain[d]] = 0;
+      });
       dailyMap.set(dateStr, initialData);
     }
 
@@ -209,7 +222,8 @@ export function useInfluencersData(
       
       if (dailyMap.has(date)) {
         const dayData = dailyMap.get(date)!;
-        dayData[domain] = (dayData[domain] || 0) + 1;
+        const key = chartKeyByDomain[domain];
+        dayData[key] = (dayData[key] || 0) + 1;
       }
     });
 
@@ -222,7 +236,8 @@ export function useInfluencersData(
 
     return {
       influencers,
-      topDomains,
+      topDomains: topDomains.map((d) => chartKeyByDomain[d]),
+      topDomainLabels: chartLabelByKey,
       dailyTrends,
       totalMentions: mentions.length,
       uniqueSources: influencers.length,
