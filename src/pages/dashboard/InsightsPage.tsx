@@ -9,6 +9,7 @@ import { DateRangeSelector } from "@/components/reports/DateRangeSelector";
 import { DataOriginBreadcrumb } from "@/components/analysis/DataOriginBreadcrumb";
 import { ActivityChart } from "@/components/panorama/ActivityChart";
 import { SentimentOverview } from "@/components/panorama/SentimentOverview";
+import { MentionsSummaryCard } from "@/components/panorama/MentionsSummaryCard";
 import { EntityTrendsChart } from "@/components/tendencias/EntityTrendsChart";
 import { AlertsSidePanel } from "@/components/alertas/AlertsSidePanel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -172,10 +173,10 @@ const InsightsPage = () => {
         </Select>
       </div>
 
-      {/* Data Origin Breadcrumb */}
-      <DataOriginBreadcrumb 
-        mentionCount={metrics.totalMentions} 
-        dateRange={startDate && endDate ? { start: startDate, end: endDate } : undefined}
+      {/* Mentions Summary Card - Clear explanation of data */}
+      <MentionsSummaryCard 
+        mentions={mentions} 
+        projectName={selectedProject.nombre} 
       />
 
       {/* Metrics Cards */}
