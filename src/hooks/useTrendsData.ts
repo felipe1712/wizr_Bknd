@@ -68,7 +68,11 @@ export function useTrendsData(
     const mentionsByDate = new Map<string, Mention[]>();
     
     filteredMentions.forEach((mention) => {
-      const mentionDate = startOfDay(new Date(mention.created_at));
+      // Use published_at if available, otherwise fall back to created_at
+      const effectiveDate = mention.published_at 
+        ? new Date(mention.published_at) 
+        : new Date(mention.created_at);
+      const mentionDate = startOfDay(effectiveDate);
       const dateKey = format(mentionDate, "yyyy-MM-dd");
       
       if (!mentionsByDate.has(dateKey)) {
@@ -157,7 +161,9 @@ export function useTrendsData(
       
       const mentionsByDate = new Map<string, Mention[]>();
       entityMentions.forEach((m) => {
-        const dateKey = format(startOfDay(new Date(m.created_at)), "yyyy-MM-dd");
+        // Use published_at if available, otherwise fall back to created_at
+        const effectiveDate = m.published_at ? new Date(m.published_at) : new Date(m.created_at);
+        const dateKey = format(startOfDay(effectiveDate), "yyyy-MM-dd");
         if (!mentionsByDate.has(dateKey)) mentionsByDate.set(dateKey, []);
         mentionsByDate.get(dateKey)!.push(m);
       });

@@ -15,6 +15,7 @@ interface MentionData {
   sentiment: string | null;
   source_domain: string | null;
   created_at: string;
+  published_at: string | null;
 }
 
 interface EntityMetrics {
@@ -77,13 +78,17 @@ export function useComparativeData(
 
       const { data, error } = await supabase
         .from("mentions")
-        .select("id, entity_id, sentiment, source_domain, created_at")
+        .select("id, entity_id, sentiment, source_domain, created_at, published_at")
         .eq("project_id", projectId)
-        .eq("is_archived", false)
-        .gte("created_at", startDate.toISOString());
+        .eq("is_archived", false);
 
       if (error) throw error;
-      return data as MentionData[];
+      
+      // Filter by effective date (published_at or created_at)
+      return (data || []).filter(m => {
+        const effectiveDate = m.published_at ? new Date(m.published_at) : new Date(m.created_at);
+        return effectiveDate >= startDate;
+      }) as MentionData[];
     },
     enabled: !!projectId,
   });
@@ -161,8 +166,11 @@ export function useComparativeData(
         );
       }
 
-      // Daily trend
-      const mentionDate = format(new Date(mention.created_at), "yyyy-MM-dd");
+      // Daily trend - use published_at if available, otherwise created_at
+      const effectiveDate = mention.published_at 
+        ? new Date(mention.published_at) 
+        : new Date(mention.created_at);
+      const mentionDate = format(effectiveDate, "yyyy-MM-dd");
       const dayEntry = metrics.dailyTrend.find((d) => d.date === mentionDate);
       if (dayEntry) {
         dayEntry.count++;
