@@ -406,25 +406,37 @@ Responde en formato JSON con esta estructura exacta:
     // Parse JSON from response
     let reportContent: Partial<ReportContent>;
     try {
-      // Extract JSON from potential markdown code blocks
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      // First, clean the content - remove markdown code blocks if present
+      let cleanedContent = content;
+      
+      // Remove ```json ... ``` blocks
+      const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) {
+        cleanedContent = codeBlockMatch[1].trim();
+      }
+      
+      // Extract JSON object from cleaned content
+      const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        reportContent = JSON.parse(jsonMatch[0]);
+        // Additional cleanup: remove any trailing text after the JSON
+        const jsonStr = jsonMatch[0];
+        reportContent = JSON.parse(jsonStr);
       } else {
         throw new Error("No JSON found in response");
       }
     } catch (parseError) {
-      console.error("JSON parse error:", parseError);
-      // Fallback: create structure from raw text
+      console.error("JSON parse error:", parseError, "Content:", content.substring(0, 500));
+      // Fallback: create structure from raw text (without the code block markers)
+      const cleanText = content.replace(/```(?:json)?/g, '').replace(/```/g, '').trim();
       reportContent = {
         title: `Reporte de ${reportType === "brief" ? "Monitoreo" : reportType === "crisis" ? "Crisis" : reportType === "thematic" ? "Análisis Temático" : "Comparativa"}`,
-        summary: content.substring(0, 500),
-        keyFindings: ["Análisis en proceso"],
-        recommendations: ["Revisar datos manualmente"],
+        summary: cleanText.substring(0, 500),
+        keyFindings: ["Análisis en proceso - hubo un error al procesar la respuesta de IA"],
+        recommendations: ["Intenta generar el reporte nuevamente", "Si persiste el error, reduce la cantidad de menciones"],
         templates: {
-          executive: content.substring(0, 300),
-          technical: content.substring(0, 400),
-          public: content.substring(0, 200),
+          executive: cleanText.substring(0, 400),
+          technical: cleanText.substring(0, 500),
+          public: "📊 Reporte en proceso. Por favor, intenta generar nuevamente.",
         },
       };
     }
