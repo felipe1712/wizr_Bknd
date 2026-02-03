@@ -211,7 +211,7 @@ INSTRUCCIONES DE FORMATO:
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                   className={`flex gap-3 min-w-0 ${message.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   {message.role === "assistant" && (
                     <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -219,7 +219,7 @@ INSTRUCCIONES DE FORMATO:
                     </div>
                   )}
                   <div
-                    className={`rounded-lg px-4 py-3 max-w-[85%] overflow-hidden ${
+                     className={`rounded-lg px-4 py-3 max-w-[85%] overflow-hidden min-w-0 ${
                       message.role === "user"
                         ? "bg-primary text-primary-foreground"
                         : "bg-muted"
@@ -228,7 +228,7 @@ INSTRUCCIONES DE FORMATO:
                     {message.role === "user" ? (
                       <p className="text-sm break-words whitespace-pre-wrap overflow-wrap-anywhere">{message.content}</p>
                     ) : (
-                      <div className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden [overflow-wrap:anywhere] [word-break:break-word] [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&>p]:my-2 [&>ul]:my-2 [&>ul]:pl-4 [&>li]:my-0.5 [&_strong]:font-semibold [&_p]:break-words [&_p]:[overflow-wrap:anywhere]">
+                       <div className="prose prose-sm dark:prose-invert max-w-none overflow-hidden min-w-0 ai-markdown [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&>p]:my-2 [&>ul]:my-2 [&>ul]:pl-4 [&>li]:my-0.5 [&_strong]:font-semibold">
                         <ReactMarkdown>{message.content}</ReactMarkdown>
                       </div>
                     )}

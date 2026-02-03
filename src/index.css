@@ -167,10 +167,22 @@ Wizr Brand: Purple (#5A2FBA), Orange (#FF6B35), with light theme as default.
   word-break: break-word;
 }
 
-/* Prose text overflow fix for AI chat */
-.prose p,
-.prose li,
-.prose span {
+/* AI markdown rendering helpers (use on containers that render model output) */
+.ai-markdown {
+  /* Preserve newlines/spacing from the model while still wrapping nicely */
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+/* Keep long tokens/URLs from overflowing inside markdown content */
+.ai-markdown :where(p, li, span, a, code, pre) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Pre/code blocks: allow horizontal scroll instead of breaking layout */
+.ai-markdown :where(pre) {
+  white-space: pre;
+  overflow-x: auto;
 }
