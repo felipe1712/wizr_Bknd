@@ -23,6 +23,7 @@ import { CommentsAnalysisTab } from "@/components/fuentes/CommentsAnalysisTab";
 import { MentionsHubTab } from "@/components/fuentes/MentionsHubTab";
 import { SavedMentionsBadge } from "@/components/fuentes/SavedMentionsBadge";
 import { AutoSaveConfigPanel } from "@/components/fuentes/AutoSaveConfigPanel";
+import { UnifiedSearch } from "@/components/fuentes/UnifiedSearch";
 import { useAutoSaveConfig } from "@/hooks/useAutoSaveConfig";
 
 import wizrLogoIcon from "@/assets/wizr-logo-icon.png";
@@ -57,12 +58,13 @@ import {
   CalendarIcon,
   X,
   MessageCircle,
+  Zap,
 } from "lucide-react";
 import { format, formatDistanceToNow, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 
 type SearchMode = "manual" | "entities";
-type ViewMode = "hub" | "search" | "google-news" | "social" | "social-history" | "comments" | "history";
+type ViewMode = "hub" | "unified" | "search" | "google-news" | "social" | "social-history" | "comments" | "history";
 type SearchSource = "news" | "social";
 
 const ITEMS_PER_PAGE = 10;
@@ -580,6 +582,18 @@ const FuentesPage = () => {
               {/* Divider */}
               <div className="mx-1 h-5 w-px bg-border" />
               
+              {/* Unified Search - Primary action */}
+              <TabsTrigger 
+                value="unified" 
+                className="gap-1.5 px-3 bg-accent/20 text-accent-foreground hover:bg-accent/30 data-[state=active]:bg-accent data-[state=active]:text-accent-foreground data-[state=active]:shadow-sm"
+              >
+                <Zap className="h-4 w-4" />
+                <span className="hidden sm:inline">Búsqueda Unificada</span>
+              </TabsTrigger>
+              
+              {/* Divider */}
+              <div className="mx-1 h-5 w-px bg-border" />
+              
               {/* Capture Section */}
               <TabsTrigger value="search" className="gap-1.5 px-3">
                 <Newspaper className="h-4 w-4" />
@@ -624,6 +638,23 @@ const FuentesPage = () => {
             onDeleteMention={deleteMention}
             onAnalyzeUnanalyzed={analyzeUnanalyzed}
             isAnalyzing={isAnalyzing}
+          />
+        </TabsContent>
+
+        {/* Unified Search Tab */}
+        <TabsContent value="unified" className="space-y-4 mt-4">
+          <UnifiedSearch
+            projectId={selectedProject.id}
+            entities={entities}
+            onSearchComplete={(total, saved) => {
+              // Refetch mentions after search completes
+              if (saved > 0) {
+                toast({
+                  title: "Menciones guardadas",
+                  description: `Se guardaron ${saved} nuevas menciones en tu proyecto`,
+                });
+              }
+            }}
           />
         </TabsContent>
 
