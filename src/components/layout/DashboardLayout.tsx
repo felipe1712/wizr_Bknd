@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,15 @@ import ProjectSelector from "@/components/layout/ProjectSelector";
 import { WelcomeModal } from "@/components/onboarding/WelcomeModal";
 import { TourGuide } from "@/components/onboarding/TourGuide";
 import { WorkflowProgressBar } from "@/components/workflow/WorkflowProgressBar";
-import { LogOut, User, Plus } from "lucide-react";
+import { LogOut, User, Plus, Trophy } from "lucide-react";
 
 const DashboardContent = () => {
   const { user, roles, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Check if we're on the rankings page (independent of projects)
+  const isRankingsPage = location.pathname.startsWith("/dashboard/rankings");
 
   const handleSignOut = async () => {
     await signOut();
@@ -41,22 +45,37 @@ const DashboardContent = () => {
             <div className="flex items-center gap-4">
               <SidebarTrigger className="text-foreground" />
               <div className="h-6 w-px bg-border" />
-              <div data-tour="project-selector">
-                <ProjectSelector />
-              </div>
-              <div className="hidden md:block">
-                <div className="h-6 w-px bg-border" />
-              </div>
-              <div className="hidden md:block" data-tour="workflow-progress">
-                <WorkflowProgressBar compact />
-              </div>
+              
+              {/* Show project selector OR rankings indicator depending on route */}
+              {isRankingsPage ? (
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <div className="h-7 w-7 rounded-md bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                    <Trophy className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <span className="text-foreground">Benchmarking Competitivo</span>
+                </div>
+              ) : (
+                <>
+                  <div data-tour="project-selector">
+                    <ProjectSelector />
+                  </div>
+                  <div className="hidden md:block">
+                    <div className="h-6 w-px bg-border" />
+                  </div>
+                  <div className="hidden md:block" data-tour="workflow-progress">
+                    <WorkflowProgressBar compact />
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="flex items-center gap-4">
-              <Button size="sm" onClick={() => navigate("/nuevo-proyecto")}>
-                <Plus className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Nuevo Proyecto</span>
-              </Button>
+              {!isRankingsPage && (
+                <Button size="sm" onClick={() => navigate("/nuevo-proyecto")}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Nuevo Proyecto</span>
+                </Button>
+              )}
 
               <div className="hidden items-center gap-2 md:flex">
                 {roles.map((role) => (
