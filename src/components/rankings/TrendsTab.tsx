@@ -5,7 +5,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { TrendingUp, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { TrendingUp, ChevronDown, ChevronUp, Users, Search, X } from "lucide-react";
 import { FaFacebookF, FaInstagram, FaYoutube, FaLinkedinIn, FaTiktok, FaXTwitter } from "react-icons/fa6";
 import { SiThreads } from "react-icons/si";
 import {
@@ -76,6 +77,18 @@ export function TrendsTab({ profiles, kpis, isLoading }: TrendsTabProps) {
   const [selectedMetric, setSelectedMetric] = useState<MetricType>("engagement_rate");
   const [selectedProfiles, setSelectedProfiles] = useState<string[]>([]);
   const [isProfilesOpen, setIsProfilesOpen] = useState(false);
+  const [profileSearch, setProfileSearch] = useState("");
+
+  // Filter profiles based on search term
+  const filteredProfiles = useMemo(() => {
+    if (!profileSearch.trim()) return profiles;
+    const searchLower = profileSearch.toLowerCase();
+    return profiles.filter(p => 
+      p.profile_id.toLowerCase().includes(searchLower) ||
+      (p.display_name && p.display_name.toLowerCase().includes(searchLower)) ||
+      p.network.toLowerCase().includes(searchLower)
+    );
+  }, [profiles, profileSearch]);
 
   // Group KPIs by date and profile
   const chartData = useMemo(() => {
@@ -217,27 +230,54 @@ export function TrendsTab({ profiles, kpis, isLoading }: TrendsTabProps) {
         </div>
         
         <CollapsibleContent className="mt-3">
-          <div className="p-3 border rounded-lg bg-muted/30">
-            <div className="flex flex-wrap gap-2">
-              {profiles.map((profile, index) => {
-                const isSelected = selectedProfiles.length === 0 
-                  ? index < 5 
-                  : selectedProfiles.includes(profile.id);
-                return (
-                  <Badge
-                    key={profile.id}
-                    variant={isSelected ? "default" : "outline"}
-                    className="cursor-pointer transition-colors hover:opacity-80 flex items-center gap-1.5"
-                    onClick={() => toggleProfile(profile.id)}
-                  >
-                    <NetworkIcon network={profile.network} className="h-3 w-3" />
-                    <span>@{profile.profile_id}</span>
-                  </Badge>
-                );
-              })}
+          <div className="p-3 border rounded-lg bg-muted/30 space-y-3">
+            {/* Search input */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar perfil o red social..."
+                value={profileSearch}
+                onChange={(e) => setProfileSearch(e.target.value)}
+                className="pl-9 pr-8 h-9"
+              />
+              {profileSearch && (
+                <button
+                  onClick={() => setProfileSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Haz clic en los perfiles para seleccionar/deseleccionar. Máximo 8 perfiles.
+            
+            {/* Filtered profiles */}
+            <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+              {filteredProfiles.length > 0 ? (
+                filteredProfiles.map((profile, index) => {
+                  const isSelected = selectedProfiles.length === 0 
+                    ? profiles.indexOf(profile) < 5 
+                    : selectedProfiles.includes(profile.id);
+                  return (
+                    <Badge
+                      key={profile.id}
+                      variant={isSelected ? "default" : "outline"}
+                      className="cursor-pointer transition-colors hover:opacity-80 flex items-center gap-1.5"
+                      onClick={() => toggleProfile(profile.id)}
+                    >
+                      <NetworkIcon network={profile.network} className="h-3 w-3" />
+                      <span>@{profile.profile_id}</span>
+                    </Badge>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-muted-foreground py-2">
+                  No se encontraron perfiles para "{profileSearch}"
+                </p>
+              )}
+            </div>
+            
+            <p className="text-xs text-muted-foreground">
+              {filteredProfiles.length} de {profiles.length} perfiles · Máximo 8 seleccionados
             </p>
           </div>
         </CollapsibleContent>
