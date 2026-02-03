@@ -30,9 +30,9 @@ interface RankingDetailProps {
 export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"ranking" | "insights" | "narratives" | "trends" | "content" | "reports" | "ai" | "config">("ranking");
-  const [datePreset, setDatePreset] = useState<DateRangePreset>("28d");
+  const [datePreset, setDatePreset] = useState<DateRangePreset>("1d");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
-  const [appliedPreset, setAppliedPreset] = useState<DateRangePreset>("28d");
+  const [appliedPreset, setAppliedPreset] = useState<DateRangePreset>("1d");
   const [appliedCustomRange, setAppliedCustomRange] = useState<DateRange | undefined>(undefined);
   const [aiInitialQuestion, setAiInitialQuestion] = useState<string>("");
   const [rankingFilterNetwork, setRankingFilterNetwork] = useState<FKNetwork | "all">("all");
@@ -42,11 +42,17 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
   const periodStart = formatDate(dateRange.from, "yyyy-MM-dd");
   const periodEnd = formatDate(dateRange.to, "yyyy-MM-dd");
 
+  // For Daily Top Posts we always want YESTERDAY (independent of global filter)
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = formatDate(yesterday, "yyyy-MM-dd");
+
   const { data: profiles = [], isLoading: loadingProfiles } = useFKProfilesByRanking(ranking.id);
   const profileIds = profiles.map((p) => p.id);
   const { data: kpis = [], isLoading: loadingKPIs } = useFKProfileKPIs(profileIds, periodStart, periodEnd);
   const { data: allKpis = [], isLoading: loadingAllKpis } = useFKAllKPIs(profileIds);
-  const { data: dailyTopPosts = [], isLoading: loadingTopPosts } = useFKDailyTopPosts(profileIds, periodStart, periodEnd);
+  // Always query yesterday for top posts (they're captured daily at 00:00 UTC)
+  const { data: dailyTopPosts = [], isLoading: loadingTopPosts } = useFKDailyTopPosts(profileIds, yesterdayStr, yesterdayStr);
 
   const syncedCount = profiles.filter((p) => p.last_synced_at).length;
 
