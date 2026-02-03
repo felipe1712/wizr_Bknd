@@ -6,6 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // Apify Actor IDs for different platforms
 const ACTOR_IDS: Record<string, string> = {
   // Twitter/X: powerai/twitter-search-scraper (rented, $4.99/1000 results)
@@ -472,10 +474,13 @@ async function handleFacebookWithFallback(
       // powerai uses: query, maxResults, recent_posts, start_date, end_date
       input = primaryInput;
     } else if (actor.name === "scraper_one") {
-      // scraper_one/facebook-posts-search uses: searchQueries (array), maxPosts
+      // scraper_one/facebook-posts-search: schema differs across versions; some require `query`.
+      // Send both to be safe.
       input = {
+        query,
         searchQueries: [query],
         maxPosts: primaryInput.maxResults || 50,
+        maxResults: primaryInput.maxResults || 50,
       };
     } else {
       input = primaryInput;
@@ -497,9 +502,29 @@ async function handleFacebookWithFallback(
         const runData = await runResponse.json();
         const runId = runData.data.id;
         const datasetId = runData.data.defaultDatasetId;
-        
+
+        // IMPORTANT: Facebook actors sometimes "start OK" but fail quickly inside the run
+        // with a transient 5xx (e.g., "API request failed with status 503").
+        // In that case we want to auto-fallback to the next actor *without*
+        // changing the frontend flow.
+        const failFast = await detectFacebookFastFail(apiToken, runId);
+        if (failFast.isFastFail) {
+          console.warn(
+            `Facebook actor ${actor.name} fast-failed (runId=${runId}). Reason: ${failFast.reason}`
+          );
+
+          errors.push({
+            actor: actor.id,
+            status: failFast.statusCode ?? 503,
+            error: (failFast.reason || "Fast fail").substring(0, 200),
+          });
+
+          // Try next actor
+          continue;
+        }
+
         console.log(`Facebook actor ${actor.name} started successfully. Run ID: ${runId}`);
-        
+
         return new Response(
           JSON.stringify({
             success: true,
@@ -509,9 +534,10 @@ async function handleFacebookWithFallback(
             actorUsed: actor.id,
             fallbackUsed: actor.name !== "powerai",
             previousErrors: errors.length > 0 ? errors : undefined,
-            message: errors.length > 0 
-              ? `Actor primario falló. Usando fallback: ${actor.name}`
-              : "Scraping job started. Use the status endpoint to check progress.",
+            message:
+              errors.length > 0
+                ? `Actor primario falló. Usando fallback: ${actor.name}`
+                : "Scraping job started. Use the status endpoint to check progress.",
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -561,4 +587,73 @@ async function handleFacebookWithFallback(
       headers: { ...corsHeaders, "Content-Type": "application/json" } 
     }
   );
+}
+
+type FacebookFastFailResult = {
+  isFastFail: boolean;
+  statusCode?: number;
+  reason?: string;
+};
+
+// Detects the common case where the run starts but immediately FAILS due to transient upstream 5xx.
+// We only use this to decide whether to auto-fallback to the next actor.
+async function detectFacebookFastFail(apiToken: string, runId: string): Promise<FacebookFastFailResult> {
+  // A few short polls (<= ~9s) to avoid delaying the UI too much.
+  const delays = [1500, 2500, 3500];
+
+  for (const d of delays) {
+    await sleep(d);
+
+    try {
+      const res = await fetch(
+        `https://api.apify.com/v2/actor-runs/${encodeURIComponent(runId)}?token=${apiToken}`
+      );
+      if (!res.ok) continue;
+      const json = await res.json();
+      const status = String(json?.data?.status || "");
+      const exitCode = json?.data?.exitCode;
+
+      if (status === "FAILED" || status === "ABORTED" || status === "TIMED-OUT") {
+        // Try to fetch last logs tail to identify 5xx cause.
+        const logTail = await fetchApifyLogTail(apiToken, runId);
+        const combined = `${logTail || ""}`.toLowerCase();
+
+        // Match known transient upstream errors.
+        const is503 = combined.includes("status 503") || combined.includes("\n503") || combined.includes("http 503");
+        const is5xx = is503 || combined.includes("status 502") || combined.includes("status 500") || combined.includes("status 504");
+
+        if (is5xx) {
+          return {
+            isFastFail: true,
+            statusCode: is503 ? 503 : 502,
+            reason: `Run ${status} (exitCode=${exitCode ?? "n/a"}). ${logTail ? logTail.split("\n").slice(-6).join("\n") : ""}`,
+          };
+        }
+
+        // Non-transient failure: don't treat as fast-fail.
+        return { isFastFail: false };
+      }
+    } catch {
+      // Ignore and keep polling.
+    }
+  }
+
+  return { isFastFail: false };
+}
+
+async function fetchApifyLogTail(apiToken: string, runId: string): Promise<string | null> {
+  try {
+    // Build log is usually enough for a diagnostic like "API request failed with status 503".
+    // We keep it small to reduce payload.
+    const res = await fetch(
+      `https://api.apify.com/v2/actor-runs/${encodeURIComponent(runId)}/log?token=${apiToken}&stream=false`
+    );
+    if (!res.ok) return null;
+    const text = await res.text();
+    // Tail last ~40 lines
+    const lines = text.split("\n");
+    return lines.slice(Math.max(0, lines.length - 40)).join("\n");
+  } catch {
+    return null;
+  }
 }
