@@ -61,15 +61,52 @@ function parseFKDate(dateStr: string): string | null {
     return dateStr.split("T")[0];
   }
   
-  // Parse FK format: "Mon Feb 02 20:00:00 UTC 2026" or similar
-  // The month names and format vary, so we use Date parsing
+  // FK can return strings like:
+  // - "Mon Feb 02 20:00:00 UTC 2026"
+  // - truncated: "Wed Jan 28 03:32:54 U"
+  // Deno's Date() parsing for these formats is not reliable, so we parse manually.
+  const currentYear = new Date().getUTCFullYear();
+  const normalized = dateStr
+    .replace(/\s+UTC\b/i, " UTC")
+    .replace(/\s+UT\b/i, " UTC")
+    .replace(/\s+U\b/i, " UTC")
+    .trim();
+
+  const m = normalized.match(
+    /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{2}:\d{2}:\d{2})(?:\s+UTC)?(?:\s+(\d{4}))?$/
+  );
+  if (m) {
+    const monthAbbrev = m[2].toLowerCase();
+    const dayNum = Number(m[3]);
+    const yearNum = m[5] ? Number(m[5]) : currentYear;
+
+    const monthMap: Record<string, number> = {
+      jan: 1,
+      feb: 2,
+      mar: 3,
+      apr: 4,
+      may: 5,
+      jun: 6,
+      jul: 7,
+      aug: 8,
+      sep: 9,
+      oct: 10,
+      nov: 11,
+      dec: 12,
+    };
+
+    const monthNum = monthMap[monthAbbrev];
+    if (monthNum && dayNum >= 1 && dayNum <= 31) {
+      const mm = String(monthNum).padStart(2, "0");
+      const dd = String(dayNum).padStart(2, "0");
+      return `${yearNum}-${mm}-${dd}`;
+    }
+  }
+
+  // Fallback: try Date() for any other variant.
   try {
-    // Replace any truncated timezone (like "U" for UTC)
-    let normalized = dateStr.replace(/\s+U$/, " UTC").replace(/\s+UT$/, " UTC");
-    
     const parsed = new Date(normalized);
     if (!isNaN(parsed.getTime())) {
-      // Format as YYYY-MM-DD
       const year = parsed.getUTCFullYear();
       const month = String(parsed.getUTCMonth() + 1).padStart(2, "0");
       const day = String(parsed.getUTCDate()).padStart(2, "0");
@@ -235,17 +272,22 @@ serve(async (req) => {
           postsPerDay = extractValue("tiktoker_posts_per_day");
           ppi = extractValue("tiktoker_page_performance_index") || extractValue("tiktoker_ppi");
         } else if (profile.network === "youtube") {
-          followers = extractValue("channel_subscribers") || extractValue("channel_subscriber");
-          engagementRate = extractValue("channel_engagement") || extractValue("channel_engagement_rate");
+          // YouTube uses channel_* prefix (e.g. channel_subscribers_count)
+          followers = extractValue("channel_subscribers_count") || extractValue("channel_subscribers");
+          engagementRate =
+            extractValue("channel_video_interaction") ||
+            extractValue("channel_engagement") ||
+            extractValue("channel_engagement_rate");
           followerGrowth = extractValue("channel_subscribers_growth");
           postsPerDay = extractValue("channel_videos_per_day");
           ppi = extractValue("channel_page_performance_index") || extractValue("channel_ppi");
         } else if (profile.network === "twitter") {
-          followers = extractValue("account_followers") || extractValue("account_follower");
-          engagementRate = extractValue("account_engagement") || extractValue("account_engagement_rate");
-          followerGrowth = extractValue("account_followers_growth");
-          postsPerDay = extractValue("account_tweets_per_day");
-          ppi = extractValue("account_page_performance_index") || extractValue("account_ppi");
+          // Twitter/X uses profile_* prefix in Fanpage Karma
+          followers = extractValue("profile_followers") || extractValue("profile_follower");
+          engagementRate = extractValue("profile_engagement") || extractValue("profile_engagement_rate");
+          followerGrowth = extractValue("profile_followers_growth") || extractValue("profile_follower_growth");
+          postsPerDay = extractValue("profile_posts_per_day") || extractValue("profile_tweets_per_day");
+          ppi = extractValue("profile_page_performance_index") || extractValue("profile_ppi");
         } else if (profile.network === "linkedin") {
           followers = extractValue("page_followers") || extractValue("page_follower");
           engagementRate = extractValue("page_engagement") || extractValue("page_engagement_rate");
