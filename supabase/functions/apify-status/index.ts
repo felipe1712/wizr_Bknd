@@ -422,13 +422,35 @@ function normalizeTikTok(item: Record<string, unknown>, index: number): Normaliz
   // sociavault uses video_id or id
   const videoId = String(get(item, "video_id") || get(item, "id") || get(item, "aweme_id") || "");
 
-  const url = String(
+  // Build URL: prefer share_url/webVideoUrl, then construct with username if available
+  // TikTok URLs work better with format: tiktok.com/@username/video/ID
+  let url = String(
     get(item, "webVideoUrl") ||
       get(item, "share_url") ||
       get(item, "url") ||
       get(item, "videoUrl") ||
-      (videoId ? `https://www.tiktok.com/video/${videoId}` : "")
+      ""
   );
+  
+  // If no URL found but we have videoId, construct it properly
+  if (!url && videoId) {
+    // Get the actual unique_id (username) for proper URL format
+    const uniqueId = String(
+      get(authorObj, "unique_id") ||
+        get(authorObj, "uniqueId") ||
+        get(authorMeta, "uniqueId") ||
+        get(authorMeta, "name") ||
+        get(authorInfoObj, "unique_id") ||
+        ""
+    );
+    
+    if (uniqueId) {
+      url = `https://www.tiktok.com/@${uniqueId}/video/${videoId}`;
+    } else {
+      // Fallback to share URL format which tends to redirect properly
+      url = `https://www.tiktok.com/t/${videoId}`;
+    }
+  }
 
   return {
     id: `tiktok-${videoId || index}-${Date.now()}`,
