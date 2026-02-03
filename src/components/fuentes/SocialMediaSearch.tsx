@@ -486,13 +486,55 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         }
         
         // DATE FILTERING: Apply strict or soft filter depending on platform and results
-        // YouTube uses SOFT FILTER: if ALL results fall outside range, show them anyway with warning
-        // Other platforms use STRICT FILTER: discard results outside the range
+        // YouTube uses STRICT FILTER based on native filter selection (thisWeek, etc.)
+        // Other platforms use the manual date range filter
         let discardedByDateCount = 0;
         let appliedSoftFilter = false;
-        if (dateFilterEnabled && dateFrom && dateTo) {
-          const fromStart = startOfDay(dateFrom);
-          const toEnd = endOfDay(dateTo);
+        
+        // Determine the effective date range for filtering
+        let effectiveDateFrom: Date | undefined = undefined;
+        let effectiveDateTo: Date | undefined = undefined;
+        let effectiveDateFilterEnabled = false;
+        
+        // YouTube: Calculate date range from native filter selection
+        // API filters are approximate, so we apply strict client-side filtering
+        if (statusPlatform === "youtube" && youtubeUploadDate && youtubeUploadDate !== "__any__") {
+          const now = new Date();
+          effectiveDateTo = endOfDay(now);
+          
+          switch (youtubeUploadDate) {
+            case "lastHour":
+              effectiveDateFrom = new Date(now.getTime() - 60 * 60 * 1000); // 1 hour ago
+              break;
+            case "today":
+              effectiveDateFrom = startOfDay(now);
+              break;
+            case "thisWeek":
+              effectiveDateFrom = startOfDay(subDays(now, 7));
+              break;
+            case "thisMonth":
+              effectiveDateFrom = startOfDay(subDays(now, 30));
+              break;
+            case "thisYear":
+              effectiveDateFrom = startOfDay(subDays(now, 365));
+              break;
+          }
+          
+          if (effectiveDateFrom) {
+            effectiveDateFilterEnabled = true;
+            console.log(`YouTube STRICT date filter from native selection '${youtubeUploadDate}': ${format(effectiveDateFrom, "yyyy-MM-dd HH:mm")} to ${format(effectiveDateTo, "yyyy-MM-dd HH:mm")}`);
+          }
+        }
+        // Other platforms: Use manual date filter if enabled
+        else if (dateFilterEnabled && dateFrom && dateTo) {
+          effectiveDateFrom = dateFrom;
+          effectiveDateTo = dateTo;
+          effectiveDateFilterEnabled = true;
+        }
+        
+        if (effectiveDateFilterEnabled && effectiveDateFrom && effectiveDateTo) {
+          const fromStart = startOfDay(effectiveDateFrom);
+          const toEnd = endOfDay(effectiveDateTo);
           const beforeFilter = processed.length;
 
           // Capture incoming date range (for debugging user expectations/timezones)
@@ -512,19 +554,10 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           
           discardedByDateCount = beforeFilter - filteredByDate.length;
           
-          // SOFT FILTER for YouTube: If ALL results are outside the range, show them with a warning
-          // This prevents "0 results" when the API doesn't have content in the exact date window
-          if (statusPlatform === "youtube" && filteredByDate.length === 0 && processed.length > 0) {
-            appliedSoftFilter = true;
-            setUsedSoftFilter(true);
-            console.log(`YouTube SOFT FILTER: No results in range ${format(dateFrom, "yyyy-MM-dd")} to ${format(dateTo, "yyyy-MM-dd")}. Showing all ${processed.length} results with warning. Actual range: ${minDateIso} to ${maxDateIso}`);
-            // Keep all results, don't filter
-          } else {
-            // STRICT FILTER for other platforms or when YouTube has some results in range
-            processed = filteredByDate;
-            if (discardedByDateCount > 0) {
-              console.log(`Strict date filter: discarded ${discardedByDateCount} results outside range ${format(dateFrom, "yyyy-MM-dd")} to ${format(dateTo, "yyyy-MM-dd")}`);
-            }
+          // STRICT FILTER: Always apply for YouTube native filters and other platforms
+          processed = filteredByDate;
+          if (discardedByDateCount > 0) {
+            console.log(`Strict date filter: discarded ${discardedByDateCount} results outside range ${format(fromStart, "yyyy-MM-dd")} to ${format(toEnd, "yyyy-MM-dd")}. Actual data range: ${minDateIso} to ${maxDateIso}`);
           }
           
           setLastStrictDateDiscard({ discarded: discardedByDateCount, minDateIso, maxDateIso });
