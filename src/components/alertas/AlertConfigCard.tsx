@@ -26,6 +26,7 @@ interface AlertConfigCardProps {
   onEdit: (config: AlertConfig) => void;
   onDelete: (id: string) => void;
   onToggleActive: (data: { id: string; is_active: boolean }) => void;
+  compact?: boolean;
 }
 
 const alertTypeIcons: Record<AlertType, React.ElementType> = {
@@ -51,6 +52,7 @@ export function AlertConfigCard({
   onEdit,
   onDelete,
   onToggleActive,
+  compact = false,
 }: AlertConfigCardProps) {
   const Icon = alertTypeIcons[config.alert_type];
 
@@ -66,6 +68,31 @@ export function AlertConfigCard({
     }
     return null;
   };
+
+  if (compact) {
+    return (
+      <div className={`rounded-lg border p-3 ${!config.is_active ? "opacity-60" : ""}`}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className={`rounded p-1.5 ${alertTypeColors[config.alert_type]}`}>
+              <Icon className="h-3.5 w-3.5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium truncate">{config.name}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {alertTypeLabels[config.alert_type]}
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={config.is_active}
+            onCheckedChange={(checked) => onToggleActive({ id: config.id, is_active: checked })}
+            className="scale-75"
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Card className={!config.is_active ? "opacity-60" : undefined}>
