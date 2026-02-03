@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { MousePointer2 } from "lucide-react";
 
 interface SentimentOverviewProps {
   data: {
@@ -8,6 +9,7 @@ interface SentimentOverviewProps {
     negativo: number;
     sinAnalizar: number;
   };
+  onSentimentClick?: (sentiment: string, label: string) => void;
 }
 
 const SENTIMENT_CONFIG = [
@@ -17,9 +19,10 @@ const SENTIMENT_CONFIG = [
   { key: "sinAnalizar", label: "Sin analizar", color: "#d1d5db" },
 ];
 
-export function SentimentOverview({ data }: SentimentOverviewProps) {
+export function SentimentOverview({ data, onSentimentClick }: SentimentOverviewProps) {
   const chartData = SENTIMENT_CONFIG.map((s) => ({
     name: s.label,
+    key: s.key,
     value: data[s.key as keyof typeof data],
     color: s.color,
   })).filter((d) => d.value > 0);
@@ -40,11 +43,27 @@ export function SentimentOverview({ data }: SentimentOverviewProps) {
     );
   }
 
+  const handleClick = (data: any) => {
+    if (data && onSentimentClick) {
+      onSentimentClick(data.key, data.name);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Sentimiento</CardTitle>
-        <CardDescription>Distribución del sentimiento en menciones</CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Sentimiento</CardTitle>
+            <CardDescription>Distribución del sentimiento en menciones</CardDescription>
+          </div>
+          {onSentimentClick && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <MousePointer2 className="h-3 w-3" />
+              Clic para filtrar
+            </span>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={250}>
@@ -59,9 +78,15 @@ export function SentimentOverview({ data }: SentimentOverviewProps) {
               dataKey="value"
               label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
               labelLine={false}
+              onClick={handleClick}
+              style={{ cursor: onSentimentClick ? "pointer" : "default" }}
             >
               {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
+                <Cell 
+                  key={`cell-${index}`} 
+                  fill={entry.color}
+                  style={{ cursor: onSentimentClick ? "pointer" : "default" }}
+                />
               ))}
             </Pie>
             <Tooltip

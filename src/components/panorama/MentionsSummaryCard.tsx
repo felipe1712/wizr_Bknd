@@ -25,6 +25,8 @@ import {
 interface MentionsSummaryCardProps {
   mentions: Mention[];
   projectName: string;
+  onPlatformClick?: (platform: string, label: string) => void;
+  onSentimentClick?: (sentiment: string, label: string) => void;
 }
 
 interface PlatformInfo {
@@ -59,7 +61,7 @@ const PLATFORM_CONFIG: Record<string, { label: string; icon: React.ComponentType
   other: { label: "Otros", icon: Globe, color: "bg-gray-400" },
 };
 
-export function MentionsSummaryCard({ mentions, projectName }: MentionsSummaryCardProps) {
+export function MentionsSummaryCard({ mentions, projectName, onPlatformClick, onSentimentClick }: MentionsSummaryCardProps) {
   const navigate = useNavigate();
 
   const summary = useMemo(() => {
@@ -75,11 +77,12 @@ export function MentionsSummaryCard({ mentions, projectName }: MentionsSummaryCa
     });
 
     // Get platforms sorted by count
-    const platforms: PlatformInfo[] = Object.entries(platformCounts)
+    const platforms = Object.entries(platformCounts)
       .map(([key, count]) => {
         const config = PLATFORM_CONFIG[key] || PLATFORM_CONFIG.other;
         const Icon = config.icon;
         return {
+          key, // Store the key for filtering
           name: config.label,
           count,
           icon: <Icon className="h-4 w-4" />,
@@ -179,7 +182,8 @@ export function MentionsSummaryCard({ mentions, projectName }: MentionsSummaryCa
             <Badge
               key={platform.name}
               variant="secondary"
-              className="flex items-center gap-1.5 py-1 px-2.5"
+              className={`flex items-center gap-1.5 py-1 px-2.5 ${onPlatformClick ? "cursor-pointer hover:bg-secondary/80" : ""}`}
+              onClick={() => onPlatformClick?.(platform.key, platform.name)}
             >
               {platform.icon}
               <span>{platform.name}</span>
@@ -198,19 +202,37 @@ export function MentionsSummaryCard({ mentions, projectName }: MentionsSummaryCa
           <span className="text-muted-foreground">Sentimiento:</span>
           <div className="flex gap-2">
             {summary.sentiment.positivo > 0 && (
-              <span className="flex items-center gap-1 text-green-600">
+              <span 
+                className={`flex items-center gap-1 text-green-600 ${onSentimentClick ? "cursor-pointer hover:underline" : ""}`}
+                onClick={() => onSentimentClick?.("positivo", "Positivo")}
+              >
                 <TrendingUp className="h-3.5 w-3.5" />
                 {summary.sentiment.positivo} positivas
               </span>
             )}
             {summary.sentiment.neutral > 0 && (
-              <span className="text-gray-500">{summary.sentiment.neutral} neutrales</span>
+              <span 
+                className={`text-gray-500 ${onSentimentClick ? "cursor-pointer hover:underline" : ""}`}
+                onClick={() => onSentimentClick?.("neutral", "Neutral")}
+              >
+                {summary.sentiment.neutral} neutrales
+              </span>
             )}
             {summary.sentiment.negativo > 0 && (
-              <span className="text-red-600">{summary.sentiment.negativo} negativas</span>
+              <span 
+                className={`text-red-600 ${onSentimentClick ? "cursor-pointer hover:underline" : ""}`}
+                onClick={() => onSentimentClick?.("negativo", "Negativo")}
+              >
+                {summary.sentiment.negativo} negativas
+              </span>
             )}
             {summary.sentiment.sinAnalizar > 0 && (
-              <span className="text-amber-600">{summary.sentiment.sinAnalizar} sin analizar</span>
+              <span 
+                className={`text-amber-600 ${onSentimentClick ? "cursor-pointer hover:underline" : ""}`}
+                onClick={() => onSentimentClick?.("sinAnalizar", "Sin analizar")}
+              >
+                {summary.sentiment.sinAnalizar} sin analizar
+              </span>
             )}
           </div>
         </div>

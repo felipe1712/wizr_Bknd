@@ -6,10 +6,10 @@ import { useMentions } from "@/hooks/useMentions";
 import { useEntities } from "@/hooks/useEntities";
 import { useTrendsData } from "@/hooks/useTrendsData";
 import { DateRangeSelector } from "@/components/reports/DateRangeSelector";
-import { DataOriginBreadcrumb } from "@/components/analysis/DataOriginBreadcrumb";
 import { ActivityChart } from "@/components/panorama/ActivityChart";
 import { SentimentOverview } from "@/components/panorama/SentimentOverview";
 import { MentionsSummaryCard } from "@/components/panorama/MentionsSummaryCard";
+import { PanoramaMentionsDrawer, MentionsFilter } from "@/components/panorama/PanoramaMentionsDrawer";
 import { EntityTrendsChart } from "@/components/tendencias/EntityTrendsChart";
 import { AlertsSidePanel } from "@/components/alertas/AlertsSidePanel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,17 +46,19 @@ import {
   Building2,
   Briefcase,
   FileSearch,
-  ArrowUpRight,
-  ArrowDownRight,
 } from "lucide-react";
 
 const InsightsPage = () => {
   const { selectedProject, loading: projectLoading } = useProject();
   const navigate = useNavigate();
-  const { dateConfig, setDateConfig, daysRange, startDate, endDate } = useDateRangeFilter("30d");
+  const { dateConfig, setDateConfig, daysRange } = useDateRangeFilter("30d");
   const { metrics, isLoading: metricsLoading } = usePanoramaData(selectedProject?.id, daysRange);
   const [selectedEntityId, setSelectedEntityId] = useState<string>("all");
   const [alertsPanelOpen, setAlertsPanelOpen] = useState(false);
+  
+  // Mentions drawer state
+  const [mentionsDrawerOpen, setMentionsDrawerOpen] = useState(false);
+  const [mentionsFilter, setMentionsFilter] = useState<MentionsFilter | null>(null);
 
   const timeRange = dateConfig.type === "7d" ? "7d" : dateConfig.type === "90d" ? "90d" : "30d";
 
@@ -176,7 +178,15 @@ const InsightsPage = () => {
       {/* Mentions Summary Card - Clear explanation of data */}
       <MentionsSummaryCard 
         mentions={mentions} 
-        projectName={selectedProject.nombre} 
+        projectName={selectedProject.nombre}
+        onPlatformClick={(platform, label) => {
+          setMentionsFilter({ type: "platform", value: platform, label });
+          setMentionsDrawerOpen(true);
+        }}
+        onSentimentClick={(sentiment, label) => {
+          setMentionsFilter({ type: "sentiment", value: sentiment, label });
+          setMentionsDrawerOpen(true);
+        }}
       />
 
       {/* Metrics Cards */}
@@ -225,9 +235,21 @@ const InsightsPage = () => {
           {/* Overview Charts */}
           <div className="grid gap-4 md:grid-cols-3">
             <div className="col-span-2">
-              <ActivityChart data={metrics.dailyActivity} />
+              <ActivityChart 
+                data={metrics.dailyActivity} 
+                onDateClick={(date, label) => {
+                  setMentionsFilter({ type: "date", value: date, label });
+                  setMentionsDrawerOpen(true);
+                }}
+              />
             </div>
-            <SentimentOverview data={metrics.sentimentBreakdown} />
+            <SentimentOverview 
+              data={metrics.sentimentBreakdown} 
+              onSentimentClick={(sentiment, label) => {
+                setMentionsFilter({ type: "sentiment", value: sentiment, label });
+                setMentionsDrawerOpen(true);
+              }}
+            />
           </div>
 
           {/* Top Sources */}
@@ -424,6 +446,14 @@ const InsightsPage = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Mentions Drawer */}
+      <PanoramaMentionsDrawer
+        open={mentionsDrawerOpen}
+        onOpenChange={setMentionsDrawerOpen}
+        mentions={mentions}
+        filter={mentionsFilter}
+      />
     </div>
   );
 };

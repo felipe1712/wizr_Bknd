@@ -1,11 +1,13 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { MousePointer2 } from "lucide-react";
 
 interface ActivityChartProps {
   data: { date: string; count: number }[];
+  onDateClick?: (date: string, label: string) => void;
 }
 
-export function ActivityChart({ data }: ActivityChartProps) {
+export function ActivityChart({ data, onDateClick }: ActivityChartProps) {
   if (data.length === 0) {
     return (
       <Card>
@@ -25,15 +27,36 @@ export function ActivityChart({ data }: ActivityChartProps) {
     label: new Date(d.date).toLocaleDateString("es-MX", { day: "numeric", month: "short" }),
   }));
 
+  const handleClick = (data: any) => {
+    if (data?.activePayload?.[0]?.payload && onDateClick) {
+      const payload = data.activePayload[0].payload;
+      onDateClick(payload.date, payload.label);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Actividad Diaria</CardTitle>
-        <CardDescription>Volumen de menciones por día</CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Actividad Diaria</CardTitle>
+            <CardDescription>Volumen de menciones por día</CardDescription>
+          </div>
+          {onDateClick && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <MousePointer2 className="h-3 w-3" />
+              Clic para ver detalle
+            </span>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={250}>
-          <AreaChart data={formattedData}>
+          <AreaChart 
+            data={formattedData}
+            onClick={handleClick}
+            style={{ cursor: onDateClick ? "pointer" : "default" }}
+          >
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis
               dataKey="label"
@@ -67,6 +90,13 @@ export function ActivityChart({ data }: ActivityChartProps) {
               stroke="hsl(var(--primary))"
               fill="hsl(var(--primary) / 0.2)"
               strokeWidth={2}
+              activeDot={{ 
+                r: 6, 
+                strokeWidth: 2, 
+                stroke: "hsl(var(--primary))",
+                fill: "hsl(var(--background))",
+                cursor: onDateClick ? "pointer" : "default"
+              }}
             />
           </AreaChart>
         </ResponsiveContainer>
