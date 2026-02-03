@@ -1,19 +1,19 @@
 # Auditoría de Actores de Apify - WIZR Platform
 
-**Última actualización:** 2026-01-27
-**Estado:** En revisión
+**Última actualización:** 2026-02-03
+**Estado:** Actualizado
 
 ## Resumen de Plataformas
 
-| Plataforma | Actor Actual | Rating | Costo | Estado | Notas |
-|------------|--------------|--------|-------|--------|-------|
-| Twitter/X | `powerai/twitter-search-scraper` | ⭐ 4.8 | $4.99/1000 | ✅ Funcional | Requiere renta del actor |
-| Facebook | `powerai/facebook-post-search-scraper` | ⭐ 5.0 | $9.99/1000 | ⚠️ Parcial | Funciona pero puede retornar menos resultados |
-| TikTok | `clockworks/tiktok-scraper` | ⭐ 4.5 | Gratis tier | ⚠️ Requiere filtrado | Resultados no siempre relevantes |
-| Instagram | `apify/instagram-scraper` | ⭐ 4.4 | Pago | ⚠️ Lento | Muy lento, limitar a 20 resultados |
-| YouTube | `scrapesmith/free-youtube-search-scraper` | ⭐ 4.5 | Gratis | ✅ Funcional | Buen rendimiento |
-| Reddit | `trudax/reddit-scraper-lite` | ⭐ 4.0 | Gratis | ✅ Funcional | Incluye comentarios |
-| LinkedIn | `harvestapi/linkedin-post-search` | ⭐ 4.7 | $2/1000 | ✅ Funcional | No requiere cookies |
+| Plataforma | Actor Actual | Fallback | Rating | Costo | Estado | Notas |
+|------------|--------------|----------|--------|-------|--------|-------|
+| Twitter/X | `powerai/twitter-search-scraper` | - | ⭐ 4.8 | $4.99/1000 | ✅ Funcional | Requiere renta del actor |
+| Facebook | `powerai/facebook-post-search-scraper` | `scraper_one/facebook-posts-search` | ⭐ 3.9 / ⭐ 4.4 | $9.99/1000 | ✅ Con fallback | Fallback automático si powerai falla |
+| TikTok | `powerai/tiktok-videos-search-scraper` | - | ⭐ 4.5 | $1.50/1000 | ✅ Funcional | URLs mejoradas con @username |
+| Instagram | `apify/instagram-hashtag-scraper` | `apify/instagram-profile-scraper` | ⭐ 4.4 | Pago | ⚠️ Lento | Muy lento, limitar a 20 resultados |
+| YouTube | `scraper_one/youtube-search-scraper` | - | ⭐ 4.5 | Gratis | ✅ Funcional | Buen rendimiento |
+| Reddit | `trudax/reddit-scraper-lite` | - | ⭐ 4.0 | Gratis | ✅ Funcional | Incluye comentarios |
+| LinkedIn | `harvestapi/linkedin-post-search` | - | ⭐ 4.7 | $2/1000 | ✅ Funcional | No requiere cookies |
 
 ---
 
@@ -42,34 +42,44 @@
 
 ---
 
-### 2. Facebook ⚠️
+### 2. Facebook ✅ (con Fallback Automático)
 **Actor Principal:** `powerai/facebook-post-search-scraper`
-**Actor Fallback (páginas):** `apify/facebook-posts-scraper`
+**Actor Fallback:** `scraper_one/facebook-posts-search`
+**Actor Páginas:** `apify/facebook-posts-scraper`
 
-**Parámetros configurados:**
+#### Sistema de Fallback Automático (v2026-02-03)
+Cuando el actor principal falla (error 503/Service Unavailable por bloqueo de Facebook):
+1. Se intenta automáticamente con `scraper_one/facebook-posts-search` (⭐ 4.4)
+2. La respuesta incluye `fallbackUsed: true` y los errores previos
+3. El normalizador maneja ambos formatos de salida
+
+**Parámetros actor principal (powerai):**
 ```json
 {
   "query": "Actinver",
-  "maxResults": 25,
-  "recent_posts": true
+  "maxResults": 50,
+  "recent_posts": true,
+  "start_date": "2026-01-04",
+  "end_date": "2026-02-03"
 }
 ```
 
-**Campos de salida mapeados:**
-- `post_id` → ID
-- `message` → Contenido del post
-- `author.name` → Nombre del autor
-- `reactions_count`, `comments_count`, `reshare_count` → Métricas
-- `timestamp` → Unix timestamp
+**Parámetros actor fallback (scraper_one):**
+```json
+{
+  "searchQueries": ["Actinver"],
+  "maxPosts": 50
+}
+```
 
-**Problemas conocidos:**
-1. **Resultados incompletos**: El actor puede retornar menos menciones que una búsqueda manual
-2. **Falsos positivos**: Requiere filtrado post-extracción por keyword
-3. **Tiempo de ejecución**: Puede tomar 1-3 minutos
+**Campos de salida mapeados (ambos actores):**
+- `post_id` / `id` → ID
+- `message` / `text` → Contenido del post
+- `author.name` / `authorName` → Nombre del autor
+- `reactions_count` / `likesCount`, `comments_count`, `reshare_count` → Métricas
+- `timestamp` / `postedAt` → Fecha
 
-**Alternativas a evaluar:**
-- `easyapi/facebook-posts-search-scraper` (rating 5.0) - Evaluado, menos confiable
-- `scrapier/facebook-posts-scraper` ($24.99/mes) - Más completo pero costoso
+**Estado:** ✅ Funcional con fallback automático
 
 ---
 

@@ -12,10 +12,11 @@ const ACTOR_IDS: Record<string, string> = {
   twitter: "powerai/twitter-search-scraper",
   // Facebook: powerai/facebook-post-search-scraper (5.0 rating, $9.99/1000 results)
   facebook: "powerai/facebook-post-search-scraper",
+  // Facebook fallback: scraper_one/facebook-posts-search (4.4 rating, more reliable)
+  facebook_fallback: "scraper_one/facebook-posts-search",
   // Facebook page-specific scraper (fallback for username searches)
   facebook_page: "apify/facebook-posts-scraper",
-  // TikTok: sociavault/tiktok-keyword-search-scraper ($1.50/1000 results, keyword filtering)
-  // NOTE: sociavault actor failed with upstream 402 (external credits). Use Apify-billed actor instead.
+  // TikTok: powerai/tiktok-videos-search-scraper
   tiktok: "powerai/tiktok-videos-search-scraper",
   // Instagram: apify/instagram-hashtag-scraper ($2.30/1000 results, maintained by Apify)
   instagram: "apify/instagram-hashtag-scraper",
@@ -32,6 +33,12 @@ const ACTOR_IDS: Record<string, string> = {
   // LinkedIn: harvestapi/linkedin-post-search (no cookies required, $2/1000 results)
   linkedin: "harvestapi/linkedin-post-search",
 };
+
+// Facebook-specific fallback actors (tried in order)
+const FACEBOOK_ACTORS = [
+  { id: "powerai/facebook-post-search-scraper", name: "powerai" },
+  { id: "scraper_one/facebook-posts-search", name: "scraper_one" },
+] as const;
 
 // Platforms that require paid subscriptions - return friendly error instead of 403
 const DISABLED_PLATFORMS: Record<string, string> = {
@@ -121,10 +128,8 @@ serve(async (req) => {
       case "facebook":
         // Facebook: Use powerai/facebook-post-search-scraper for keyword queries
         // Use page scraper only for specific username/page searches
+        // Fallback logic is handled after the switch statement
         if (query) {
-          // Use Facebook Post Search Scraper (powerai - 5.0 rating, better reliability)
-          actorId = ACTOR_IDS.facebook; // powerai/facebook-post-search-scraper
-          
           // Calculate date range: last 30 days to ensure recent posts
           const today = new Date();
           const thirtyDaysAgo = new Date(today);
@@ -132,15 +137,20 @@ serve(async (req) => {
           
           const formatDate = (d: Date) => d.toISOString().split("T")[0]; // yyyy-mm-dd
           
+          // Store Facebook-specific inputs for fallback logic
+          // Primary actor (powerai) input format
           input = {
-            query: query, // This actor uses 'query' not 'searchQuery'
+            query: query,
             maxResults: maxResults,
-            recent_posts: true, // Focus on recent posts for monitoring
-            start_date: formatDate(thirtyDaysAgo), // Filter posts from last 30 days
+            recent_posts: true,
+            start_date: formatDate(thirtyDaysAgo),
             end_date: formatDate(today),
           };
+          
+          // Mark as Facebook query for fallback handling
+          actorId = "__FACEBOOK_WITH_FALLBACK__";
         } else if (username) {
-          // Fallback to page scraper for specific pages
+          // Fallback to page scraper for specific pages (no fallback needed)
           actorId = ACTOR_IDS.facebook_page;
           input = {
             startUrls: [{ url: `https://www.facebook.com/${username}` }],
@@ -379,6 +389,11 @@ serve(async (req) => {
 
     console.log(`Starting Apify actor ${actorId} with input:`, JSON.stringify(input));
 
+    // Special handling for Facebook with automatic fallback
+    if (actorId === "__FACEBOOK_WITH_FALLBACK__") {
+      return await handleFacebookWithFallback(APIFY_API_TOKEN, input, query || "");
+    }
+
     // Start the actor run
     // Apify API URLs typically use the `owner~actor-name` form.
     // Some actors may not resolve correctly via `owner/actor-name` in path segments.
@@ -403,6 +418,8 @@ serve(async (req) => {
         JSON.stringify({
           success: false,
           error: `Apify error ${runResponse.status}: ${errorText}`,
+          errorCode: runResponse.status,
+          errorDetails: errorText,
         }),
         { status: runResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -420,6 +437,7 @@ serve(async (req) => {
         runId,
         datasetId,
         status: runData.data.status,
+        actorUsed: actorId,
         message: "Scraping job started. Use the status endpoint to check progress.",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -435,3 +453,112 @@ serve(async (req) => {
     );
   }
 });
+
+// Facebook fallback handler with automatic retry on different actors
+async function handleFacebookWithFallback(
+  apiToken: string,
+  primaryInput: Record<string, unknown>,
+  query: string
+): Promise<Response> {
+  const errors: Array<{ actor: string; status: number; error: string }> = [];
+  
+  for (const actor of FACEBOOK_ACTORS) {
+    console.log(`Trying Facebook actor: ${actor.name} (${actor.id})`);
+    
+    // Build input based on actor type
+    let input: Record<string, unknown>;
+    
+    if (actor.name === "powerai") {
+      // powerai uses: query, maxResults, recent_posts, start_date, end_date
+      input = primaryInput;
+    } else if (actor.name === "scraper_one") {
+      // scraper_one/facebook-posts-search uses: searchQueries (array), maxPosts
+      input = {
+        searchQueries: [query],
+        maxPosts: primaryInput.maxResults || 50,
+      };
+    } else {
+      input = primaryInput;
+    }
+    
+    const actorPathId = actor.id.replace("/", "~");
+    
+    try {
+      const runResponse = await fetch(
+        `https://api.apify.com/v2/acts/${encodeURIComponent(actorPathId)}/runs?token=${apiToken}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        }
+      );
+      
+      if (runResponse.ok) {
+        const runData = await runResponse.json();
+        const runId = runData.data.id;
+        const datasetId = runData.data.defaultDatasetId;
+        
+        console.log(`Facebook actor ${actor.name} started successfully. Run ID: ${runId}`);
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            runId,
+            datasetId,
+            status: runData.data.status,
+            actorUsed: actor.id,
+            fallbackUsed: actor.name !== "powerai",
+            previousErrors: errors.length > 0 ? errors : undefined,
+            message: errors.length > 0 
+              ? `Actor primario falló. Usando fallback: ${actor.name}`
+              : "Scraping job started. Use the status endpoint to check progress.",
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      // Actor failed - record error and try next
+      const errorText = await runResponse.text();
+      console.error(`Facebook actor ${actor.name} failed:`, runResponse.status, errorText);
+      
+      errors.push({
+        actor: actor.id,
+        status: runResponse.status,
+        error: errorText.substring(0, 200), // Truncate for response size
+      });
+      
+      // Only retry on 5xx errors (service unavailable, etc.)
+      // For 4xx errors (invalid input, not rented), don't retry
+      if (runResponse.status < 500) {
+        console.log(`Actor ${actor.name} returned ${runResponse.status} - not retrying`);
+        break;
+      }
+      
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Network error";
+      console.error(`Facebook actor ${actor.name} network error:`, errorMsg);
+      errors.push({
+        actor: actor.id,
+        status: 0,
+        error: errorMsg,
+      });
+    }
+  }
+  
+  // All actors failed
+  const lastError = errors[errors.length - 1];
+  return new Response(
+    JSON.stringify({
+      success: false,
+      error: `Todos los actores de Facebook fallaron. Último error: ${lastError?.error || "Unknown"}`,
+      errorCode: lastError?.status || 503,
+      errorDetails: errors,
+      platform: "facebook",
+      retriable: true,
+    }),
+    { 
+      status: lastError?.status || 503, 
+      headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    }
+  );
+}

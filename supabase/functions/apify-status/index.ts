@@ -240,68 +240,73 @@ function normalizeTwitter(item: Record<string, unknown>, index: number): Normali
 }
 
 function normalizeFacebook(item: Record<string, unknown>, index: number): NormalizedResult {
-  // Handle powerai/facebook-post-search-scraper format (primary)
-  // and fallback for page scraper formats
+  // Handle multiple Facebook actor formats:
+  // - powerai/facebook-post-search-scraper: message, author.name, reactions_count, timestamp
+  // - scraper_one/facebook-posts-search: text, authorName, likesCount, postedAt
+  // - apify/facebook-posts-scraper (page scraper): postText, pageName, likes, time
   const author = item.author as Record<string, unknown> | undefined;
   
   const text = String(
     get(item, "message") ||  // powerai format
-    get(item, "text") || 
+    get(item, "text") ||     // scraper_one format
     get(item, "postText") || 
     get(item, "content") ||
+    get(item, "caption") ||  // alternative field
     ""
   );
   
-  // powerai format returns author object with id, name, url, profile_picture_url
+  // Author name from various formats
   const authorName = String(
-    get(author, "name") ||
+    get(author, "name") ||           // powerai nested format
+    get(item, "authorName") ||       // scraper_one format
     get(item, "pageName") || 
     get(item, "page.name") || 
-    get(item, "authorName") ||
     get(item, "user_name") ||
     get(item, "userName") ||
+    get(item, "profileName") ||      // alternative
     ""
   );
   
   const authorUrl = String(
-    get(author, "url") ||
+    get(author, "url") ||            // powerai nested format
+    get(item, "authorUrl") ||        // scraper_one format
+    get(item, "profileUrl") ||
     get(item, "pageUrl") || 
     get(item, "page.url") || 
-    get(item, "authorUrl") ||
     get(item, "user_url") ||
-    get(item, "profileUrl") ||
     ""
   );
   
   const authorAvatar = String(
-    get(author, "profile_picture_url") ||
+    get(author, "profile_picture_url") ||  // powerai nested format
+    get(item, "authorProfilePicture") ||   // scraper_one format
+    get(item, "profilePicture") ||
     get(item, "page.profilePicture") || 
     get(item, "authorAvatar") || 
-    get(item, "profilePicture") || 
     ""
   );
   
-  // powerai format uses reactions_count, comments_count, reshare_count
+  // Metrics from various formats
   const metrics = {
     likes: Number(
-      get(item, "reactions_count") || // powerai format
+      get(item, "reactions_count") ||  // powerai format
+      get(item, "likesCount") ||       // scraper_one format
       get(item, "likes") || 
-      get(item, "likesCount") || 
       get(item, "reactions") || 
       get(item, "reactionCount") || 
       0
     ),
     comments: Number(
-      get(item, "comments_count") || // powerai format
+      get(item, "comments_count") ||   // powerai format
+      get(item, "commentsCount") ||    // scraper_one format
       get(item, "comments") || 
-      get(item, "commentsCount") || 
       get(item, "commentCount") || 
       0
     ),
     shares: Number(
-      get(item, "reshare_count") || // powerai format
+      get(item, "reshare_count") ||    // powerai format
+      get(item, "sharesCount") ||      // scraper_one format
       get(item, "shares") || 
-      get(item, "sharesCount") || 
       get(item, "shareCount") || 
       0
     ),
@@ -312,13 +317,14 @@ function normalizeFacebook(item: Record<string, unknown>, index: number): Normal
     get(item, "url") || 
     get(item, "postUrl") || 
     get(item, "link") ||
+    get(item, "permalink") ||  // scraper_one sometimes uses this
     ""
   );
   
-  // powerai uses 'type' field and 'timestamp' (unix)
-  const postType = String(get(item, "type") || "post");
-  const hasVideo = Boolean(get(item, "video") || get(item, "video_files"));
-  const hasImage = Boolean(get(item, "image") || get(item, "album_preview"));
+  // Detect content type
+  const postType = String(get(item, "type") || get(item, "postType") || "post");
+  const hasVideo = Boolean(get(item, "video") || get(item, "video_files") || get(item, "videoUrl"));
+  const hasImage = Boolean(get(item, "image") || get(item, "album_preview") || get(item, "imageUrl"));
 
   return {
     id: `facebook-${get(item, "post_id") || get(item, "id") || get(item, "postId") || index}-${Date.now()}`,
@@ -330,11 +336,12 @@ function normalizeFacebook(item: Record<string, unknown>, index: number): Normal
       username: authorName.toLowerCase().replace(/\s+/g, ""),
       url: authorUrl,
       avatarUrl: authorAvatar,
-      followers: Number(get(item, "page.likes") || get(item, "followersCount") || 0),
+      followers: Number(get(item, "page.likes") || get(item, "followersCount") || get(item, "followers") || 0),
     },
     metrics: { ...metrics, engagement: calculateEngagement(metrics) },
     publishedAt: parseDate(
-      get(item, "timestamp") || // powerai uses unix timestamp
+      get(item, "timestamp") ||     // powerai uses unix timestamp
+      get(item, "postedAt") ||      // scraper_one format
       get(item, "time") || 
       get(item, "publishedAt") || 
       get(item, "date") || 
