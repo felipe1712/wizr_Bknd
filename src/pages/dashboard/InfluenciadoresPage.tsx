@@ -319,7 +319,7 @@ const InfluenciadoresPage = () => {
       ) : (
         <>
           {/* Trend chart */}
-          <InfluencerTrendChart data={dailyTrends} domains={topDomains} labels={topDomainLabels} />
+          <InfluencerTrendChart data={dailyTrends} domains={topDomains} labels={topDomainLabels} mentions={rawMentions} />
 
           {/* Influencers display */}
           {viewMode === "cards" ? (
