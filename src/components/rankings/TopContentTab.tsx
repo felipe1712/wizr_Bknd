@@ -56,6 +56,7 @@ type SortBy = "engagement" | "likes" | "comments" | "shares" | "date";
 // Extended post type that includes the profile_id for multi-profile view
 interface FKPostWithProfile extends FKPost {
   profile_id?: string;
+  display_name?: string;
 }
 
 const formatNumber = (num: number | null | undefined): string => {
@@ -245,7 +246,11 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
   // Select the appropriate posts based on mode
   const posts: FKPostWithProfile[] = isAllProfiles 
     ? allProfilesPosts 
-    : singleProfilePosts.map(p => ({ ...p, profile_id: selectedProfile?.profile_id }));
+    : singleProfilePosts.map(p => ({ 
+        ...p, 
+        profile_id: selectedProfile?.profile_id,
+        display_name: selectedProfile?.display_name || selectedProfile?.profile_id 
+      }));
   const postsLoading = isAllProfiles ? allProfilesLoading : singlePostsLoading;
   const isFetching = isAllProfiles ? allProfilesFetching : isFetchingSingle;
 
@@ -710,7 +715,7 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
                 <PostCard 
                   key={post.id || `${post.profile_id}-${index}`} 
                   post={post} 
-                  profileName={post.profile_id || selectedProfile?.profile_id || ""} 
+                  profileName={post.display_name || post.profile_id || selectedProfile?.display_name || selectedProfile?.profile_id || ""} 
                   rank={((currentPage - 1) * POSTS_PER_PAGE) + index + 1}
                 />
               ))}
@@ -843,6 +848,7 @@ function useFetchMultipleProfilePosts(profiles: FKProfile[]) {
             shares,
             engagement: totalEngagement,
             profile_id: profile.profile_id,
+            display_name: profile.display_name || profile.profile_id,
           };
         });
       },
