@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { TrendingUp, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { FaFacebookF, FaInstagram, FaYoutube, FaLinkedinIn, FaTiktok, FaXTwitter } from "react-icons/fa6";
+import { SiThreads } from "react-icons/si";
 import {
   LineChart,
   Line,
@@ -16,9 +18,23 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { FKProfile, FKProfileKPI } from "@/hooks/useFanpageKarma";
+import { FKProfile, FKProfileKPI, FKNetwork } from "@/hooks/useFanpageKarma";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+
+// Network icon component
+const NetworkIcon = ({ network, className = "h-3 w-3" }: { network: string; className?: string }) => {
+  const icons: Record<string, React.ReactNode> = {
+    facebook: <FaFacebookF className={`${className} text-[#1877F2]`} />,
+    instagram: <FaInstagram className={`${className} text-[#E4405F]`} />,
+    youtube: <FaYoutube className={`${className} text-[#FF0000]`} />,
+    linkedin: <FaLinkedinIn className={`${className} text-[#0A66C2]`} />,
+    tiktok: <FaTiktok className={className} />,
+    twitter: <FaXTwitter className={className} />,
+    threads: <SiThreads className={className} />,
+  };
+  return <>{icons[network] || null}</>;
+};
 
 type MetricType = "followers" | "engagement_rate" | "follower_growth_percent" | "posts_per_day";
 
@@ -186,7 +202,8 @@ export function TrendsTab({ profiles, kpis, isLoading }: TrendsTabProps) {
                 .filter(p => selectedProfiles.includes(p.id))
                 .slice(0, 5)
                 .map((profile) => (
-                  <Badge key={profile.id} variant="default" className="text-xs">
+                  <Badge key={profile.id} variant="default" className="text-xs flex items-center gap-1">
+                    <NetworkIcon network={profile.network} className="h-2.5 w-2.5" />
                     @{profile.profile_id}
                   </Badge>
                 ))}
@@ -210,10 +227,11 @@ export function TrendsTab({ profiles, kpis, isLoading }: TrendsTabProps) {
                   <Badge
                     key={profile.id}
                     variant={isSelected ? "default" : "outline"}
-                    className="cursor-pointer transition-colors hover:opacity-80"
+                    className="cursor-pointer transition-colors hover:opacity-80 flex items-center gap-1.5"
                     onClick={() => toggleProfile(profile.id)}
                   >
-                    @{profile.profile_id}
+                    <NetworkIcon network={profile.network} className="h-3 w-3" />
+                    <span>@{profile.profile_id}</span>
                   </Badge>
                 );
               })}
