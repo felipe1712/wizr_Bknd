@@ -7,60 +7,35 @@ const corsHeaders = {
 };
 
 // Bright Data Dataset IDs for social media scrapers
-// These are the pre-built scraper IDs from Bright Data's Social Media API Suite
+// HYBRID STRATEGY: Only TikTok and YouTube have keyword search available
+// Other platforms (Twitter, Instagram, Facebook, LinkedIn, Reddit) use Apify
 const BRIGHTDATA_DATASETS: Record<string, string> = {
-  // Facebook Posts by Search (keyword search)
-  facebook_posts_search: "gd_lyclf27l1knqaruv1",
-  // Facebook Posts by Profile URL
-  facebook_posts_profile: "gd_lycleh7010mwt37tvc",
-  // Instagram Posts by Hashtag
-  instagram_hashtag: "gd_l1villgoqfuktt1co",
-  // Instagram Posts by Profile
-  instagram_profile: "gd_l1vikfnt1wgvvqz95w",
-  // TikTok Posts Search
-  tiktok_search: "gd_l7q7dkf244hwjntr0",
-  // TikTok Posts by Profile
-  tiktok_profile: "gd_lxt7p2o81g1tmc2s4i",
-  // YouTube Videos Search
-  youtube_search: "gd_lvmq889k7jsh4f0z",
-  // YouTube Videos by Channel
-  youtube_channel: "gd_l2m3a8o5uyb2o2qz1w",
-  // Reddit Posts Search
-  reddit_search: "gd_l1villgoqfuktt1cq",
-  // LinkedIn Posts Search
-  linkedin_search: "gd_l1vikfnt1wgvvqz95x",
-  // Twitter/X Search
-  twitter_search: "gd_lwxkxvnf1cynvib9co",
+  // TikTok Posts - Discover by keyword (ACTIVE - keyword search available)
+  tiktok_keyword: "gd_lu702nij2f790tmv9h",
+  // YouTube Videos posts - Discover by keyword (ACTIVE - keyword search available)
+  youtube_keyword: "gd_lk56epmy2i5g7lzu0k",
 };
 
-// Platform to dataset mapping based on search type
+// Platform to dataset mapping - ONLY TikTok and YouTube keyword search supported
+// Returns null for unsupported platforms (use Apify instead)
 function getDatasetId(platform: string, searchType: string): string | null {
   switch (platform) {
-    case "facebook":
-      return searchType === "username" 
-        ? BRIGHTDATA_DATASETS.facebook_posts_profile 
-        : BRIGHTDATA_DATASETS.facebook_posts_search;
-    case "instagram":
-      if (searchType === "username" || searchType === "taggedPosts") {
-        return BRIGHTDATA_DATASETS.instagram_profile;
-      }
-      return BRIGHTDATA_DATASETS.instagram_hashtag;
     case "tiktok":
-      return searchType === "username" 
-        ? BRIGHTDATA_DATASETS.tiktok_profile 
-        : BRIGHTDATA_DATASETS.tiktok_search;
+      // Only keyword search is supported via Bright Data
+      if (searchType === "query" || searchType === "hashtag") {
+        return BRIGHTDATA_DATASETS.tiktok_keyword;
+      }
+      return null; // Profile scraping not configured
+
     case "youtube":
     case "youtube_shorts":
-      return searchType === "channelUrl" 
-        ? BRIGHTDATA_DATASETS.youtube_channel 
-        : BRIGHTDATA_DATASETS.youtube_search;
-    case "reddit":
-    case "reddit_comments":
-      return BRIGHTDATA_DATASETS.reddit_search;
-    case "linkedin":
-      return BRIGHTDATA_DATASETS.linkedin_search;
-    case "twitter":
-      return BRIGHTDATA_DATASETS.twitter_search;
+      // Only keyword search is supported via Bright Data
+      if (searchType === "query") {
+        return BRIGHTDATA_DATASETS.youtube_keyword;
+      }
+      return null; // Channel scraping not configured
+
+    // All other platforms should use Apify
     default:
       return null;
   }
@@ -114,77 +89,29 @@ serve(async (req) => {
       throw new Error(`Unsupported platform for Bright Data: ${platform}`);
     }
 
-    // Build input payload based on platform and search type
+    // Build input payload - ONLY TikTok and YouTube keyword search
     let inputPayload: Record<string, unknown>[] = [];
 
     switch (platform) {
-      case "twitter":
-        if (query) {
-          inputPayload = [{ keyword: query, num_of_posts: maxResults }];
-        } else if (username) {
-          inputPayload = [{ url: `https://twitter.com/${username.replace(/^@/, "")}`, num_of_posts: maxResults }];
-        }
-        break;
-
-      case "facebook":
-        if (searchType === "username" && username) {
-          inputPayload = [{ url: `https://www.facebook.com/${username}`, num_of_posts: maxResults }];
-        } else if (query) {
-          inputPayload = [{ keyword: query, num_of_posts: maxResults }];
-        }
-        break;
-
       case "tiktok":
-        if (searchType === "username" && username) {
-          inputPayload = [{ url: `https://www.tiktok.com/@${username.replace(/^@/, "")}`, num_of_posts: maxResults }];
-        } else if (hashtag) {
-          inputPayload = [{ keyword: hashtag.replace(/^#/, ""), num_of_posts: maxResults }];
+        // TikTok uses 'search_keyword' parameter (from Bright Data dashboard)
+        if (hashtag) {
+          inputPayload = [{ search_keyword: hashtag.replace(/^#/, ""), num_of_posts: maxResults }];
         } else if (query) {
-          inputPayload = [{ keyword: query, num_of_posts: maxResults }];
-        }
-        break;
-
-      case "instagram":
-        if (searchType === "taggedPosts" && taggedUsername) {
-          inputPayload = [{ url: `https://www.instagram.com/${taggedUsername.replace(/^@/, "")}/tagged/`, num_of_posts: maxResults }];
-        } else if (searchType === "username" && username) {
-          const usernames = username.split(",").map(u => u.trim().replace(/^@/, "")).filter(Boolean);
-          inputPayload = usernames.map(u => ({ url: `https://www.instagram.com/${u}/`, num_of_posts: Math.ceil(maxResults / usernames.length) }));
-        } else if (hashtag) {
-          const tags = hashtag.split(",").map(h => h.trim().replace(/^#/, "")).filter(Boolean);
-          inputPayload = tags.map(t => ({ url: `https://www.instagram.com/explore/tags/${t}/`, num_of_posts: Math.ceil(maxResults / tags.length) }));
-        } else if (query) {
-          // Treat query as hashtag for Instagram
-          inputPayload = [{ url: `https://www.instagram.com/explore/tags/${query.replace(/^#/, "")}/`, num_of_posts: maxResults }];
+          inputPayload = [{ search_keyword: query, num_of_posts: maxResults }];
         }
         break;
 
       case "youtube":
       case "youtube_shorts":
-        if (searchType === "channelUrl" && channelUrl) {
-          inputPayload = [{ url: channelUrl, num_of_posts: maxResults }];
-        } else if (query) {
-          inputPayload = [{ keyword: query, num_of_posts: maxResults }];
-        }
-        break;
-
-      case "reddit":
-      case "reddit_comments":
-        if (subreddit) {
-          inputPayload = [{ url: `https://www.reddit.com/r/${subreddit}/`, num_of_posts: maxResults }];
-        } else if (query) {
-          inputPayload = [{ keyword: query, num_of_posts: maxResults }];
-        }
-        break;
-
-      case "linkedin":
+        // YouTube uses 'keyword' parameter with optional date filters
         if (query) {
           inputPayload = [{ keyword: query, num_of_posts: maxResults }];
         }
         break;
 
       default:
-        throw new Error(`Unsupported platform: ${platform}`);
+        throw new Error(`Platform ${platform} not supported by Bright Data. Use Apify instead.`);
     }
 
     if (inputPayload.length === 0) {
