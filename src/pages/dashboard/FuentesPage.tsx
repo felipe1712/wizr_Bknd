@@ -24,6 +24,7 @@ import { MentionsHubTab } from "@/components/fuentes/MentionsHubTab";
 import { SavedMentionsBadge } from "@/components/fuentes/SavedMentionsBadge";
 import { AutoSaveConfigPanel } from "@/components/fuentes/AutoSaveConfigPanel";
 import { UnifiedSearch } from "@/components/fuentes/UnifiedSearch";
+import { ScheduledSearchConfig } from "@/components/fuentes/ScheduledSearchConfig";
 import { useAutoSaveConfig } from "@/hooks/useAutoSaveConfig";
 
 import wizrLogoIcon from "@/assets/wizr-logo-icon.png";
@@ -642,7 +643,11 @@ const FuentesPage = () => {
         </TabsContent>
 
         {/* Unified Search Tab */}
-        <TabsContent value="unified" className="space-y-4 mt-4">
+        <TabsContent value="unified" className="space-y-6 mt-4">
+          {/* Scheduled Search Configuration */}
+          <ScheduledSearchConfig projectId={selectedProject.id} />
+          
+          {/* Manual Unified Search */}
           <UnifiedSearch
             projectId={selectedProject.id}
             entities={entities}

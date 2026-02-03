@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.generate-ranking-report]
 verify_jwt = false
+
+[functions.scheduled-unified-search]
+verify_jwt = false
