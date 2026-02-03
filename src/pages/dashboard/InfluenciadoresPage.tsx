@@ -32,34 +32,34 @@ const SOURCE_TYPE_OPTIONS: { value: SourceType; label: string }[] = [
   { value: "other", label: "Otros (Foros, Blogs)" },
 ];
 
+// Normalized domain names (matching useInfluencersData output)
 const SOCIAL_DOMAINS = [
-  "facebook.com",
-  "twitter.com",
-  "x.com",
-  "instagram.com",
-  "linkedin.com",
-  "tiktok.com",
-  "youtube.com",
-  "threads.net",
+  "facebook",
+  "twitter",
+  "instagram",
+  "linkedin",
+  "tiktok",
+  "youtube",
+  "threads",
 ];
 
-const NEWS_DOMAINS = [
-  "msn.com",
-  "elfinanciero.com.mx",
-  "eleconomista.com.mx",
-  "reforma.com",
-  "milenio.com",
-  "jornada.com.mx",
-  "proceso.com.mx",
-  "forbes.com.mx",
-  "expansion.mx",
-  "bloomberglinea.com",
-  "bbc.com",
-  "reuters.com",
-  "cnn.com",
-  "elpais.com",
-  "lanacion.com.ar",
-  "infobae.com",
+const NEWS_KEYWORDS = [
+  "msn",
+  "elfinanciero",
+  "eleconomista",
+  "reforma",
+  "milenio",
+  "jornada",
+  "proceso",
+  "forbes",
+  "expansion",
+  "bloomberglinea",
+  "bbc",
+  "reuters",
+  "cnn",
+  "elpais",
+  "lanacion",
+  "infobae",
 ];
 
 const InfluenciadoresPage = () => {
@@ -71,8 +71,10 @@ const InfluenciadoresPage = () => {
 
   const classifyDomain = (domain: string): SourceType => {
     const lowerDomain = domain.toLowerCase();
-    if (SOCIAL_DOMAINS.some((sd) => lowerDomain.includes(sd))) return "social";
-    if (NEWS_DOMAINS.some((nd) => lowerDomain.includes(nd))) return "news";
+    // Check exact match or if the normalized domain is a social platform
+    if (SOCIAL_DOMAINS.includes(lowerDomain) || SOCIAL_DOMAINS.some((sd) => lowerDomain.includes(sd))) return "social";
+    // Check if it's a news domain (partial match for subdomains)
+    if (NEWS_KEYWORDS.some((nd) => lowerDomain.includes(nd))) return "news";
     return "other";
   };
 
