@@ -176,13 +176,23 @@ serve(async (req) => {
       body: JSON.stringify({ input: inputPayload }),
     });
 
+    // Read response as text first - Bright Data may return NDJSON (newline-delimited JSON)
+    const responseText = await triggerResponse.text();
+    
     if (!triggerResponse.ok) {
-      const errorText = await triggerResponse.text();
-      console.error("Bright Data trigger error:", triggerResponse.status, errorText);
-      throw new Error(`Bright Data API error: ${triggerResponse.status} - ${errorText}`);
+      console.error("Bright Data trigger error:", triggerResponse.status, responseText);
+      throw new Error(`Bright Data API error: ${triggerResponse.status} - ${responseText}`);
     }
 
-    const triggerData = await triggerResponse.json();
+    // Parse only the first line of the response (NDJSON format)
+    const firstLine = responseText.split('\n')[0].trim();
+    let triggerData: { snapshot_id?: string };
+    try {
+      triggerData = JSON.parse(firstLine);
+    } catch (parseError) {
+      console.error("Failed to parse Bright Data response:", responseText.substring(0, 500));
+      throw new Error(`Invalid JSON response from Bright Data: ${parseError}`);
+    }
     console.log("Bright Data trigger response:", JSON.stringify(triggerData));
 
     // Bright Data returns snapshot_id for async requests
