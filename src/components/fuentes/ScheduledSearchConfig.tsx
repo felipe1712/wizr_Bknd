@@ -71,6 +71,7 @@ export function ScheduledSearchConfig({ projectId }: ScheduledSearchConfigProps)
 
   const selectedPlatforms = schedule?.platforms || ["news", "twitter", "facebook"];
   const frequency = (schedule?.frequency || "daily") as ScheduleFrequency;
+  const maxResults = schedule?.max_results_per_platform || 50;
 
   const handlePlatformToggle = (platformId: string) => {
     const newPlatforms = selectedPlatforms.includes(platformId)
@@ -235,7 +236,7 @@ export function ScheduledSearchConfig({ projectId }: ScheduledSearchConfigProps)
             <div className="flex items-center justify-between">
               <Label htmlFor="maxResults">Resultados máximos por plataforma</Label>
               <Select 
-                value={(schedule?.max_results_per_platform || 25).toString()} 
+                value={maxResults.toString()} 
                 onValueChange={handleMaxResultsChange}
               >
                 <SelectTrigger className="w-24">

@@ -93,7 +93,7 @@ export function useSearchSchedule(projectId: string | undefined): UseSearchSched
             is_enabled: false,
             frequency: "daily",
             platforms: ["news", "twitter", "facebook"],
-            max_results_per_platform: 25,
+            max_results_per_platform: 50,
             ...data,
           });
 
