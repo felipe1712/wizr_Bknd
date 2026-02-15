@@ -379,9 +379,9 @@ const slides = [
     </div>
   ),
 
-  /* 10 — Google */
+  /* 10 — Google: búsqueda urgente */
   () => (
-    <div className="flex flex-col w-full h-full bg-white">
+    <div className="flex flex-col w-full h-full bg-white overflow-hidden">
       <div className="pt-12 px-16">
         <h1 className="text-[36px] font-bold text-slate-800 tracking-tight">Google: La búsqueda de ayuda urgente</h1>
         <div className="h-1 w-24 bg-slate-600 mt-4" />
@@ -422,6 +422,230 @@ const slides = [
           No aparecer en Google es, para una mujer en crisis, <span className="text-slate-300 font-bold italic">no existir como opción de ayuda.</span>
         </p>
         <i className="fas fa-shield-alt text-slate-400 text-[30px]" />
+      </div>
+    </div>
+  ),
+
+  /* 11 — Desmitificando la complejidad */
+  () => (
+    <div className="flex flex-col w-full h-full bg-white overflow-hidden">
+      <div className="pt-12 px-16 flex justify-between items-end">
+        <div>
+          <h1 className="text-[36px] font-extrabold text-slate-900 tracking-tight">Desmitificando la complejidad técnica</h1>
+          <div className="h-1 w-24 bg-slate-800 mt-4" />
+        </div>
+        <p className="text-slate-500 font-semibold uppercase tracking-widest text-[14px] mb-1">Estrategia Digital</p>
+      </div>
+      <div className="flex-1 px-16 py-12 grid grid-cols-12 gap-8 items-center">
+        <div className="col-span-7 space-y-6">
+          <p className="text-[20px] text-slate-600 mb-8 leading-relaxed">
+            La presencia digital efectiva no depende de la sofisticación tecnológica, sino de la <strong>claridad del mensaje</strong> y la <strong>disponibilidad para ayudar</strong>.
+          </p>
+          <div className="grid grid-cols-1 gap-4">
+            {[
+              { icon: "fa-user-slash", title: 'No es ser "Influencer"', desc: 'Se trata de ser <strong>encontrable y útil</strong>, no de buscar fama personal o "likes" masivos.' },
+              { icon: "fa-tools", title: "No requiere expertiz técnica", desc: "Las herramientas actuales son <strong>intuitivas</strong>. Lo importante es el contenido de valor que ya generan." },
+              { icon: "fa-camera", title: "No exige estética perfecta", desc: "La <strong>autenticidad</strong> y la información veraz superan a la edición profesional en el liderazgo social." },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-6 p-6 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="flex-shrink-0 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm">
+                  <i className={`fas ${item.icon} text-slate-400 text-[24px]`} />
+                </div>
+                <div>
+                  <h3 className="text-[18px] font-bold text-slate-800">{item.title}</h3>
+                  <p className="text-slate-600" dangerouslySetInnerHTML={{ __html: item.desc }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="col-span-5 flex flex-col gap-4">
+          <div className="rounded-2xl overflow-hidden shadow-xl border-4 border-slate-50">
+            <img alt="Mujeres trabajando" className="w-full h-64 object-cover" src="https://picture-search.skywork.ai/aippt/image/sheet/775598a185beb72197ca5b325ec7d571.jpg" />
+          </div>
+          <div className="bg-slate-900 p-6 rounded-2xl text-white">
+            <p className="text-[14px] uppercase tracking-widest font-bold text-slate-400 mb-2">Principio Rector</p>
+            <p className="text-[18px] font-medium leading-snug">
+              &quot;La tecnología es solo el canal; la <strong>capacidad de servicio</strong> sigue siendo su mayor activo.&quot;
+            </p>
+          </div>
+        </div>
+      </div>
+      <div className="h-16 px-16 border-t border-slate-100 flex items-center justify-between text-slate-400 text-[12px] font-semibold uppercase tracking-widest">
+        <span>Presencia Digital y Liderazgo Femenino</span>
+        <span>Módulo de Herramientas Técnicas</span>
+      </div>
+    </div>
+  ),
+
+  /* 12 — Espacio público digital */
+  () => (
+    <div className="flex flex-col w-full h-full bg-white p-16 overflow-hidden">
+      <header className="mb-12">
+        <h1 className="text-[48px] font-extrabold text-slate-900 tracking-tight">El espacio público digital</h1>
+        <div className="h-1.5 w-20 bg-slate-800 mt-4" />
+      </header>
+      <div className="flex gap-12 items-start flex-1">
+        <div className="w-7/12 space-y-10">
+          <p className="text-[24px] text-slate-600 leading-relaxed">
+            Lo digital no es un mundo aparte; es la <strong>extensión actual</strong> del espacio público donde se construye la participación ciudadana y la incidencia política.
+          </p>
+          <div className="grid grid-cols-1 gap-8">
+            {[
+              { icon: "fa-landmark", title: "Incidencia en la agenda", text: "Estar presentes permite que las <strong>causas comunitarias</strong> locales formen parte de la conversación pública general." },
+              { icon: "fa-users-rectangle", title: "Representación efectiva", text: "Garantiza que la <strong>voz de las mujeres</strong> esté representada en los espacios donde se toman las decisiones hoy." },
+              { icon: "fa-network-wired", title: "Construcción colectiva", text: "Facilita la creación de <strong>redes de apoyo</strong> y alianzas estratégicas entre líderes de distintas regiones." },
+            ].map((item, i) => (
+              <div key={i} className="flex gap-6 items-start">
+                <div className="w-12 h-12 flex items-center justify-center bg-slate-100 rounded text-slate-700 shrink-0">
+                  <i className={`fas ${item.icon} text-[20px]`} />
+                </div>
+                <div>
+                  <h3 className="text-[20px] font-bold text-slate-800 mb-2">{item.title}</h3>
+                  <p className="text-slate-600 text-[18px]" dangerouslySetInnerHTML={{ __html: item.text }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="w-5/12">
+          <div className="bg-slate-50 p-4 rounded-xl shadow-sm border border-slate-100">
+            <img alt="Liderazgo femenino" className="rounded-lg shadow-md w-full h-auto object-cover" src="https://picture-search.skywork.ai/aippt/image/sheet/697197ecf69e1bc3af388b02fd20c225.jpg" />
+            <div className="mt-4 px-2">
+              <p className="text-[14px] text-slate-400 font-semibold tracking-widest uppercase">Participación e Incidencia</p>
+              <p className="text-slate-500 text-[14px] mt-1">La presencia digital es hoy un componente esencial del liderazgo político moderno.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer className="mt-auto pt-8 border-t border-slate-100 flex justify-between items-center">
+        <span className="text-slate-400 text-[14px] font-medium uppercase tracking-widest">Presencia Digital y Liderazgo Femenino</span>
+        <div className="flex items-center gap-2 text-slate-700 font-semibold">
+          <span className="h-1 w-8 bg-slate-900" />
+          <span>Herramienta de Servicio</span>
+        </div>
+      </footer>
+    </div>
+  ),
+
+  /* 13 — Ser encontradas */
+  () => (
+    <div className="flex flex-col w-full h-full bg-[#F8FAFC] p-20 overflow-hidden">
+      <div className="flex items-center gap-6 mb-12">
+        <div className="w-1.5 h-16 bg-slate-900" />
+        <h1 className="text-[48px] font-extrabold text-slate-900 tracking-tight">
+          El objetivo central: <span className="text-slate-600 font-light">Ser encontradas</span>
+        </h1>
+      </div>
+      <div className="flex flex-1 gap-16">
+        <div className="w-1/2 flex flex-col justify-center gap-10">
+          <p className="text-[24px] text-slate-700 leading-relaxed font-medium">
+            La presencia digital no busca notoriedad, sino <strong>disponibilidad</strong>. Aseguramos que ninguna mujer se quede sin apoyo por falta de contacto.
+          </p>
+          <div className="space-y-8">
+            {[
+              { icon: "fa-search-location", title: "Ubicación Inmediata", text: 'Reducir el tiempo entre la <strong>necesidad de ayuda</strong> y el primer contacto con la líder.' },
+              { icon: "fa-shield-heart", title: "Puente de Confianza", text: 'Ser el <strong>referente seguro</strong> que aparece cuando una mujer busca orientación en su celular.' },
+              { icon: "fa-user-clock", title: "Respuesta Oportuna", text: 'Estar presentes donde las nuevas generaciones y mujeres en crisis <strong>buscan soluciones</strong> hoy.' },
+            ].map((item, i) => (
+              <div key={i} className="flex items-start gap-5">
+                <div className="text-slate-400 mt-1"><i className={`fas ${item.icon} text-[30px]`} /></div>
+                <div>
+                  <h3 className="text-[20px] font-bold text-slate-800">{item.title}</h3>
+                  <p className="text-slate-600" dangerouslySetInnerHTML={{ __html: item.text }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="w-1/2 flex flex-col justify-center">
+          <div className="rounded-xl overflow-hidden shadow-2xl border border-slate-200">
+            <img alt="Líder comunicando" className="w-full h-[340px] object-cover" src="https://picture-search.skywork.ai/aippt/image/sheet/aab97924ddbe95be6c29a0b08b959f85.jpg" />
+          </div>
+          <p className="mt-4 text-[14px] text-slate-500 italic text-right">La comunicación efectiva es la base del liderazgo de servicio.</p>
+        </div>
+      </div>
+      <div className="mt-8 bg-slate-900 text-white p-8 rounded-lg flex items-center gap-8">
+        <div className="bg-slate-700 p-4 rounded-full"><i className="fas fa-bullseye text-[24px] text-slate-200" /></div>
+        <p className="text-[20px] font-medium leading-snug">
+          &quot;La presencia digital no es exposición personal. Es una forma de <strong>servicio</strong> que permite que más mujeres encuentren <strong>apoyo a tiempo</strong>.&quot;
+        </p>
+      </div>
+    </div>
+  ),
+
+  /* 14 — Compromiso */
+  () => (
+    <div className="flex flex-col w-full h-full bg-white overflow-hidden">
+      <div className="px-16 pt-12 pb-8 flex justify-between items-center border-b border-slate-100">
+        <div>
+          <h1 className="text-[36px] font-extrabold text-slate-900 tracking-tight">La presencia digital como compromiso</h1>
+          <p className="text-slate-500 text-[18px] mt-1">Extensión del servicio y la vocación</p>
+        </div>
+        <span className="text-[12px] font-bold uppercase tracking-widest text-slate-400">Conclusión del Taller</span>
+      </div>
+      <div className="flex-1 flex flex-col justify-center px-16 gap-12">
+        <div className="grid grid-cols-3 gap-8">
+          {[
+            { icon: "fa-handshake", title: "Extensión del Servicio", text: 'No es una tarea extra, es llevar su <strong>vocación de ayuda</strong> a los espacios donde las mujeres están hoy.' },
+            { icon: "fa-route", title: "Eliminar Distancias", text: 'Lo digital permite que una mujer en una zona remota o aislada <strong>pueda contactarlas</strong> sin barreras físicas.' },
+            { icon: "fa-clock", title: "Respuesta Oportuna", text: 'Estar presente significa que la ayuda llega en el <strong>momento crítico</strong>, cuando más se necesita.' },
+          ].map((item, i) => (
+            <div key={i} className="flex flex-col gap-4 p-8 border border-slate-100 bg-slate-50 rounded-lg">
+              <div className="text-slate-700 text-[30px]"><i className={`fas ${item.icon}`} /></div>
+              <h3 className="text-[20px] font-bold text-slate-900">{item.title}</h3>
+              <p className="text-slate-600 leading-relaxed text-[18px]" dangerouslySetInnerHTML={{ __html: item.text }} />
+            </div>
+          ))}
+        </div>
+        <div className="bg-slate-900 text-slate-100 p-10 rounded-xl shadow-xl flex flex-col gap-4">
+          <div className="flex items-center gap-4">
+            <div className="h-0.5 w-12 bg-slate-400" />
+            <span className="uppercase tracking-[0.3em] text-[14px] font-bold text-slate-400">Mensaje Final</span>
+          </div>
+          <p className="text-[30px] font-light italic leading-snug">
+            &quot;La presencia digital <strong>no es exposición personal</strong>. Es una forma de servicio que permite que más mujeres encuentren <strong>apoyo a tiempo</strong>.&quot;
+          </p>
+        </div>
+      </div>
+      <div className="px-16 py-8 flex justify-between items-center text-slate-400 text-[14px]">
+        <span>Presencia Digital y Liderazgo Femenino</span>
+      </div>
+    </div>
+  ),
+
+  /* 15 — Transición al ejercicio práctico */
+  () => (
+    <div className="flex flex-col w-full h-full bg-[#F8FAFC] overflow-hidden">
+      <div className="h-2 w-full bg-slate-900" />
+      <div className="flex-1 flex flex-col p-16 justify-between">
+        <div className="flex flex-col gap-4">
+          <span className="text-slate-500 uppercase tracking-widest text-[14px] font-bold">Cierre de fase teórica</span>
+          <h1 className="text-[48px] font-extrabold text-slate-900 leading-tight">Transición al ejercicio práctico</h1>
+          <div className="w-24 h-1.5 bg-slate-800" />
+        </div>
+        <div className="grid grid-cols-3 gap-8 my-12">
+          {[
+            { icon: "fa-mobile-alt", title: "Configuración", text: 'Ajuste de perfiles institucionales para que la <strong>información de contacto</strong> sea clara y accesible.' },
+            { icon: "fa-tools", title: "Herramientas", text: 'Uso de mensajes automáticos y respuestas rápidas para la <strong>atención oportuna</strong>.' },
+            { icon: "fa-handshake", title: "Canales de Ayuda", text: 'Vinculación de plataformas para asegurar que el <strong>puente de servicio</strong> esté siempre abierto.' },
+          ].map((item, i) => (
+            <div key={i} className="bg-white border border-slate-200 p-8 rounded-lg flex flex-col gap-4">
+              <div className="text-slate-700 text-[30px]"><i className={`fas ${item.icon}`} /></div>
+              <h3 className="text-[20px] font-bold text-slate-800">{item.title}</h3>
+              <p className="text-slate-600 leading-relaxed" dangerouslySetInnerHTML={{ __html: item.text }} />
+            </div>
+          ))}
+        </div>
+        <div className="bg-slate-900 p-10 rounded-lg text-white">
+          <p className="text-[24px] font-light leading-snug">
+            &quot;La presencia digital no es exposición personal. <br />Es una <strong>forma de servicio</strong> que permite que más mujeres encuentren <strong>apoyo a tiempo</strong>.&quot;
+          </p>
+          <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-700">
+            <span className="text-slate-400 font-semibold tracking-widest text-[14px] uppercase">Iniciamos Parte Práctica</span>
+            <span className="px-4 py-2 bg-white text-slate-900 font-bold text-[14px]">MANOS A LA OBRA</span>
+          </div>
+        </div>
       </div>
     </div>
   ),
