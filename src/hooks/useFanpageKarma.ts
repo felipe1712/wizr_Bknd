@@ -278,11 +278,26 @@ export function useBulkDeleteFKProfiles() {
   });
 }
 
+// Minimum hours between syncs for a single profile
+const MIN_SYNC_INTERVAL_HOURS = 12;
+
+function canSyncProfile(profile: FKProfile): boolean {
+  if (!profile.last_synced_at) return true;
+  const lastSync = new Date(profile.last_synced_at).getTime();
+  const now = Date.now();
+  return (now - lastSync) >= MIN_SYNC_INTERVAL_HOURS * 60 * 60 * 1000;
+}
+
 export function useSyncFKProfile() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ profile, periodDays = 28 }: { profile: FKProfile; periodDays?: number }) => {
+    mutationFn: async ({ profile, periodDays = 28, force = false }: { profile: FKProfile; periodDays?: number; force?: boolean }) => {
+      // Throttle: skip if recently synced (unless forced)
+      if (!force && !canSyncProfile(profile)) {
+        const hoursAgo = Math.round((Date.now() - new Date(profile.last_synced_at!).getTime()) / (1000 * 60 * 60));
+        throw new Error(`Perfil sincronizado hace ${hoursAgo}h. Siguiente sync disponible en ${MIN_SYNC_INTERVAL_HOURS - hoursAgo}h. Usa "forzar" para omitir.`);
+      }
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(endDate.getDate() - periodDays);
@@ -438,18 +453,31 @@ export function useSyncAllProfiles() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ profiles, periodDays = 28 }: { profiles: FKProfile[]; periodDays?: number }) => {
+    mutationFn: async ({ profiles, periodDays = 28, force = false }: { profiles: FKProfile[]; periodDays?: number; force?: boolean }) => {
+      // Filter to only profiles that need syncing (unless forced)
+      const profilesToSync = force ? profiles : profiles.filter(canSyncProfile);
+      const skippedCount = profiles.length - profilesToSync.length;
+      
+      if (profilesToSync.length === 0) {
+        return { 
+          success: 0, 
+          failed: 0, 
+          skipped: skippedCount,
+          errors: [] as string[],
+        };
+      }
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(endDate.getDate() - periodDays);
 
-      const results: { success: number; failed: number; errors: string[] } = {
+      const results: { success: number; failed: number; skipped: number; errors: string[] } = {
         success: 0,
         failed: 0,
+        skipped: skippedCount,
         errors: [],
       };
 
-      for (const profile of profiles) {
+      for (const profile of profilesToSync) {
         try {
           const period = `${startDate.toISOString().split("T")[0]}_${endDate.toISOString().split("T")[0]}`;
 
@@ -591,12 +619,17 @@ export function useSyncAllProfiles() {
       queryClient.invalidateQueries({ queryKey: ["fk-profiles"] });
       queryClient.invalidateQueries({ queryKey: ["fk-kpis"] });
       
-      if (results.success > 0 && results.failed === 0) {
-        toast.success(`${results.success} perfiles sincronizados exitosamente`);
-      } else if (results.success > 0 && results.failed > 0) {
-        toast.warning(`${results.success} sincronizados, ${results.failed} con errores`);
+      const parts: string[] = [];
+      if (results.success > 0) parts.push(`${results.success} sincronizados`);
+      if (results.skipped > 0) parts.push(`${results.skipped} omitidos (ya actualizados)`);
+      if (results.failed > 0) parts.push(`${results.failed} con errores`);
+      
+      if (results.failed === 0) {
+        toast.success(parts.join(", "));
+      } else if (results.success > 0) {
+        toast.warning(parts.join(", "));
       } else {
-        toast.error(`Falló la sincronización de ${results.failed} perfiles`);
+        toast.error(parts.join(", "));
       }
     },
     onError: (error: Error) => {
@@ -684,7 +717,7 @@ export function useFetchProfilePosts(profile: FKProfile | undefined) {
       });
     },
     enabled: !!profile,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 60 * 60 * 1000, // 1 hour - avoid excessive API calls
   });
 }
 

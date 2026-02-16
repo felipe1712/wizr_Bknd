@@ -58,14 +58,16 @@ export function ProfilesList({ profiles, isLoading, rankingId, projectId }: Prof
   const handleSync = async (profile: FKProfile) => {
     setSyncingId(profile.id);
     try {
-      await syncProfile.mutateAsync({ profile });
+      await syncProfile.mutateAsync({ profile, force: false });
+    } catch (err) {
+      // Error already handled by mutation's onError
     } finally {
       setSyncingId(null);
     }
   };
 
   const handleSyncAll = async () => {
-    await syncAllProfiles.mutateAsync({ profiles });
+    await syncAllProfiles.mutateAsync({ profiles, force: false });
   };
 
   const handleSelectAll = (checked: boolean) => {
