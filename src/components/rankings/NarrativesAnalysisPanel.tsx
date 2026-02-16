@@ -23,7 +23,7 @@ import {
   Lightbulb,
   Search
 } from "lucide-react";
-import { FKProfile, useFetchProfilePosts, FKPost, FKNetwork, getNetworkLabel } from "@/hooks/useFanpageKarma";
+import { FKProfile, FKPost, FKNetwork, getNetworkLabel } from "@/hooks/useFanpageKarma";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { NetworkFilter } from "./NetworkFilter";
@@ -169,44 +169,42 @@ export function NarrativesAnalysisPanel({ profiles, isLoading: profilesLoading, 
     setSelectedProfileIds(new Set());
   };
 
+  // Fetch posts from DB (fk_daily_top_posts) instead of calling API
   const fetchPostsForProfiles = async (profilesToFetch: FKProfile[]) => {
     setLoadingPosts(true);
     const newPosts = new Map<string, FKPost[]>();
 
-    for (const profile of profilesToFetch) {
-      try {
-        const { data, error } = await supabase.functions.invoke("fanpage-karma", {
-          body: {
-            action: "posts",
-            profileId: profile.profile_id,
-            network: profile.network,
-          },
-        });
+    try {
+      const profileIds = profilesToFetch.map(p => p.id);
+      
+      const { data: dbPosts, error } = await supabase
+        .from("fk_daily_top_posts")
+        .select("*")
+        .in("fk_profile_id", profileIds)
+        .order("post_date", { ascending: false });
 
-        if (error) throw error;
-        
-        // Fanpage Karma returns { success, data: { posts: [...] } }
-        const postsData = data?.data?.posts || data?.posts || [];
-        if (data.success && postsData.length > 0) {
-          // Normalize posts structure from Fanpage Karma response
-          const normalizedPosts: FKPost[] = postsData.map((post: any) => ({
-            id: post.id,
-            url: post.link || post.url,
-            title: post.title,
-            message: post.message || post.text || post.caption || post.description || "",
-            content_type: post.type || "post",
-            image_url: post.image,
-            published_at: post.date,
-            likes: post.kpi?.page_posts_likes_count?.value || post.likes || 0,
-            comments: post.kpi?.page_posts_comments_count?.value || post.comments || 0,
-            shares: post.kpi?.page_posts_shares_count?.value || post.shares || 0,
-            engagement: post.kpi?.page_total_engagement_count?.value || post.engagement || 0,
-          }));
-          newPosts.set(profile.id, normalizedPosts);
+      if (error) throw error;
+
+      // Group posts by profile
+      for (const post of (dbPosts || [])) {
+        const profileId = post.fk_profile_id;
+        if (!newPosts.has(profileId)) {
+          newPosts.set(profileId, []);
         }
-      } catch (err) {
-        console.error(`Error fetching posts for ${profile.profile_id}:`, err);
+        newPosts.get(profileId)!.push({
+          id: post.id,
+          url: post.post_url || undefined,
+          message: post.post_content || undefined,
+          image_url: post.post_image_url || undefined,
+          published_at: post.post_date,
+          likes: post.likes || 0,
+          comments: post.comments || 0,
+          shares: post.shares || 0,
+          engagement: post.engagement || 0,
+        });
       }
+    } catch (err) {
+      console.error("Error fetching posts from DB:", err);
     }
 
     setProfilePosts(newPosts);
