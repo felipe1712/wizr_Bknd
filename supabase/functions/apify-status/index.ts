@@ -1138,7 +1138,9 @@ serve(async (req) => {
         // SOFT FILTER for YouTube: When the query IS the keyword, Apify already searched for it.
         // Re-filtering would be overly restrictive (e.g. a video about "Actinver" might not repeat the word in title).
         // So for YouTube we skip keyword filtering entirely and rely on frontend date filtering.
-        const useSoftFilter = platform === "youtube";
+        // Reddit & YouTube: Apify already searched for the keyword, so re-filtering is
+        // redundant and overly restrictive (drops 95%+ of valid results). Skip keyword filter.
+        const useSoftFilter = platform === "youtube" || platform === "reddit" || platform === "reddit_comments";
         
         if (keywordLower && platform !== "tiktok" && !useSoftFilter) {
           const beforeCount = normalized.length;
@@ -1224,7 +1226,7 @@ serve(async (req) => {
     }
 
     // Capture whether soft filter was used
-    const usedSoftFilter = keywordLower && platform === "youtube";
+    const usedSoftFilter = keywordLower && (platform === "youtube" || platform === "reddit" || platform === "reddit_comments");
 
     return new Response(
       JSON.stringify({
