@@ -564,10 +564,20 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
           
           discardedByDateCount = beforeFilter - filteredByDate.length;
           
-          // STRICT FILTER: Always apply for YouTube native filters and other platforms
-          processed = filteredByDate;
-          if (discardedByDateCount > 0) {
-            console.log(`Strict date filter: discarded ${discardedByDateCount} results outside range ${format(fromStart, "yyyy-MM-dd")} to ${format(toEnd, "yyyy-MM-dd")}. Actual data range: ${minDateIso} to ${maxDateIso}`);
+          // SOFT FILTER FALLBACK: If date filter removes ALL results, show them anyway with a warning
+          // This prevents the frustrating "0 results" when the scraper DID find data but outside the date range
+          if (filteredByDate.length === 0 && processed.length > 0) {
+            // Keep all results but flag as soft-filtered
+            appliedSoftFilter = true;
+            setUsedSoftFilter(true);
+            console.log(`Soft date filter activated: all ${processed.length} results outside range ${format(fromStart, "yyyy-MM-dd")} to ${format(toEnd, "yyyy-MM-dd")}. Showing unfiltered. Actual data range: ${minDateIso} to ${maxDateIso}`);
+          } else {
+            // STRICT FILTER: Some results remain, apply filter normally
+            setUsedSoftFilter(false);
+            processed = filteredByDate;
+            if (discardedByDateCount > 0) {
+              console.log(`Strict date filter: discarded ${discardedByDateCount} results outside range ${format(fromStart, "yyyy-MM-dd")} to ${format(toEnd, "yyyy-MM-dd")}. Actual data range: ${minDateIso} to ${maxDateIso}`);
+            }
           }
           
           setLastStrictDateDiscard({ discarded: discardedByDateCount, minDateIso, maxDateIso });
@@ -1889,27 +1899,61 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
         {/* Completed Status with Filter Stats */}
         {jobStatus === "completed" && results.length > 0 && (
           <div className="space-y-2">
-            {/* Success message - simple and clean */}
-            <div className="flex items-center gap-3 p-3 rounded-lg border bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                  ¡Búsqueda completada!
-                </p>
-                <p className="text-xs text-green-600 dark:text-green-400">
-                  {rawResultsCount > 0 && rawResultsCount !== results.length ? (
-                    (() => {
-                      const discardedByKeywords = Math.max(rawResultsCount - (keywordFilteredCount || results.length), 0);
-                      const discardedByDate = dateFilterEnabled ? (lastStrictDateDiscard?.discarded || 0) : 0;
-                      const dateSuffix = discardedByDate > 0 ? `, ${discardedByDate} descartados por fecha` : "";
-                      return `${results.length} resultados relevantes de ${rawResultsCount} extraídos (≈${discardedByKeywords} descartados por keywords${dateSuffix})`;
-                    })()
-                  ) : (
-                    `${results.length} resultados de ${config.label}`
-                  )}
-                </p>
+            {/* Soft filter warning - results shown but outside date range */}
+            {usedSoftFilter && lastStrictDateDiscard?.discarded ? (
+              <div className="flex items-center gap-3 p-3 rounded-lg border bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+                <Info className="h-5 w-5 text-amber-600 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                    Ningún resultado coincide con el filtro de fecha
+                  </p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Se encontraron {results.length} resultados pero todos están fuera del rango seleccionado
+                    {lastStrictDateDiscard.minDateIso && lastStrictDateDiscard.maxDateIso ? (
+                      <span>
+                        {" "}(fechas: {format(new Date(lastStrictDateDiscard.minDateIso), "d MMM yyyy", { locale: es })}
+                        {" "}– {format(new Date(lastStrictDateDiscard.maxDateIso), "d MMM yyyy", { locale: es })})
+                      </span>
+                    ) : null}
+                    . Se muestran de todas formas para que puedas evaluarlos.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 text-amber-700 border-amber-300 hover:bg-amber-100 dark:text-amber-300 dark:border-amber-700 dark:hover:bg-amber-900/30"
+                  onClick={() => {
+                    setDateFilterEnabled(false);
+                    setUsedSoftFilter(false);
+                  }}
+                >
+                  <Filter className="h-3.5 w-3.5 mr-1" />
+                  Quitar filtro de fecha
+                </Button>
               </div>
-            </div>
+            ) : (
+              /* Success message - simple and clean */
+              <div className="flex items-center gap-3 p-3 rounded-lg border bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                    ¡Búsqueda completada!
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400">
+                    {rawResultsCount > 0 && rawResultsCount !== results.length ? (
+                      (() => {
+                        const discardedByKeywords = Math.max(rawResultsCount - (keywordFilteredCount || results.length), 0);
+                        const discardedByDate = dateFilterEnabled ? (lastStrictDateDiscard?.discarded || 0) : 0;
+                        const dateSuffix = discardedByDate > 0 ? `, ${discardedByDate} descartados por fecha` : "";
+                        return `${results.length} resultados relevantes de ${rawResultsCount} extraídos (≈${discardedByKeywords} descartados por keywords${dateSuffix})`;
+                      })()
+                    ) : (
+                      `${results.length} resultados de ${config.label}`
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
