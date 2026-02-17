@@ -411,41 +411,53 @@ serve(async (req) => {
         break;
         
       case "reddit":
-        // Reddit scraper configuration - includes comments, sorted by NEW for chronological order
-        // Increased maxComments to capture more mentions within discussions
+        // Reddit scraper configuration (trudax/reddit-scraper-lite)
+        // Key params: type="post" + searchPosts=true ensures we get posts (not communities/users)
+        // sort="new" for chronological order, time="all" for all time ranges
         if (subreddit) {
           input = {
             startUrls: [{ url: `https://www.reddit.com/r/${subreddit}/new/` }],
             maxItems: maxResults,
             maxPostCount: maxResults,
-            maxComments: 50, // Increased from 10 to capture more comment mentions
-            sort: "new", // Chronological order
+            maxComments: 50,
+            sort: "new",
+            time: "all",
           };
         } else if (query) {
           input = {
             searches: [query],
+            type: "post",
+            searchPosts: true,
+            searchCommunities: false,
+            searchUsers: false,
             maxItems: maxResults,
             maxPostCount: maxResults,
-            maxComments: 50, // Increased from 10 to capture more comment mentions
-            sort: "new", // Chronological order
+            maxComments: 50,
+            sort: "new",
+            time: "all",
           };
         }
         break;
         
       case "reddit_comments":
-        // Use the same actor as regular reddit (trudax/reddit-scraper-lite) but with increased 
-        // maxComments and more posts. The filtering happens in apify-status where we check if keywords
-        // appear in the comments of each post. This avoids needing a paid actor rental.
+        // For comments search: use trudax/reddit-scraper-lite with sort="comments" to prioritize
+        // posts with most comments (more likely to contain keyword mentions in discussion).
+        // Then sort="new" as secondary pass. The filtering happens in apify-status.
         actorId = ACTOR_IDS.reddit; // Use trudax/reddit-scraper-lite
         if (!query) {
           throw new Error("Reddit comments search requires a search query.");
         }
         input = {
           searches: [query],
-          maxItems: Math.min(maxResults * 3, 150), // More posts to search through
+          type: "post",
+          searchPosts: true,
+          searchCommunities: false,
+          searchUsers: false,
+          maxItems: Math.min(maxResults * 3, 150),
           maxPostCount: Math.min(maxResults * 3, 150),
-          maxComments: 75, // Significantly increased: fetch many comments per post to find mentions
-          sort: "new",
+          maxComments: 75,
+          sort: "comments", // Sort by most comments first — more likely to have keyword in discussions
+          time: "all",
         };
         break;
         
