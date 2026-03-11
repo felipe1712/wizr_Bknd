@@ -83,29 +83,31 @@ Cuando el actor principal falla (error 503/Service Unavailable por bloqueo de Fa
 
 ---
 
-### 3. TikTok ✅
-**Actor:** `sociavault/tiktok-keyword-search-scraper`
+### 3. TikTok ✅ (RapidAPI - tiktok-api23)
+**Proveedor:** RapidAPI `tiktok-api23` (migrado desde Apify 2026-03-11)
+**Fallback:** Apify `powerai/tiktok-videos-search-scraper`
 
-**Parámetros configurados:**
-```json
-{
-  "query": "Actinver",
-  "max_results": 50,
-  "date_posted": "this-month",
-  "sort_by": "date"
-}
-```
+**Ventajas sobre Apify:**
+- Respuesta sincrónica (no requiere polling)
+- Mayor calidad de datos y metadatos
+- Menor latencia (~1-3 segundos vs 30-60 segundos)
+- Endpoints dedicados: search, user_posts, hashtag
+
+**Endpoints usados:**
+- `/api/search/general?keyword=X&count=N` - Búsqueda por keyword
+- `/api/user/info?uniqueId=X` + `/api/user/posts?secUid=X` - Posts de usuario
+- Hashtag: búsqueda general con `#hashtag` como keyword
 
 **Campos de salida mapeados:**
-- `video_id` / `id` → ID del video
-- `description` → Descripción del video
-- `author.nickname` → Username
-- `likes`, `comments`, `shares`, `views` → Métricas
-- `created_at` → Timestamp ISO
+- `aweme_id` / `id` → ID del video
+- `desc` → Descripción del video
+- `author.nickname` / `author.unique_id` → Username
+- `statistics.digg_count`, `statistics.comment_count`, `statistics.share_count`, `statistics.play_count` → Métricas
+- `create_time` → Timestamp Unix
 
-**Estado:** ✅ Funcional - Especializado en búsquedas por keyword ($1.50/1000 resultados)
+**Estado:** ✅ Funcional - RapidAPI plan Basic ($0/mo free tier) o Pro ($9.99/mo)
 
-**Cambio 2026-01-27:** Migrado desde `powerai/tiktok-videos-search-scraper` que no filtraba por keyword correctamente
+**Cambio 2026-03-11:** Migrado desde Apify `powerai/tiktok-videos-search-scraper` por calidad de datos mediocre. Apify se mantiene como fallback automático.
 
 ---
 

@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.brightdata-status]
 verify_jwt = false
+
+[functions.rapidapi-tiktok]
+verify_jwt = false

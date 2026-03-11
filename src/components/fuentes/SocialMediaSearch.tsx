@@ -1073,6 +1073,145 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       setCurrentJobId(job.id);
 
       // =====================================================
+      // RAPIDAPI TIKTOK FLOW (synchronous - no polling needed)
+      // =====================================================
+      if (platform === "tiktok") {
+        setProgressMessage("Buscando en TikTok (RapidAPI)...");
+        setProgress(20);
+
+        try {
+          const rapidApiBody: Record<string, unknown> = { count: maxResults };
+
+          if (searchType === "username") {
+            rapidApiBody.action = "user_posts";
+            rapidApiBody.username = searchValue.replace("@", "");
+          } else if (searchType === "hashtag") {
+            rapidApiBody.action = "hashtag";
+            rapidApiBody.hashtag = searchValue.replace("#", "");
+          } else {
+            rapidApiBody.action = "search";
+            rapidApiBody.keyword = searchValue;
+          }
+
+          const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+          const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+          const response = await fetch(`${SUPABASE_URL}/functions/v1/rapidapi-tiktok`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: SUPABASE_KEY,
+              Authorization: `Bearer ${SUPABASE_KEY}`,
+            },
+            body: JSON.stringify(rapidApiBody),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          const data = await response.json();
+
+          if (!data.success) {
+            throw new Error(data.error || "Error en RapidAPI TikTok");
+          }
+
+          setProgress(80);
+          setProgressMessage("Procesando resultados...");
+
+          const processed = processBackendResults(
+            (data.items || []) as SocialSearchResult[],
+            "tiktok"
+          );
+
+          // Apply date filtering if enabled
+          let finalResults = processed;
+          if (dateFilterEnabled && dateFrom && dateTo) {
+            const fromStart = startOfDay(dateFrom);
+            const toEnd = endOfDay(dateTo);
+            const filtered = processed.filter((r) => {
+              if (!r.publishedAt) return false;
+              const pubDate = new Date(r.publishedAt);
+              if (isNaN(pubDate.getTime())) return false;
+              return !isBefore(pubDate, fromStart) && !isAfter(pubDate, toEnd);
+            });
+            if (filtered.length > 0) {
+              finalResults = filtered;
+            } else {
+              setUsedSoftFilter(true);
+            }
+          }
+
+          setRawResultsCount(data.totalCount || processed.length);
+          setFilteredResultsCount(finalResults.length);
+          setKeywordFilteredCount(finalResults.length);
+          setResults(finalResults);
+          setJobStatus("completed");
+          setProgress(100);
+          setProgressMessage("¡Completado!");
+          setIsSearching(false);
+
+          // Save job and results to database
+          try {
+            await updateJob({
+              id: job.id,
+              updates: {
+                status: "completed",
+                completed_at: new Date().toISOString(),
+                results_count: finalResults.length,
+                metadata: { provider: "rapidapi" },
+              },
+            });
+
+            if (finalResults.length > 0) {
+              await saveResults({
+                jobId: job.id,
+                results: finalResults.map((r) => ({
+                  platform: r.platform,
+                  external_id: r.id,
+                  title: r.title || "",
+                  description: r.description || "",
+                  author_name: r.author?.name || "",
+                  author_username: r.author?.username || "",
+                  author_url: r.author?.url || "",
+                  author_avatar_url: r.author?.avatarUrl,
+                  author_verified: r.author?.verified,
+                  author_followers: r.author?.followers,
+                  likes: r.metrics?.likes || 0,
+                  comments: r.metrics?.comments || 0,
+                  shares: r.metrics?.shares || 0,
+                  views: r.metrics?.views,
+                  engagement: r.metrics?.engagement,
+                  published_at: r.publishedAt,
+                  url: r.url || "",
+                  content_type: r.contentType || "post",
+                  hashtags: r.hashtags,
+                  mentions: r.mentions,
+                  raw_data: JSON.parse(JSON.stringify(r.raw || {})),
+                })),
+              });
+            }
+            refetchJobs();
+          } catch (saveErr) {
+            console.error("Error saving TikTok results:", saveErr);
+          }
+
+          toast({
+            title: "Búsqueda completada (RapidAPI)",
+            description: `Se encontraron ${finalResults.length} resultados en TikTok`,
+          });
+          return; // Exit handleSearch - TikTok is done
+        } catch (error) {
+          // If RapidAPI fails, fall through to Apify as fallback
+          console.warn("RapidAPI TikTok failed, falling back to Apify:", error);
+          setProgressMessage("RapidAPI falló, intentando con Apify...");
+          setProgress(10);
+          // Continue to Apify flow below
+        }
+      }
+
+      // =====================================================
       // BRIGHT DATA FLOW (only TikTok & YouTube supported)
       // =====================================================
       const brightDataSupported = ["tiktok", "youtube"].includes(platform);
