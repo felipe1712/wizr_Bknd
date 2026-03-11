@@ -163,7 +163,7 @@ const TendenciasPage = () => {
             <Button
               className="mt-4"
               variant="outline"
-              onClick={() => navigate("/fuentes")}
+              onClick={() => navigate("/dashboard/fuentes")}
             >
               Ir a Fuentes
             </Button>
