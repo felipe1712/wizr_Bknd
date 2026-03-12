@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
-import { apifyApi } from "@/lib/api/apify";
+import { n8nApi } from "@/lib/api/n8n";
 import { firecrawlApi, type EntityForSearch } from "@/lib/api/firecrawl";
 import { cn } from "@/lib/utils";
 import { deduplicateBatch, type DuplicateCandidate } from "@/lib/utils/semanticDedup";
@@ -310,56 +310,19 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
             }));
           }
         } else {
-          // Use Apify for social platforms
+          // Asynchronously trigger n8n for social platforms
           const searchQuery = buildSearchQuery(entity);
           
-          const scrapeResult = await apifyApi.startScrape({
+          const scrapeResult = await n8nApi.startScrape({
             platform: job.platform as "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "reddit",
             query: searchQuery,
             maxResults: maxResultsPerPlatform,
           });
 
-          if (!scrapeResult.success) throw new Error(scrapeResult.error || "Search failed to start");
-
-          if (scrapeResult.data?.runId) {
-            // Poll for completion
-            let attempts = 0;
-            const maxAttempts = 60; // 2 minutes max
-            
-            while (attempts < maxAttempts) {
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              
-              const statusData = await apifyApi.checkStatus(
-                scrapeResult.data.runId, 
-                job.platform as "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "reddit"
-              );
-
-              if (!statusData.success) throw new Error(statusData.error || "Failed to get status");
-              
-              const data = statusData.data;
-
-              if (data?.status === "SUCCEEDED" || data?.status === "completed") {
-                results = (data.items || []).map((r: Record<string, unknown>) => ({
-                  url: (r as { url?: string }).url || "",
-                  title: (r as { title?: string }).title,
-                  description: (r as { description?: string; text?: string }).description || (r as { text?: string }).text,
-                  source_domain: job.platform,
-                  published_at: (r as { publishedAt?: string; timestamp?: string }).publishedAt || (r as { timestamp?: string }).timestamp,
-                }));
-                break;
-              }
-
-              if (data?.status === "FAILED" || data?.status === "failed") {
-                throw new Error(data?.error || "Search failed");
-              }
-
-              attempts++;
-            }
-
-            if (attempts >= maxAttempts) {
-              throw new Error("Search timeout");
-            }
-          }
+          if (!scrapeResult.success) throw new Error(scrapeResult.error || "Search failed to delegate to n8n");
+          
+          // No results are returned immediately since n8n operates asynchronously.
+          // n8n will fetch, deduplicate, and insert directly into the database.
         }
 
         // Save results to mentions table with semantic deduplication

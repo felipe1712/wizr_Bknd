@@ -9,8 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useSocialScrapeJobs } from "@/hooks/useSocialScrapeJobs";
-import { apifyApi } from "@/lib/api/apify";
-import { brightdataApi } from "@/lib/api/brightdata";
+import { n8nApi } from "@/lib/api/n8n";
 import api from "@/lib/api";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -417,627 +416,6 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       });
   };
 
-  const checkJobStatus = useCallback(async (
-    jobRunId: string,
-    filterKw?: string,
-    startTime?: number,
-    platformOverride?: Platform,
-  ) => {
-    // Track polling start time
-    const pollingStart = startTime || pollingStartTime || Date.now();
-    if (!startTime && !pollingStartTime) {
-      setPollingStartTime(pollingStart);
-    }
-    
-    // Check for timeout (3 minutes max)
-    const elapsedMs = Date.now() - pollingStart;
-    if (elapsedMs > MAX_POLLING_DURATION_MS) {
-      console.warn(`Polling timeout after ${Math.round(elapsedMs / 1000)}s for run ${jobRunId}`);
-      setJobStatus("failed");
-      setIsSearching(false);
-      setPollingStartTime(null);
-      
-      // Update job status in database
-      if (currentJobId) {
-        try {
-          await updateJob({
-            id: currentJobId,
-            updates: {
-              status: "failed",
-              completed_at: new Date().toISOString(),
-              error_message: `Tiempo de espera agotado (${Math.round(MAX_POLLING_DURATION_MS / 1000)}s). El actor de Apify tardó demasiado.`,
-            },
-          });
-          refetchJobs();
-        } catch (updateError) {
-          console.error("Error updating job status:", updateError);
-        }
-      }
-      
-      toast({
-        title: "Tiempo agotado",
-        description: `La búsqueda tardó más de ${Math.round(MAX_POLLING_DURATION_MS / 60000)} minutos. Intenta con menos resultados.`,
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    try {
-      // IMPORTANT: if the run was started with an internal platform (e.g. reddit_comments),
-      // we must poll status using that same platform so backend applies the correct filtering.
-      const statusPlatform: Platform = platformOverride || (platform as Platform);
-
-      // Pass filterKeyword to backend for TikTok exact-match filtering
-      const result = await apifyApi.checkStatus(jobRunId, statusPlatform, filterKw);
-
-      if (!result.success || !result.data) {
-        throw new Error(result.error || "Error al verificar estado");
-      }
-
-      const data = result.data;
-
-      if (data.status === "SUCCEEDED") {
-        setJobStatus("completed");
-        setProgress(100);
-        setProgressMessage("¡Completado!");
-        setIsSearching(false); // Stop the spinner
-        setPollingStartTime(null); // Reset polling timer
-        // Results are now pre-normalized by the backend
-        let processed = processBackendResults((data.items || []) as SocialSearchResult[], statusPlatform);
-        // Backend already applied keyword filtering for some platforms (e.g., Reddit/TikTok).
-        // Keep this count to explain why rawCount != shownCount.
-        setKeywordFilteredCount(processed.length);
-        
-        // Capture filter stats from backend response if available
-        if (data.rawCount !== undefined) {
-          setRawResultsCount(data.rawCount);
-        }
-        if ((data as any).softFilter !== undefined) {
-          setUsedSoftFilter((data as any).softFilter);
-        }
-        
-        // DATE FILTERING: Apply strict or soft filter depending on platform and results
-        // YouTube uses STRICT FILTER based on native filter selection (thisWeek, etc.)
-        // Other platforms use the manual date range filter
-        let discardedByDateCount = 0;
-        let appliedSoftFilter = false;
-        
-        // Determine the effective date range for filtering
-        let effectiveDateFrom: Date | undefined = undefined;
-        let effectiveDateTo: Date | undefined = undefined;
-        let effectiveDateFilterEnabled = false;
-        
-        // YouTube: Calculate date range from native filter selection
-        // API filters are approximate, so we apply strict client-side filtering
-        if (statusPlatform === "youtube" && youtubeUploadDate && youtubeUploadDate !== "__any__") {
-          const now = new Date();
-          effectiveDateTo = endOfDay(now);
-          
-          switch (youtubeUploadDate) {
-            case "lastHour":
-              effectiveDateFrom = new Date(now.getTime() - 60 * 60 * 1000); // 1 hour ago
-              break;
-            case "today":
-              effectiveDateFrom = startOfDay(now);
-              break;
-            case "thisWeek":
-              effectiveDateFrom = startOfDay(subDays(now, 7));
-              break;
-            case "thisMonth":
-              effectiveDateFrom = startOfDay(subDays(now, 30));
-              break;
-            case "thisYear":
-              effectiveDateFrom = startOfDay(subDays(now, 365));
-              break;
-          }
-          
-          if (effectiveDateFrom) {
-            effectiveDateFilterEnabled = true;
-            console.log(`YouTube STRICT date filter from native selection '${youtubeUploadDate}': ${format(effectiveDateFrom, "yyyy-MM-dd HH:mm")} to ${format(effectiveDateTo, "yyyy-MM-dd HH:mm")}`);
-          }
-        }
-        // Other platforms: Use manual date filter if enabled
-        else if (dateFilterEnabled && dateFrom && dateTo) {
-          effectiveDateFrom = dateFrom;
-          effectiveDateTo = dateTo;
-          effectiveDateFilterEnabled = true;
-        }
-        
-        if (effectiveDateFilterEnabled && effectiveDateFrom && effectiveDateTo) {
-          const fromStart = startOfDay(effectiveDateFrom);
-          const toEnd = endOfDay(effectiveDateTo);
-          const beforeFilter = processed.length;
-
-          // Capture incoming date range (for debugging user expectations/timezones)
-          const validDates = processed
-            .map((r) => new Date(r.publishedAt))
-            .filter((d) => !isNaN(d.getTime()))
-            .sort((a, b) => a.getTime() - b.getTime());
-          const minDateIso = validDates[0]?.toISOString();
-          const maxDateIso = validDates[validDates.length - 1]?.toISOString();
-          
-          const filteredByDate = processed.filter((r) => {
-            if (!r.publishedAt) return false; // Discard items without date
-            const pubDate = new Date(r.publishedAt);
-            if (isNaN(pubDate.getTime())) return false; // Discard invalid dates
-            return !isBefore(pubDate, fromStart) && !isAfter(pubDate, toEnd);
-          });
-          
-          discardedByDateCount = beforeFilter - filteredByDate.length;
-          
-          // SOFT FILTER FALLBACK: If date filter removes ALL results, show them anyway with a warning
-          // This prevents the frustrating "0 results" when the scraper DID find data but outside the date range
-          if (filteredByDate.length === 0 && processed.length > 0) {
-            // Keep all results but flag as soft-filtered
-            appliedSoftFilter = true;
-            setUsedSoftFilter(true);
-            console.log(`Soft date filter activated: all ${processed.length} results outside range ${format(fromStart, "yyyy-MM-dd")} to ${format(toEnd, "yyyy-MM-dd")}. Showing unfiltered. Actual data range: ${minDateIso} to ${maxDateIso}`);
-          } else {
-            // STRICT FILTER: Some results remain, apply filter normally
-            setUsedSoftFilter(false);
-            processed = filteredByDate;
-            if (discardedByDateCount > 0) {
-              console.log(`Strict date filter: discarded ${discardedByDateCount} results outside range ${format(fromStart, "yyyy-MM-dd")} to ${format(toEnd, "yyyy-MM-dd")}. Actual data range: ${minDateIso} to ${maxDateIso}`);
-            }
-          }
-          
-          setLastStrictDateDiscard({ discarded: discardedByDateCount, minDateIso, maxDateIso });
-        } else {
-          setLastStrictDateDiscard(null);
-          setUsedSoftFilter(false);
-        }
-        
-        setFilteredResultsCount(processed.length);
-        setResults(processed);
-        
-        // Auto-save job and results to database (only the filtered ones in strict mode)
-        if (currentJobId && processed.length > 0) {
-          try {
-            // Update job status
-            await updateJob({
-              id: currentJobId,
-              updates: {
-                status: "completed",
-                completed_at: new Date().toISOString(),
-                results_count: processed.length,
-              },
-            });
-            
-            // Save results
-            await saveResults({
-              jobId: currentJobId,
-              results: processed.map((r) => ({
-                platform: r.platform,
-                external_id: r.id,
-                title: r.title || "",
-                description: r.description || "",
-                author_name: r.author?.name || "",
-                author_username: r.author?.username || "",
-                author_url: r.author?.url || "",
-                author_avatar_url: r.author?.avatarUrl,
-                author_verified: r.author?.verified,
-                author_followers: r.author?.followers,
-                likes: r.metrics?.likes || 0,
-                comments: r.metrics?.comments || 0,
-                shares: r.metrics?.shares || 0,
-                views: r.metrics?.views,
-                engagement: r.metrics?.engagement,
-                published_at: r.publishedAt,
-                url: r.url || "",
-                content_type: r.contentType || "post",
-                hashtags: r.hashtags,
-                mentions: r.mentions,
-                raw_data: JSON.parse(JSON.stringify(r.raw || {})),
-              })),
-            });
-            
-            refetchJobs();
-          } catch (saveError) {
-            console.error("Error saving to database:", saveError);
-          }
-        }
-        
-        const dateFilterNote = discardedByDateCount > 0 
-          ? appliedSoftFilter
-            ? ` (sin resultados en el rango seleccionado - mostrando ${processed.length} disponibles)`
-            : ` (${discardedByDateCount} descartados por fecha)` 
-          : "";
-        toast({
-          title: appliedSoftFilter ? "Búsqueda completada (sin filtro de fecha)" : "Búsqueda completada",
-          description: `Se encontraron ${processed.length} resultados en ${config.label}${dateFilterNote}`,
-          variant: appliedSoftFilter ? "default" : "default",
-        });
-      } else if (data.status === "FAILED" || data.status === "ABORTED" || data.status === "TIMED-OUT") {
-        setJobStatus("failed");
-        setIsSearching(false); // Stop the spinner on failure
-        setPollingStartTime(null); // Reset polling timer
-
-        const failureDetail = (data as any)?.error
-          ? `${data.status}: ${(data as any).error}`
-          : `Job ${data.status}`;
-
-        // Update job status in database
-        if (currentJobId) {
-          try {
-            await updateJob({
-              id: currentJobId,
-              updates: {
-                status: "failed",
-                completed_at: new Date().toISOString(),
-                error_message: failureDetail,
-              },
-            });
-            refetchJobs();
-          } catch (updateError) {
-            console.error("Error updating job status:", updateError);
-          }
-        }
-        
-        toast({
-          title: "Error en la búsqueda",
-          description: failureDetail,
-          variant: "destructive",
-        });
-      } else {
-        // Still running - update progress with real-time feedback
-        const stats = data.stats || {};
-        const pagesLoaded = stats.pagesLoaded || 0;
-        const itemsFound = stats.itemsFound || stats.requestsFinished || 0;
-        const statusMessage = String((data as any)?.statusMessage || "");
-
-        // YouTube actor frequently exposes useful progress via statusMessage (e.g. "Crawled 37/39 pages")
-        // while stats may be empty. Parse it to show meaningful progress.
-        let messageProgress: number | null = null;
-        if (platform === "youtube" && statusMessage) {
-          const m = statusMessage.match(/Crawled\s+(\d+)\s*\/\s*(\d+)\s*pages/i);
-          if (m?.[1] && m?.[2]) {
-            const done = Number(m[1]);
-            const total = Number(m[2]);
-            if (Number.isFinite(done) && Number.isFinite(total) && total > 0) {
-              messageProgress = Math.min(90, Math.max(5, Math.round((done / total) * 90)));
-            }
-          }
-        }
-
-        const estimatedProgress = Math.min(90, Math.max(pagesLoaded * 10, itemsFound * 2));
-        setProgress(messageProgress ?? estimatedProgress);
-        
-        // Calculate remaining time
-        const remainingMs = MAX_POLLING_DURATION_MS - elapsedMs;
-        const remainingSecs = Math.ceil(remainingMs / 1000);
-        const timeWarning = remainingSecs < 60 ? ` (${remainingSecs}s restantes)` : "";
-        
-        // Show meaningful progress message with time remaining if running low
-        if (platform === "youtube" && statusMessage) {
-          setProgressMessage(`${statusMessage}${timeWarning}`);
-        } else if (itemsFound > 0) {
-          setProgressMessage(`Extrayendo datos... ${itemsFound} items encontrados${timeWarning}`);
-        } else if (pagesLoaded > 0) {
-          setProgressMessage(`Procesando... ${pagesLoaded} páginas cargadas${timeWarning}`);
-        } else {
-          setProgressMessage(`Iniciando extracción...${timeWarning}`);
-        }
-        
-        // Slightly slower polling for YouTube (reduces cold-start spam and still feels responsive)
-        const pollMs = statusPlatform === "youtube" ? 3000 : 2000;
-        setTimeout(() => checkJobStatus(jobRunId, filterKw, pollingStart, statusPlatform), pollMs);
-      }
-    } catch (error) {
-      console.error("Error checking job status:", error);
-      setJobStatus("failed");
-      setIsSearching(false); // Stop the spinner on error
-      setPollingStartTime(null); // Reset polling timer
-    }
-  }, [platform, config.label, toast, currentJobId, updateJob, saveResults, refetchJobs, dateFilterEnabled, dateFrom, dateTo, pollingStartTime, MAX_POLLING_DURATION_MS]);
-
-  // YouTube parallel status checker for combined Videos + Shorts search
-  const checkYouTubeParallelStatus = useCallback(async (
-    parallelState: {
-      videosRunId: string | null;
-      shortsRunId: string | null;
-      videosComplete: boolean;
-      shortsComplete: boolean;
-      videosResults: SocialSearchResult[];
-      shortsResults: SocialSearchResult[];
-    },
-    filterKw: string
-  ) => {
-    try {
-      const updatedState = { ...parallelState };
-      let anyUpdate = false;
-
-      // Check videos status if not complete
-      if (parallelState.videosRunId && !parallelState.videosComplete) {
-        const videosStatus = await apifyApi.checkStatus(parallelState.videosRunId, "youtube", filterKw);
-        if (videosStatus.success && videosStatus.data) {
-          const vData = videosStatus.data;
-          if (vData.status === "SUCCEEDED" || vData.status === "FAILED" || vData.status === "ABORTED" || vData.status === "TIMED-OUT") {
-            updatedState.videosComplete = true;
-            if (vData.items && Array.isArray(vData.items)) {
-              updatedState.videosResults = vData.items as SocialSearchResult[];
-            }
-            anyUpdate = true;
-          }
-        }
-      }
-
-      // Check shorts status if not complete
-      if (parallelState.shortsRunId && !parallelState.shortsComplete) {
-        const shortsStatus = await apifyApi.checkStatus(parallelState.shortsRunId, "youtube_shorts", filterKw);
-        if (shortsStatus.success && shortsStatus.data) {
-          const sData = shortsStatus.data;
-          if (sData.status === "SUCCEEDED" || sData.status === "FAILED" || sData.status === "ABORTED" || sData.status === "TIMED-OUT") {
-            updatedState.shortsComplete = true;
-            if (sData.items && Array.isArray(sData.items)) {
-              updatedState.shortsResults = sData.items as SocialSearchResult[];
-            }
-            anyUpdate = true;
-          }
-        }
-      }
-
-      // Update progress message
-      const videosCount = updatedState.videosResults.length;
-      const shortsCount = updatedState.shortsResults.length;
-      setProgressMessage(
-        `Videos: ${updatedState.videosComplete ? `✓ ${videosCount}` : "buscando..."} | ` +
-        `Shorts: ${updatedState.shortsComplete ? `✓ ${shortsCount}` : "buscando..."}`
-      );
-
-      // Calculate progress based on completion
-      const progress = 10 + (updatedState.videosComplete ? 40 : 0) + (updatedState.shortsComplete ? 40 : 0);
-      setProgress(Math.min(progress, 90));
-
-      // Both complete - merge and finalize
-      if (updatedState.videosComplete && updatedState.shortsComplete) {
-        // Apply date filtering to combined results
-        let combinedResults = [...updatedState.videosResults, ...updatedState.shortsResults];
-        
-        // DATE FILTERING with SOFT FILTER for YouTube
-        let appliedSoftFilter = false;
-        if (dateFilterEnabled && dateFrom && dateTo) {
-          const fromStart = startOfDay(dateFrom);
-          const toEnd = endOfDay(dateTo);
-          
-          const filteredByDate = combinedResults.filter((item) => {
-            if (!item.publishedAt) return false;
-            const pubDate = new Date(item.publishedAt);
-            return !isBefore(pubDate, fromStart) && !isAfter(pubDate, toEnd);
-          });
-          
-          // SOFT FILTER: If ALL results are outside the range, show them with a warning
-          if (filteredByDate.length === 0 && combinedResults.length > 0) {
-            appliedSoftFilter = true;
-            setUsedSoftFilter(true);
-            console.log(`YouTube parallel SOFT FILTER: No results in range. Showing all ${combinedResults.length} available.`);
-            // Keep all results
-          } else {
-            combinedResults = filteredByDate;
-          }
-        }
-
-        // Sort by date (newest first)
-        combinedResults.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-
-        setResults(combinedResults);
-        setRawResultsCount(updatedState.videosResults.length + updatedState.shortsResults.length);
-        setFilteredResultsCount(combinedResults.length);
-        setProgress(100);
-        setJobStatus("completed");
-        setIsSearching(false);
-
-        // Update job in database
-        if (currentJobId) {
-          await updateJob({
-            id: currentJobId,
-            updates: {
-              status: "completed",
-              results_count: combinedResults.length,
-              completed_at: new Date().toISOString(),
-            },
-          });
-          await saveResults({
-            jobId: currentJobId,
-            results: combinedResults.map((r) => ({
-              platform: r.platform,
-              external_id: r.id,
-              title: r.title || "",
-              description: r.description || "",
-              author_name: r.author?.name || "",
-              author_username: r.author?.username || "",
-              author_url: r.author?.url || "",
-              author_avatar_url: r.author?.avatarUrl,
-              author_verified: r.author?.verified,
-              author_followers: r.author?.followers,
-              likes: r.metrics?.likes || 0,
-              comments: r.metrics?.comments || 0,
-              shares: r.metrics?.shares || 0,
-              views: r.metrics?.views,
-              engagement: r.metrics?.engagement,
-              published_at: r.publishedAt,
-              url: r.url || "",
-              content_type: r.contentType || "post",
-              hashtags: r.hashtags,
-              mentions: r.mentions,
-              raw_data: JSON.parse(JSON.stringify(r.raw || {})),
-            })),
-          });
-        }
-
-        const softFilterNote = appliedSoftFilter 
-          ? " (sin resultados en el rango - mostrando disponibles)" 
-          : "";
-        toast({
-          title: appliedSoftFilter ? "Búsqueda completada (sin filtro de fecha)" : "Búsqueda completada",
-          description: `${combinedResults.length} resultados (${videosCount} videos, ${shortsCount} shorts)${softFilterNote}`,
-        });
-
-        refetchJobs();
-      } else {
-        // Continue polling
-        setYoutubeParallelRuns(updatedState);
-        setTimeout(() => checkYouTubeParallelStatus(updatedState, filterKw), 2000);
-      }
-    } catch (error) {
-      console.error("Error checking YouTube parallel status:", error);
-      setJobStatus("failed");
-      setIsSearching(false);
-    }
-  }, [currentJobId, updateJob, saveResults, refetchJobs, dateFilterEnabled, dateFrom, dateTo, toast]);
-
-  // Bright Data status checker
-  const checkBrightDataStatus = useCallback(async (
-    snapshotId: string,
-    startTime: number,
-  ) => {
-    // Check for timeout
-    const elapsedMs = Date.now() - startTime;
-    if (elapsedMs > MAX_POLLING_DURATION_MS) {
-      console.warn(`Bright Data polling timeout after ${Math.round(elapsedMs / 1000)}s`);
-      setJobStatus("failed");
-      setIsSearching(false);
-      setPollingStartTime(null);
-      
-      if (currentJobId) {
-        try {
-          await updateJob({
-            id: currentJobId,
-            updates: {
-              status: "failed",
-              completed_at: new Date().toISOString(),
-              error_message: `Tiempo de espera agotado`,
-            },
-          });
-          refetchJobs();
-        } catch (updateError) {
-          console.error("Error updating job status:", updateError);
-        }
-      }
-      
-      toast({
-        title: "Tiempo agotado",
-        description: "La búsqueda con Bright Data tardó demasiado.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const result = await brightdataApi.checkStatus(snapshotId, platform);
-
-      if (!result.success || !result.data) {
-        throw new Error(result.error || "Error al verificar estado");
-      }
-
-      const data = result.data;
-
-      if (data.status === "completed") {
-        setJobStatus("completed");
-        setProgress(100);
-        setProgressMessage("¡Completado!");
-        setIsSearching(false);
-        setPollingStartTime(null);
-
-        const processed = processBackendResults((data.items || []) as SocialSearchResult[], platform);
-        setRawResultsCount(data.rawCount || processed.length);
-        setFilteredResultsCount(processed.length);
-        setKeywordFilteredCount(processed.length);
-        setResults(processed);
-
-        // Save to database
-        if (currentJobId && processed.length > 0) {
-          try {
-            await updateJob({
-              id: currentJobId,
-              updates: {
-                status: "completed",
-                completed_at: new Date().toISOString(),
-                results_count: processed.length,
-                metadata: { provider: "brightdata" },
-              },
-            });
-            
-            await saveResults({
-              jobId: currentJobId,
-              results: processed.map((r) => ({
-                platform: r.platform,
-                external_id: r.id,
-                title: r.title || "",
-                description: r.description || "",
-                author_name: r.author?.name || "",
-                author_username: r.author?.username || "",
-                author_url: r.author?.url || "",
-                author_avatar_url: r.author?.avatarUrl,
-                author_verified: r.author?.verified,
-                author_followers: r.author?.followers,
-                likes: r.metrics?.likes || 0,
-                comments: r.metrics?.comments || 0,
-                shares: r.metrics?.shares || 0,
-                views: r.metrics?.views,
-                engagement: r.metrics?.engagement,
-                published_at: r.publishedAt,
-                url: r.url || "",
-                content_type: r.contentType || "post",
-                hashtags: r.hashtags,
-                mentions: r.mentions,
-                raw_data: JSON.parse(JSON.stringify(r.raw || {})),
-              })),
-            });
-            
-            refetchJobs();
-          } catch (saveError) {
-            console.error("Error saving to database:", saveError);
-          }
-        }
-
-        toast({
-          title: "Búsqueda completada (Bright Data)",
-          description: `Se encontraron ${processed.length} resultados en ${config.label}`,
-        });
-      } else if (data.status === "failed") {
-        setJobStatus("failed");
-        setIsSearching(false);
-        setPollingStartTime(null);
-
-        if (currentJobId) {
-          try {
-            await updateJob({
-              id: currentJobId,
-              updates: {
-                status: "failed",
-                completed_at: new Date().toISOString(),
-                error_message: data.error || "Error desconocido",
-              },
-            });
-            refetchJobs();
-          } catch (updateError) {
-            console.error("Error updating job status:", updateError);
-          }
-        }
-
-        toast({
-          title: "Error en la búsqueda",
-          description: data.error || "Error con Bright Data",
-          variant: "destructive",
-        });
-      } else {
-        // Still running
-        const remainingMs = MAX_POLLING_DURATION_MS - elapsedMs;
-        const remainingSecs = Math.ceil(remainingMs / 1000);
-        const timeWarning = remainingSecs < 60 ? ` (${remainingSecs}s restantes)` : "";
-        setProgressMessage(`Extrayendo datos con Bright Data...${timeWarning}`);
-        setProgress(Math.min(80, 20 + (elapsedMs / MAX_POLLING_DURATION_MS) * 60));
-        
-        setTimeout(() => checkBrightDataStatus(snapshotId, startTime), 3000);
-      }
-    } catch (error) {
-      console.error("Error checking Bright Data status:", error);
-      setJobStatus("failed");
-      setIsSearching(false);
-      setPollingStartTime(null);
-    }
-  }, [platform, config.label, toast, currentJobId, updateJob, saveResults, refetchJobs, MAX_POLLING_DURATION_MS]);
-
   const handleSearch = async () => {
     if (!searchValue.trim()) {
       toast({
@@ -1050,9 +428,8 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
 
     setIsSearching(true);
     setJobStatus("running");
-    setProgress(5);
-    const providerLabel = dataProvider === "brightdata" ? "Bright Data" : "Apify";
-    setProgressMessage(`Conectando con ${config.label} (${providerLabel})...`);
+    setProgress(50);
+    setProgressMessage(`Conectando orquestador n8n para ${config.label}...`);
     setResults([]);
     setCurrentJobId(null);
     setRawResultsCount(0);
@@ -1062,7 +439,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
     setYoutubeParallelRuns(null);
 
     try {
-      // Create job in database first
+      // Create job in database to track the intent
       const job = await createJob({
         project_id: projectId,
         platform,
@@ -1073,219 +450,54 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       
       setCurrentJobId(job.id);
 
-      // =====================================================
-      // TIKTOK: RapidAPI desactivado, usar Apify directamente
-      // =====================================================
+      const effectivePlatform = (platform === "reddit" && searchType === "comments") 
+        ? "reddit_comments" 
+        : platform;
 
-      // =====================================================
-      // BRIGHT DATA FLOW (only TikTok & YouTube supported)
-      // =====================================================
-      const brightDataSupported = ["tiktok", "youtube"].includes(platform);
-      const effectiveProvider = (dataProvider === "brightdata" && brightDataSupported) ? "brightdata" : "apify";
+      // Trigger asynchronous scrape to n8n via backend
+      const result = await n8nApi.startScrape({
+        platform: effectivePlatform as any,
+        query: (searchType === "query" || searchType === "comments") ? searchValue : undefined,
+        username: searchType === "username" ? searchValue.replace("@", "") : undefined,
+        hashtag: searchType === "hashtag" ? searchValue.replace("#", "") : undefined,
+        companyUrl: searchType === "companyUrl" ? searchValue : undefined,
+        channelUrl: searchType === "channelUrl" ? searchValue : undefined,
+        subreddit: searchType === "subreddit" ? searchValue.replace("r/", "") : undefined,
+        maxResults,
+      });
 
-      if (effectiveProvider === "brightdata") {
-        const effectivePlatform = (platform === "reddit" && searchType === "comments") 
-          ? "reddit_comments" 
-          : platform;
-
-        const result = await brightdataApi.startScrape({
-          // Let backend persist run_id/dataset_id even if client times out
-          jobId: job.id,
-          platform: effectivePlatform,
-          query: (searchType === "query" || searchType === "comments") ? searchValue : undefined,
-          username: searchType === "username" ? searchValue.replace("@", "") : undefined,
-          hashtag: searchType === "hashtag" ? searchValue.replace("#", "") : undefined,
-          companyUrl: searchType === "companyUrl" ? searchValue : undefined,
-          channelUrl: searchType === "channelUrl" ? searchValue : undefined,
-          subreddit: searchType === "subreddit" ? searchValue.replace("r/", "") : undefined,
-          taggedUsername: searchType === "taggedPosts" ? searchValue.replace("@", "") : undefined,
-          captionFilter: (platform === "instagram" && searchType === "hashtag" && captionFilter.trim()) 
-            ? captionFilter.trim() 
-            : undefined,
-          maxResults,
-          searchType,
-        });
-
-        if (!result.success || !result.data) {
-          // If the browser timed out, the backend may still have started the job.
-          const msg = result.error || "Error al iniciar la búsqueda con Bright Data";
-          if (msg.toLowerCase().includes("tiempo de espera agotado")) {
-            setProgress(10);
-            setProgressMessage("Iniciando búsqueda (Bright Data puede tardar en responder)...");
-            // Give backend a moment to persist run_id, then refetch and resume polling.
-            setTimeout(async () => {
-              try {
-                await refetchJobs();
-                const { data } = await api.get(`/scrape-jobs/${job.id}`);
-
-                if (data?.run_id) {
-                  setRunId(data.run_id);
-                  const startTime = Date.now();
-                  setPollingStartTime(startTime);
-                  setTimeout(() => checkBrightDataStatus(data.run_id!, startTime), 3000);
-                  return;
-                }
-
-                // If still no run_id, mark as failed (real start likely didn't happen)
-                await updateJob({
-                  id: job.id,
-                  updates: {
-                    status: "failed",
-                    completed_at: new Date().toISOString(),
-                    error_message: msg,
-                  },
-                });
-                setJobStatus("failed");
-                setIsSearching(false);
-                toast({
-                  title: "Error",
-                  description: msg,
-                  variant: "destructive",
-                });
-              } catch (e) {
-                console.error("Error recovering Bright Data job after timeout:", e);
-                setJobStatus("failed");
-                setIsSearching(false);
-              }
-            }, 5000);
-            return;
-          }
-
-          throw new Error(msg);
-        }
-
-        const data = result.data;
-
-        if (data.success && data.runId) {
-          setRunId(data.runId);
-          setProgress(10);
-          
-          await updateJob({
-            id: job.id,
-            updates: {
-              run_id: data.runId,
-              dataset_id: data.datasetId,
-              status: "running",
-              metadata: { provider: "brightdata" },
-            },
-          });
-          
-          const startTime = Date.now();
-          setPollingStartTime(startTime);
-          setTimeout(() => checkBrightDataStatus(data.runId!, startTime), 3000);
-        } else {
-          throw new Error(data.error || "Error al iniciar la búsqueda con Bright Data");
-        }
+      if (!result.success) {
+        throw new Error(result.error);
       }
-      // =====================================================
-      // APIFY FLOW (original or fallback from unsupported Bright Data platform)
-      // =====================================================
-      else if (effectiveProvider === "apify" && platform === "youtube") {
-        // YOUTUBE SEARCH: streamers/youtube-scraper handles BOTH videos AND shorts in one run
-        setProgressMessage("Buscando videos y shorts...");
-        
-        // Determine valid YouTube upload date filter
-        const validUploadDates = ["lastHour", "today", "thisWeek", "thisMonth", "thisYear"] as const;
-        const uploadDateValue = validUploadDates.includes(youtubeUploadDate as typeof validUploadDates[number])
-          ? (youtubeUploadDate as typeof validUploadDates[number])
-          : undefined;
-        
-        const result = await apifyApi.startScrape({
-          platform: "youtube",
-          query: searchType === "query" ? searchValue : undefined,
-          channelUrl: searchType === "channelUrl" ? searchValue : undefined,
-          maxResults,
-          // Pass native YouTube filters
-          youtubeUploadDate: uploadDateValue,
-          youtubeSortType: youtubeSortType || undefined,
-        });
 
-        if (!result.success || !result.data) {
-          throw new Error(result.error || "Error al iniciar la búsqueda de YouTube");
-        }
+      setJobStatus("completed");
+      setProgress(100);
+      setProgressMessage("Petición enviada exitosamente. n8n está procesando...");
+      setIsSearching(false);
+      
+      toast({
+        title: "Búsqueda Iniciada",
+        description: "La tarea ha sido enviada a n8n. Los resultados se guardarán en la base de datos automáticamente en los próximos minutos.",
+      });
+      
+      // Update job to completed immediately from frontend perspective 
+      // since n8n handles the actual data fetch and DB upsert asynchronously
+      await updateJob({
+        id: job.id,
+        updates: {
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          metadata: { message: "Delegated to n8n" }
+        },
+      });
+      
+      onResultsSaved?.();
 
-        const data = result.data;
-
-        if (data.success && data.runId) {
-          setRunId(data.runId);
-          setProgress(10);
-          
-          // Update job with runId and datasetId
-          await updateJob({
-            id: job.id,
-            updates: {
-              run_id: data.runId,
-              dataset_id: data.datasetId,
-              status: "running",
-            },
-          });
-          
-          // Start polling for status (use standard flow - actor returns both videos & shorts)
-          const startTime = Date.now();
-          setPollingStartTime(startTime);
-          setTimeout(() => checkJobStatus(data.runId!, searchValue, startTime), 3000);
-        } else {
-          throw new Error(data.error || "Error al iniciar la búsqueda de YouTube");
-        }
-      } else {
-        // STANDARD SINGLE PLATFORM SEARCH
-        // Special handling for Reddit comments search - use reddit_comments platform
-        const effectivePlatform = (platform === "reddit" && searchType === "comments") 
-          ? "reddit_comments" 
-          : platform;
-        
-        const result = await apifyApi.startScrape({
-          platform: effectivePlatform,
-          query: (searchType === "query" || searchType === "comments") ? searchValue : undefined,
-          username: searchType === "username" ? searchValue.replace("@", "") : undefined,
-          hashtag: searchType === "hashtag" ? searchValue.replace("#", "") : undefined,
-          companyUrl: searchType === "companyUrl" ? searchValue : undefined,
-          channelUrl: searchType === "channelUrl" ? searchValue : undefined,
-          subreddit: searchType === "subreddit" ? searchValue.replace("r/", "") : undefined,
-          taggedUsername: searchType === "taggedPosts" ? searchValue.replace("@", "") : undefined,
-          captionFilter: (platform === "instagram" && searchType === "hashtag" && captionFilter.trim()) 
-            ? captionFilter.trim() 
-            : undefined,
-          maxResults,
-        });
-
-        if (!result.success || !result.data) {
-          throw new Error(result.error || "Error al iniciar la búsqueda");
-        }
-
-        const data = result.data;
-
-        if (data.success && data.runId) {
-          setRunId(data.runId);
-          setProgress(10);
-          
-          // Update job with runId and datasetId
-          await updateJob({
-            id: job.id,
-            updates: {
-              run_id: data.runId,
-              dataset_id: data.datasetId,
-              status: "running",
-            },
-          });
-          
-          // Start polling for status
-          const filterKw = (platform === "instagram" && searchType === "hashtag" && captionFilter.trim())
-            ? captionFilter.trim()
-            : searchValue;
-          const startTime = Date.now();
-          setPollingStartTime(startTime);
-          setTimeout(() => checkJobStatus(data.runId!, filterKw, startTime, effectivePlatform as Platform), 3000);
-        } else {
-          throw new Error(data.error || "Error al iniciar la búsqueda");
-        }
-      }
     } catch (error) {
       console.error("Search error:", error);
       setJobStatus("failed");
       setIsSearching(false);
       
-      // Update job status if it was created
       if (currentJobId) {
         try {
           await updateJob({
@@ -1302,8 +514,8 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       }
       
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Error al realizar la búsqueda",
+        title: "Error de Orquestador",
+        description: error instanceof Error ? error.message : "Error al iniciar la petición en n8n",
         variant: "destructive",
       });
     }
