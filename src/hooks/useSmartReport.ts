@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import type { Mention } from "./useMentions";
 
@@ -66,8 +66,7 @@ export function useSmartReport() {
     setError(null);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke("generate-smart-report", {
-        body: {
+      const { data } = await api.post("/reports/smart", {
           mentions: mentions.map(m => ({
             id: m.id,
             title: m.title,
@@ -79,12 +78,7 @@ export function useSmartReport() {
             matched_keywords: m.matched_keywords,
           })),
           ...config,
-        },
       });
-
-      if (fnError) {
-        throw fnError;
-      }
 
       if (data.error) {
         throw new Error(data.error);

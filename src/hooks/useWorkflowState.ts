@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useProject } from "@/contexts/ProjectContext";
 
 export type WorkflowStep = "define" | "capture" | "analyze" | "report";
@@ -38,13 +38,8 @@ export function useWorkflowState(): WorkflowState {
     queryKey: ["workflow-entities", projectId],
     queryFn: async () => {
       if (!projectId) return { count: 0, keywords: 0 };
-      const { data, error } = await supabase
-        .from("entities")
-        .select("id, palabras_clave")
-        .eq("project_id", projectId)
-        .eq("activo", true);
-      if (error) throw error;
-      const keywords = (data || []).reduce((sum, e) => sum + (e.palabras_clave?.length || 0), 0);
+      const { data } = await api.get(`/projects/${projectId}/entities`);
+      const keywords = (data || []).reduce((sum: number, e: any) => sum + (e.palabras_clave?.length || 0), 0);
       return { count: data?.length || 0, keywords };
     },
     enabled: !!projectId,
@@ -56,12 +51,7 @@ export function useWorkflowState(): WorkflowState {
     queryKey: ["workflow-mentions", projectId],
     queryFn: async () => {
       if (!projectId) return { total: 0, analyzed: 0, unanalyzed: 0 };
-      const { data, error } = await supabase
-        .from("mentions")
-        .select("id, sentiment")
-        .eq("project_id", projectId)
-        .eq("is_archived", false);
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}/mentions`);
       const mentions = data || [];
       return {
         total: mentions.length,
@@ -78,11 +68,7 @@ export function useWorkflowState(): WorkflowState {
     queryKey: ["workflow-reports", projectId],
     queryFn: async () => {
       if (!projectId) return { cards: 0 };
-      const { data, error } = await supabase
-        .from("thematic_cards")
-        .select("id")
-        .eq("project_id", projectId);
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}/thematic-cards`);
       return { cards: data?.length || 0 };
     },
     enabled: !!projectId,

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,8 @@ const Registro = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { signIn } = useAuth();
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,22 +36,19 @@ const Registro = () => {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: {
-          full_name: fullName.trim(),
-        },
-      },
-    });
+    try {
+      const { data } = await api.post('/auth/register', {
+        email: email.trim(),
+        password,
+        full_name: fullName.trim(),
+      });
 
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-    } else {
+      signIn(data.token, data.user);
       navigate("/dashboard");
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Ocurrió un error al crear la cuenta.");
+    } finally {
+      setLoading(false);
     }
   };
 

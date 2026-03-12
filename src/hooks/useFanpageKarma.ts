@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { toast } from "sonner";
 
 export type FKNetwork = "facebook" | "instagram" | "youtube" | "linkedin" | "tiktok" | "threads" | "twitter";
@@ -75,15 +75,7 @@ export function useFKProfilesByRanking(rankingId: string | undefined) {
     queryFn: async () => {
       if (!rankingId) return [];
       
-      const { data, error } = await supabase
-        .from("fk_profiles")
-        .select("*")
-        .eq("ranking_id", rankingId)
-        .eq("is_active", true)
-        .order("network", { ascending: true })
-        .order("display_name", { ascending: true });
-
-      if (error) throw error;
+      const { data } = await api.get(`/rankings/${rankingId}/fk-profiles`);
       return data as FKProfile[];
     },
     enabled: !!rankingId,
@@ -97,15 +89,7 @@ export function useFKProfiles(projectId: string | undefined) {
     queryFn: async () => {
       if (!projectId) return [];
       
-      const { data, error } = await supabase
-        .from("fk_profiles")
-        .select("*")
-        .eq("project_id", projectId)
-        .eq("is_active", true)
-        .order("network", { ascending: true })
-        .order("display_name", { ascending: true });
-
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}/fk-profiles`);
       return data as FKProfile[];
     },
     enabled: !!projectId,
@@ -118,22 +102,13 @@ export function useFKProfileKPIs(profileIds: string[], periodStart?: string, per
     queryFn: async () => {
       if (profileIds.length === 0) return [];
 
-      let query = supabase
-        .from("fk_profile_kpis")
-        .select("*")
-        .in("fk_profile_id", profileIds)
-        .order("fetched_at", { ascending: false });
-
-      // If period is specified, filter for KPIs that overlap with the requested period
-      // This allows finding relevant data even if sync was done with different date ranges
-      if (periodStart && periodEnd) {
-        query = query
-          .lte("period_start", periodEnd)
-          .gte("period_end", periodStart);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
+      const { data } = await api.get('/fk-profiles/kpis', {
+        params: {
+          profileIds: profileIds.join(','),
+          periodStart,
+          periodEnd
+        }
+      });
       return data as FKProfileKPI[];
     },
     enabled: profileIds.length > 0,
@@ -164,12 +139,9 @@ export function useAddFKProfilesToRanking() {
         is_active: true,
       }));
 
-      const { data, error } = await supabase
-        .from("fk_profiles")
-        .insert(profilesToInsert)
-        .select();
-
-      if (error) throw error;
+      const { data } = await api.post(`/rankings/${rankingId}/fk-profiles/batch`, { 
+        profiles: profilesToInsert 
+      });
       return { inserted: data.length, network: batch.network };
     },
     onSuccess: (result, variables) => {
@@ -207,12 +179,9 @@ export function useAddFKProfiles() {
         is_active: true,
       }));
 
-      const { data, error } = await supabase
-        .from("fk_profiles")
-        .upsert(profilesToInsert, { onConflict: "project_id,network,profile_id" })
-        .select();
-
-      if (error) throw error;
+      const { data } = await api.post(`/projects/${projectId}/fk-profiles/batch`, { 
+        profiles: profilesToInsert 
+      });
       return { inserted: data.length, network: batch.network };
     },
     onSuccess: (result, variables) => {
@@ -230,12 +199,7 @@ export function useDeleteFKProfile() {
 
   return useMutation({
     mutationFn: async ({ profileId, rankingId }: { profileId: string; rankingId?: string }) => {
-      const { error } = await supabase
-        .from("fk_profiles")
-        .delete()
-        .eq("id", profileId);
-
-      if (error) throw error;
+      await api.delete(`/fk-profiles/${profileId}`);
       return rankingId;
     },
     onSuccess: (rankingId) => {
@@ -258,12 +222,7 @@ export function useBulkDeleteFKProfiles() {
         throw new Error("No se seleccionaron perfiles");
       }
 
-      const { error } = await supabase
-        .from("fk_profiles")
-        .delete()
-        .in("id", profileIds);
-
-      if (error) throw error;
+      await api.post(`/fk-profiles/batch-delete`, { profileIds });
       return { count: profileIds.length, rankingId };
     },
     onSuccess: (result) => {
@@ -304,16 +263,12 @@ export function useSyncFKProfile() {
 
       const period = `${startDate.toISOString().split("T")[0]}_${endDate.toISOString().split("T")[0]}`;
 
-      const { data, error } = await supabase.functions.invoke("fanpage-karma", {
-        body: {
-          action: "kpi",
-          network: profile.network,
-          profileId: profile.profile_id,
-          period,
-        },
+      const { data } = await api.post("/fanpage-karma/kpi", {
+        network: profile.network,
+        profileId: profile.profile_id,
+        period,
       });
 
-      if (error) throw error;
       if (!data.success) throw new Error(data.error || "Error al obtener KPIs");
 
       // Store the KPIs - extract values from Fanpage Karma response structure
@@ -373,10 +328,7 @@ export function useSyncFKProfile() {
             performanceIndex = extractValue('page_performance_index');
           }
 
-      const { error: insertError } = await supabase
-        .from("fk_profile_kpis")
-        .upsert({
-          fk_profile_id: profile.id,
+      await api.post(`/fk-profiles/${profile.id}/kpis`, {
           period_start: startDate.toISOString().split("T")[0],
           period_end: endDate.toISOString().split("T")[0],
           followers: followers,
@@ -388,9 +340,7 @@ export function useSyncFKProfile() {
           page_performance_index: performanceIndex,
           raw_data: kpiData,
           fetched_at: new Date().toISOString(),
-        }, { onConflict: "fk_profile_id,period_start,period_end" });
-
-      if (insertError) throw insertError;
+      });
 
       // Extract display_name from metadata if available
       const metadata = data.metadata || {};
@@ -430,10 +380,7 @@ export function useSyncFKProfile() {
         updateData.avatar_url = avatarUrl;
       }
       
-      await supabase
-        .from("fk_profiles")
-        .update(updateData)
-        .eq("id", profile.id);
+      await api.patch(`/fk-profiles/${profile.id}`, updateData);
 
       return { profile, kpiData };
     },
@@ -481,16 +428,12 @@ export function useSyncAllProfiles() {
         try {
           const period = `${startDate.toISOString().split("T")[0]}_${endDate.toISOString().split("T")[0]}`;
 
-          const { data, error } = await supabase.functions.invoke("fanpage-karma", {
-            body: {
-              action: "kpi",
-              network: profile.network,
-              profileId: profile.profile_id,
-              period,
-            },
+          const { data } = await api.post("/fanpage-karma/kpi", {
+            network: profile.network,
+            profileId: profile.profile_id,
+            period,
           });
 
-          if (error) throw error;
           if (!data.success) throw new Error(data.error || "Error al obtener KPIs");
 
           const kpiData = data.data || {};
@@ -545,10 +488,7 @@ export function useSyncAllProfiles() {
             performanceIndex = extractValue('page_performance_index');
           }
 
-           const { error: upsertError } = await supabase
-            .from("fk_profile_kpis")
-            .upsert({
-              fk_profile_id: profile.id,
+           await api.post(`/fk-profiles/${profile.id}/kpis`, {
               period_start: startDate.toISOString().split("T")[0],
               period_end: endDate.toISOString().split("T")[0],
                followers,
@@ -560,10 +500,7 @@ export function useSyncAllProfiles() {
                page_performance_index: performanceIndex,
               raw_data: kpiData,
               fetched_at: new Date().toISOString(),
-            }, { onConflict: "fk_profile_id,period_start,period_end" });
-
-           // IMPORTANT: upsert can fail silently unless we check the returned error
-           if (upsertError) throw upsertError;
+            });
 
           // Extract display_name from metadata if available
           const metadata = data.metadata || {};
@@ -600,10 +537,7 @@ export function useSyncAllProfiles() {
             updateData.avatar_url = avatarUrl;
           }
 
-          await supabase
-            .from("fk_profiles")
-            .update(updateData)
-            .eq("id", profile.id);
+          await api.patch(`/fk-profiles/${profile.id}`, updateData);
 
           results.success++;
         } catch (err) {
@@ -650,16 +584,12 @@ export function useFetchProfilePosts(profile: FKProfile | undefined) {
 
       const period = `${startDate.toISOString().split("T")[0]}_${endDate.toISOString().split("T")[0]}`;
 
-      const { data, error } = await supabase.functions.invoke("fanpage-karma", {
-        body: {
-          action: "posts",
-          network: profile.network,
-          profileId: profile.profile_id,
-          period,
-        },
+      const { data } = await api.post("/fanpage-karma/posts", {
+        network: profile.network,
+        profileId: profile.profile_id,
+        period,
       });
 
-      if (error) throw error;
       if (!data.success) throw new Error(data.error || "Error al obtener posts");
 
       // Fanpage Karma returns posts inside data.data.posts array
@@ -728,13 +658,11 @@ export function useFKAllKPIs(profileIds: string[]) {
     queryFn: async () => {
       if (profileIds.length === 0) return [];
 
-      const { data, error } = await supabase
-        .from("fk_profile_kpis")
-        .select("*")
-        .in("fk_profile_id", profileIds)
-        .order("period_end", { ascending: true });
-
-      if (error) throw error;
+      const { data } = await api.get('/fk-profile-kpis/all', {
+        params: {
+          profileIds: profileIds.join(',')
+        }
+      });
       return data as FKProfileKPI[];
     },
     enabled: profileIds.length > 0,
@@ -766,21 +694,13 @@ export function useFKDailyTopPosts(profileIds: string[], startDate?: string, end
     queryFn: async () => {
       if (profileIds.length === 0) return [];
 
-      let query = supabase
-        .from("fk_daily_top_posts")
-        .select("*")
-        .in("fk_profile_id", profileIds)
-        .order("post_date", { ascending: false });
-
-      if (startDate) {
-        query = query.gte("post_date", startDate);
-      }
-      if (endDate) {
-        query = query.lte("post_date", endDate);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
+      const { data } = await api.get('/fk-daily-top-posts', {
+        params: {
+          profileIds: profileIds.join(','),
+          startDate,
+          endDate
+        }
+      });
       return data as FKDailyTopPost[];
     },
     enabled: profileIds.length > 0,
@@ -793,33 +713,9 @@ export function useFKDailyTopPostsByRanking(rankingId: string | undefined, start
     queryFn: async () => {
       if (!rankingId) return [];
 
-      // First get profile IDs for this ranking
-      const { data: profiles, error: profilesError } = await supabase
-        .from("fk_profiles")
-        .select("id")
-        .eq("ranking_id", rankingId)
-        .eq("is_active", true);
-
-      if (profilesError) throw profilesError;
-      if (!profiles || profiles.length === 0) return [];
-
-      const profileIds = profiles.map(p => p.id);
-
-      let query = supabase
-        .from("fk_daily_top_posts")
-        .select("*")
-        .in("fk_profile_id", profileIds)
-        .order("post_date", { ascending: false });
-
-      if (startDate) {
-        query = query.gte("post_date", startDate);
-      }
-      if (endDate) {
-        query = query.lte("post_date", endDate);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
+      const { data } = await api.get(`/rankings/${rankingId}/fk-daily-top-posts`, {
+        params: { startDate, endDate }
+      });
       return data as FKDailyTopPost[];
     },
     enabled: !!rankingId,

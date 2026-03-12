@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,23 +22,21 @@ const SolicitarAcceso = () => {
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase
-      .from("access_requests")
-      .insert({
+    try {
+      await api.post('/auth/access-request', {
         email: email.trim().toLowerCase(),
         full_name: fullName.trim(),
         reason: reason.trim() || null,
       });
 
-    if (error) {
-      if (error.code === "23505") {
+      setSuccess(true);
+    } catch (err: any) {
+      if (err.response?.status === 409) {
         setError("Ya existe una solicitud con este correo electrónico");
       } else {
-        setError(error.message);
+        setError(err.response?.data?.error || "Ocurrió un error al enviar la solicitud.");
       }
-      setLoading(false);
-    } else {
-      setSuccess(true);
+    } finally {
       setLoading(false);
     }
   };

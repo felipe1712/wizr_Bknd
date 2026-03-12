@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useMemo } from "react";
 import { subDays, startOfDay, eachDayOfInterval, format, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
@@ -53,13 +53,7 @@ export function useReportData(
     queryFn: async () => {
       if (!projectId) return null;
 
-      const { data, error } = await supabase
-        .from("projects")
-        .select("id, nombre, descripcion, tipo, objetivo")
-        .eq("id", projectId)
-        .single();
-
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}`);
       return data as ProjectInfo;
     },
     enabled: !!projectId,
@@ -71,18 +65,12 @@ export function useReportData(
     queryFn: async () => {
       if (!projectId) return [];
 
-      const { data, error } = await supabase
-        .from("mentions")
-        .select(`
-          *,
-          entity:entities(id, nombre, tipo)
-        `)
-        .eq("project_id", projectId)
-        .eq("is_archived", false)
-        .gte("created_at", startDate.toISOString())
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}/mentions`, {
+        params: {
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString()
+        }
+      });
       return data as Mention[];
     },
     enabled: !!projectId,

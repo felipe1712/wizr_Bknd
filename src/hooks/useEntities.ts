@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 export type EntityType = "persona" | "marca" | "institucion" | "tema" | "evento";
@@ -40,14 +40,7 @@ export function useEntities(projectId: string | undefined) {
     queryFn: async () => {
       if (!projectId) return [];
 
-      const { data, error } = await supabase
-        .from("entities")
-        .select("*")
-        .eq("project_id", projectId)
-        .eq("activo", true)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}/entities`);
       return data as Entity[];
     },
     enabled: !!projectId,
@@ -55,13 +48,7 @@ export function useEntities(projectId: string | undefined) {
 
   const createMutation = useMutation({
     mutationFn: async (data: CreateEntityData) => {
-      const { data: entity, error } = await supabase
-        .from("entities")
-        .insert(data)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const { data: entity } = await api.post(`/projects/${projectId}/entities`, data);
       return entity as Entity;
     },
     onSuccess: () => {
@@ -82,14 +69,7 @@ export function useEntities(projectId: string | undefined) {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...data }: UpdateEntityData) => {
-      const { data: entity, error } = await supabase
-        .from("entities")
-        .update(data)
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const { data: entity } = await api.patch(`/entities/${id}`, data);
       return entity as Entity;
     },
     onSuccess: () => {
@@ -111,12 +91,7 @@ export function useEntities(projectId: string | undefined) {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       // Soft delete by setting activo to false
-      const { error } = await supabase
-        .from("entities")
-        .update({ activo: false })
-        .eq("id", id);
-
-      if (error) throw error;
+      await api.delete(`/entities/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entities", projectId] });

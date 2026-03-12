@@ -21,7 +21,7 @@ import {
   Database,
 } from "lucide-react";
 import { FKProfile, FKPost, FKNetwork, FKDailyTopPost } from "@/hooks/useFanpageKarma";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { format, isWithinInterval } from "date-fns";
 import { es } from "date-fns/locale";
 import { NetworkFilter } from "./NetworkFilter";
@@ -194,21 +194,13 @@ function useTopPostsFromDB(profileIds: string[], startDate?: string, endDate?: s
     queryFn: async () => {
       if (profileIds.length === 0) return [];
 
-      let query = supabase
-        .from("fk_daily_top_posts")
-        .select("*")
-        .in("fk_profile_id", profileIds)
-        .order("post_date", { ascending: false });
-
-      if (startDate) {
-        query = query.gte("post_date", startDate);
-      }
-      if (endDate) {
-        query = query.lte("post_date", endDate);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
+      const { data } = await api.get("/fanpage-karma/daily-top-posts", {
+        params: {
+          profileIds: profileIds.join(","),
+          startDate,
+          endDate,
+        }
+      });
       return data as FKDailyTopPost[];
     },
     enabled: profileIds.length > 0,
@@ -376,8 +368,7 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
         date: post.published_at,
       }));
 
-      const { data, error } = await supabase.functions.invoke("analyze-narratives", {
-        body: {
+      const { data } = await api.post("/reports/narratives/analyze", {
           profileName: isAllProfiles ? `${filteredProfiles.length} perfiles` : (selectedProfile?.profile_id || "Perfil"),
           network: isAllProfiles ? "múltiples redes" : (selectedProfile?.network || "social"),
           posts: postsForAnalysis,
@@ -385,11 +376,7 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
             from: format(dateRange.from, "yyyy-MM-dd"),
             to: format(dateRange.to, "yyyy-MM-dd"),
           } : null,
-        },
       });
-
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error || "Error en el análisis");
 
       const analysis = data.analysis;
       const structuredAnalysis: ContentAnalysisData = {

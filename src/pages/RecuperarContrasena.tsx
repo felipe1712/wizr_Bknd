@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,15 +19,12 @@ const RecuperarContrasena = () => {
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/restablecer-contrasena`,
-    });
-
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-    } else {
+    try {
+      await api.post('/auth/recover-password', { email: email.trim() });
       setSuccess(true);
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Ocurrió un error al enviar el correo de recuperación.");
+    } finally {
       setLoading(false);
     }
   };

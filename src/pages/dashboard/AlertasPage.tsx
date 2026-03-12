@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { toast } from "sonner";
 import {
   AlertCircle,
@@ -58,9 +58,9 @@ const AlertasPage = () => {
   const handleRunMonitoring = async () => {
     setIsRunningMonitoring(true);
     try {
-      const { data, error } = await supabase.functions.invoke('scheduled-monitoring', {
-        body: { manual: true },
-      });
+      const { data, error } = await api.post('/monitoring/scheduled', { manual: true })
+        .then(res => ({ data: res.data, error: null }))
+        .catch(err => ({ data: null, error: err as Error }));
 
       if (error) {
         toast.error('Error al ejecutar monitoreo', {

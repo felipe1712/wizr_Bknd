@@ -13,7 +13,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import { FKProfile, FKProfileKPI } from "@/hooks/useFanpageKarma";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import ReactMarkdown from "react-markdown";
 
 interface Message {
@@ -107,17 +107,13 @@ INSTRUCCIONES DE FORMATO:
 - Destaca solo lo más importante, evita relleno
 - Si no hay datos suficientes, indícalo brevemente`;
 
-      const { data, error } = await supabase.functions.invoke("ranking-ai-chat", {
-        body: {
+      const { data } = await api.post("/reports/ranking/chat", {
           messages: [
             ...messages.map(m => ({ role: m.role, content: m.content })),
             { role: "user", content: text }
           ],
           systemPrompt
-        }
       });
-
-      if (error) throw error;
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),

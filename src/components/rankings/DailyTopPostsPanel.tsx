@@ -22,7 +22,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { FKProfile, FKDailyTopPost, getNetworkLabel, FKNetwork } from "@/hooks/useFanpageKarma";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { toast } from "sonner";
 import { 
   SiFacebook, 
@@ -82,27 +82,11 @@ export function DailyTopPostsPanel({ profiles, topPosts, isLoading, onRefresh }:
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 minutes
       
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scheduled-ranking-sync`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({}),
-          signal: controller.signal,
-        }
-      );
+      const response = await api.post("/rankings/sync", {}, { signal: controller.signal });
       
       clearTimeout(timeoutId);
       
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
-      }
-      
-      const data = await response.json();
+      const data = response.data;
 
       if (data?.success && data?.started) {
         toast.success("Sincronización iniciada. En unos minutos verás los posts top.");

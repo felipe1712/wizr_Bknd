@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import api from "@/lib/api";
 
 export type FirecrawlResponse<T = unknown> = {
   success: boolean;
@@ -143,38 +143,17 @@ export const firecrawlApi = {
         const timeoutId = setTimeout(() => controller.abort(), 45000);
 
         try {
-          const response = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/firecrawl-search`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-                'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-              },
-              body: JSON.stringify({ query, options }),
-              signal: controller.signal,
-            }
+          const response = await api.post(
+            `/firecrawl/search`,
+            { query, options },
+            { signal: controller.signal }
           );
 
           clearTimeout(timeoutId);
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `Request failed with status ${response.status}`);
-          }
-
-          const data = await response.json();
-
-          // Handle Firecrawl response structure
-          if (data?.success === false) {
-            throw new Error(data.error || 'Search failed');
-          }
-
-          return data;
+          return response.data;
         } catch (err) {
           clearTimeout(timeoutId);
-          if (err instanceof Error && err.name === 'AbortError') {
+          if (err?.code === 'ECONNABORTED' || err?.message?.includes('canceled')) {
             throw new Error('La búsqueda tardó demasiado. Por favor intenta de nuevo.');
           }
           throw err;
@@ -202,13 +181,7 @@ export const firecrawlApi = {
    */
   async scrape(url: string, options?: ScrapeOptions): Promise<FirecrawlResponse<ScrapeResult>> {
     try {
-      const { data, error } = await supabase.functions.invoke('firecrawl-scrape', {
-        body: { url, options },
-      });
-
-      if (error) {
-        return { success: false, error: error.message };
-      }
+      const { data } = await api.post('/firecrawl/scrape', { url, options });
 
       if (data?.success === false) {
         return { success: false, error: data.error };

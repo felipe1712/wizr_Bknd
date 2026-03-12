@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useMemo } from "react";
 import { subDays, format, eachDayOfInterval, startOfDay } from "date-fns";
 
@@ -25,14 +25,11 @@ export function usePanoramaData(projectId: string | undefined, daysRange: number
     queryFn: async () => {
       if (!projectId) return [];
 
-      const { data, error } = await supabase
-        .from("mentions")
-        .select("id, sentiment, source_domain, created_at, published_at")
-        .eq("project_id", projectId)
-        .eq("is_archived", false)
-        .order("created_at", { ascending: true });
-
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}/mentions`, {
+        params: {
+          days: daysRange
+        }
+      });
       
       // Filter by effective date (published_at or created_at)
       return (data || []).filter(m => {

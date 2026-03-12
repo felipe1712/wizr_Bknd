@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import type { FKProfile, FKProfileKPI, FKNetwork } from "./useFanpageKarma";
 
@@ -93,8 +93,7 @@ export function useRankingReport() {
     setError(null);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke("generate-ranking-report", {
-        body: {
+      const { data } = await api.post("/reports/ranking", {
           rankingName: config.rankingName,
           reportType: config.reportType,
           extension: config.extension,
@@ -115,12 +114,9 @@ export function useRankingReport() {
           narratives: narratives || [],
           dateRange: config.dateRange,
           filterNetwork: config.filterNetwork,
-        },
       });
 
-      if (fnError) {
-        throw fnError;
-      }
+
 
       if (data.error) {
         throw new Error(data.error);

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { subDays, format, startOfDay, eachDayOfInterval } from "date-fns";
 
 interface Entity {
@@ -59,13 +59,7 @@ export function useComparativeData(
     queryFn: async () => {
       if (!projectId) return [];
 
-      const { data, error } = await supabase
-        .from("entities")
-        .select("id, nombre, tipo")
-        .eq("project_id", projectId)
-        .eq("activo", true);
-
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}/entities`);
       return data as Entity[];
     },
     enabled: !!projectId,
@@ -76,13 +70,11 @@ export function useComparativeData(
     queryFn: async () => {
       if (!projectId) return [];
 
-      const { data, error } = await supabase
-        .from("mentions")
-        .select("id, entity_id, sentiment, source_domain, created_at, published_at")
-        .eq("project_id", projectId)
-        .eq("is_archived", false);
-
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}/mentions`, {
+        params: {
+          days: daysRange
+        }
+      });
       
       // Filter by effective date (published_at or created_at)
       return (data || []).filter(m => {

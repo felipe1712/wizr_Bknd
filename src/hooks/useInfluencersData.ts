@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useMemo } from "react";
 import { format, subDays } from "date-fns";
 
@@ -39,32 +39,12 @@ export function useInfluencersData(
     queryFn: async () => {
       if (!projectId) return [];
 
-      let query = supabase
-        .from("mentions")
-        .select(`
-          id,
-          title,
-          description,
-          url,
-          source_domain,
-          sentiment,
-          matched_keywords,
-          entity_id,
-          created_at,
-          published_at,
-          entity:entities(id, nombre)
-        `)
-        .eq("project_id", projectId)
-        .eq("is_archived", false)
-        .gte("created_at", startDate.toISOString());
-
-      if (selectedEntityIds.length > 0) {
-        query = query.in("entity_id", selectedEntityIds);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}/influencers-mentions`, {
+        params: {
+          startDate: startDate.toISOString(),
+          selectedEntityIds: selectedEntityIds.join(','),
+        }
+      });
       return data || [];
     },
     enabled: !!projectId,
@@ -75,13 +55,7 @@ export function useInfluencersData(
     queryFn: async () => {
       if (!projectId) return [];
 
-      const { data, error } = await supabase
-        .from("entities")
-        .select("id, nombre, tipo")
-        .eq("project_id", projectId)
-        .eq("activo", true);
-
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}/entities`);
       return data || [];
     },
     enabled: !!projectId,

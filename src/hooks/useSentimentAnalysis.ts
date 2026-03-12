@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 export type SentimentType = "positivo" | "neutral" | "negativo";
@@ -41,12 +41,10 @@ export function useSentimentAnalysis(projectId: string | undefined) {
       for (let i = 0; i < mentions.length; i += BATCH_SIZE) {
         const batch = mentions.slice(i, i + BATCH_SIZE);
 
-        const { data, error } = await supabase.functions.invoke<AnalyzeSentimentResponse>(
-          "analyze-sentiment",
-          { body: { mentions: batch } }
+        const { data } = await api.post<AnalyzeSentimentResponse>(
+          `/projects/${projectId}/mentions/analyze-sentiment`,
+          { mentions: batch }
         );
-
-        if (error) throw error;
         if (!data?.success) {
           throw new Error(data?.error || "Error en análisis de sentimiento");
         }
@@ -75,10 +73,9 @@ export function useSentimentAnalysis(projectId: string | undefined) {
 
       // Update sentiments in batch
       const updates = sentiments.map((s) =>
-        supabase
-          .from("mentions")
-          .update({ sentiment: s.sentiment })
-          .eq("id", s.id)
+        api.patch(`/mentions/${s.id}`, { sentiment: s.sentiment })
+          .then(res => ({ data: res.data, error: null }))
+          .catch(err => ({ data: null, error: err as Error }))
       );
 
       const results = await Promise.all(updates);
@@ -125,12 +122,10 @@ export function useSentimentAnalysis(projectId: string | undefined) {
     if (!text?.trim()) return null;
 
     try {
-      const { data, error } = await supabase.functions.invoke<AnalyzeSentimentResponse>(
-        "analyze-sentiment",
-        { body: { mentions: [{ id: "temp", title: text, description: null }] } }
+      const { data } = await api.post<AnalyzeSentimentResponse>(
+        `/projects/${projectId}/mentions/analyze-sentiment`,
+        { mentions: [{ id: "temp", title: text, description: null }] }
       );
-
-      if (error) throw error;
       if (!data?.success || !data.results?.length) return null;
 
       return data.results[0].sentiment;

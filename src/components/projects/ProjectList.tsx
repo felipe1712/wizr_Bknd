@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,12 +77,8 @@ const ProjectList = () => {
   const fetchProjects = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const { data } = await api.get("/projects");
 
-      if (error) throw error;
       setProjects((data as Project[]) || []);
     } catch (error) {
       console.error("Error fetching projects:", error);
@@ -105,12 +101,7 @@ const ProjectList = () => {
 
     setIsDeleting(true);
     try {
-      const { error } = await supabase
-        .from("projects")
-        .delete()
-        .eq("id", projectToDelete.id);
-
-      if (error) throw error;
+      await api.delete(`/projects/${projectToDelete.id}`);
 
       setProjects(projects.filter((p) => p.id !== projectToDelete.id));
       toast({
@@ -132,12 +123,7 @@ const ProjectList = () => {
 
   const handleToggleStatus = async (project: Project) => {
     try {
-      const { error } = await supabase
-        .from("projects")
-        .update({ activo: !project.activo })
-        .eq("id", project.id);
-
-      if (error) throw error;
+      await api.patch(`/projects/${project.id}`, { activo: !project.activo });
 
       setProjects(
         projects.map((p) =>

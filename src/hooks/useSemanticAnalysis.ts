@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Mention, SentimentType } from "./useMentions";
 
@@ -144,12 +144,12 @@ export function useSemanticAnalysis(projectId: string | undefined) {
         matched_keywords: Array.isArray(m.matched_keywords) ? m.matched_keywords.slice(0, 25) : [],
       }));
 
-      const { data, error } = await supabase.functions.invoke<AnalyzeResponse>(
-        "analyze-semantics",
-        { body: { mentions: mentionsForAnalysis } }
+      const { data } = await api.post<AnalyzeResponse>(
+        `/projects/${projectId}/mentions/analyze-semantics`,
+        { mentions: mentionsForAnalysis }
       );
 
-      if (error) throw error;
+
       if (!data?.success || !data.analysis) {
         throw new Error(data?.error || "Error en el análisis");
       }
@@ -187,10 +187,9 @@ export function useSemanticAnalysis(projectId: string | undefined) {
       // Update sentiments in batch
       const results = await Promise.all(
         sentiments.map(async (s) => {
-          const { error, count } = await supabase
-            .from("mentions")
-            .update({ sentiment: s.sentiment })
-            .eq("id", s.id);
+          const { data, error, count } = await api.patch(`/mentions/${s.id}`, { sentiment: s.sentiment })
+            .then(res => ({ data: res.data, error: null, count: 1 }))
+            .catch(err => ({ data: null, error: err as Error, count: 0 }));
           
           return { id: s.id, sentiment: s.sentiment, error, count };
         })

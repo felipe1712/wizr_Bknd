@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import type { Mention } from "./useMentions";
 
@@ -81,13 +81,7 @@ export function useThematicCards(projectId: string | undefined) {
     queryFn: async () => {
       if (!projectId) return [];
 
-      const { data, error } = await supabase
-        .from("thematic_cards")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}/thematic-cards`);
       
       return (data || []).map(card => ({
         ...card,
@@ -110,8 +104,7 @@ export function useThematicCards(projectId: string | undefined) {
       title: string;
       additionalContext?: string;
     }) => {
-      const { data, error } = await supabase.functions.invoke("generate-thematic-card", {
-        body: {
+      const { data } = await api.post("/thematic-cards/generate", {
           cardType,
           title,
           additionalContext,
@@ -125,10 +118,7 @@ export function useThematicCards(projectId: string | undefined) {
             created_at: m.created_at,
             matched_keywords: m.matched_keywords || [],
           })),
-        },
       });
-
-      if (error) throw error;
       if (!data.success) throw new Error(data.error || "Failed to generate content");
       
       return data.content;
@@ -150,8 +140,7 @@ export function useThematicCards(projectId: string | undefined) {
       title: string;
       currentContent: ConversationAnalysisContent | InformativeContent;
     }) => {
-      const { data, error } = await supabase.functions.invoke("generate-thematic-card", {
-        body: {
+      const { data } = await api.post("/thematic-cards/generate", {
           cardType,
           title,
           regenerateSection: section,
@@ -166,10 +155,7 @@ export function useThematicCards(projectId: string | undefined) {
             created_at: m.created_at,
             matched_keywords: m.matched_keywords || [],
           })),
-        },
       });
-
-      if (error) throw error;
       if (!data.success) throw new Error(data.error || "Failed to regenerate section");
       
       return { section: data.section, content: data.content };
@@ -202,22 +188,16 @@ export function useThematicCards(projectId: string | undefined) {
     }) => {
       if (!projectId) throw new Error("No project selected");
 
-      const { data, error } = await supabase
-        .from("thematic_cards")
-        .insert([{
+      const { data } = await api.post("/thematic-cards", {
           project_id: projectId,
           title,
           card_type: cardType,
-          content: JSON.parse(JSON.stringify(content)),
+          content: content,
           mention_ids: mentionIds,
           period_start: periodStart?.toISOString().split("T")[0],
           period_end: periodEnd?.toISOString().split("T")[0],
           status: "draft" as const,
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
+      });
       return data;
     },
     onSuccess: () => {
@@ -242,14 +222,7 @@ export function useThematicCards(projectId: string | undefined) {
       id: string;
       updates: Partial<Pick<ThematicCard, "title" | "content" | "status">>;
     }) => {
-      const { data, error } = await supabase
-        .from("thematic_cards")
-        .update(updates as Record<string, unknown>)
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const { data } = await api.patch(`/thematic-cards/${id}`, updates as Record<string, unknown>);
       return data;
     },
     onSuccess: () => {
@@ -268,12 +241,7 @@ export function useThematicCards(projectId: string | undefined) {
   // Delete a card
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("thematic_cards")
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
+      await api.delete(`/thematic-cards/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["thematic-cards", projectId] });

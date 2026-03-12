@@ -11,8 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useSocialScrapeJobs } from "@/hooks/useSocialScrapeJobs";
 import { apifyApi } from "@/lib/api/apify";
 import { brightdataApi } from "@/lib/api/brightdata";
+import api from "@/lib/api";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { supabase } from "@/integrations/supabase/client";
+
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1115,11 +1116,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
             setTimeout(async () => {
               try {
                 await refetchJobs();
-                const { data } = await supabase
-                  .from("social_scrape_jobs")
-                  .select("run_id, dataset_id, status")
-                  .eq("id", job.id)
-                  .maybeSingle();
+                const { data } = await api.get(`/scrape-jobs/${job.id}`);
 
                 if (data?.run_id) {
                   setRunId(data.run_id);
@@ -1387,13 +1384,7 @@ export const SocialMediaSearch = ({ projectId, onResultsSaved }: SocialMediaSear
       const dedupedMentions = Array.from(uniqueMentionsMap.values());
 
       // Use upsert to handle duplicates (same URL for same project)
-      const { error } = await supabase
-        .from("mentions")
-        .upsert(dedupedMentions, { 
-          onConflict: "project_id,url"
-        });
-
-      if (error) throw error;
+      await api.post('/mentions/bulk', { mentions: dedupedMentions });
 
       const discardedCount = results.length - resultsToSave.length;
       toast({

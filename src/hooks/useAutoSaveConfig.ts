@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 export interface AutoSaveConfig {
@@ -27,14 +27,13 @@ export function useAutoSaveConfig(projectId: string | undefined) {
     queryFn: async () => {
       if (!projectId) return null;
 
-      const { data, error } = await supabase
-        .from("auto_save_configs")
-        .select("*")
-        .eq("project_id", projectId)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data as AutoSaveConfig | null;
+      try {
+        const { data } = await api.get(`/projects/${projectId}/auto-save-config`);
+        return data as AutoSaveConfig;
+      } catch (err: any) {
+        if (err.response?.status === 404) return null;
+        throw err;
+      }
     },
     enabled: !!projectId,
   });
@@ -43,19 +42,7 @@ export function useAutoSaveConfig(projectId: string | undefined) {
     mutationFn: async (input: AutoSaveConfigInput) => {
       if (!projectId) throw new Error("No project selected");
 
-      const { data, error } = await supabase
-        .from("auto_save_configs")
-        .upsert(
-          {
-            project_id: projectId,
-            ...input,
-          },
-          { onConflict: "project_id" }
-        )
-        .select()
-        .single();
-
-      if (error) throw error;
+      const { data } = await api.put(`/projects/${projectId}/auto-save-config`, input);
       return data as AutoSaveConfig;
     },
     onSuccess: () => {

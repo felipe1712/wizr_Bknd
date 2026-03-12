@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -81,13 +81,7 @@ const ProjectSpecBuilder = () => {
   const loadProject = async (id: string) => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${id}`);
       
       if (!data) {
         toast({
@@ -174,30 +168,7 @@ const ProjectSpecBuilder = () => {
     try {
       if (isEditMode && projectId) {
         // Update existing project
-        const { error } = await supabase
-          .from("projects")
-          .update({
-            nombre: data.nombre,
-            descripcion: data.descripcion || null,
-            tipo: data.tipo,
-            objetivo: data.objetivo,
-            audiencia: data.audiencia,
-            sensibilidad: data.sensibilidad,
-            alcance_temporal: data.alcance_temporal,
-            alcance_geografico: data.alcance_geografico,
-          })
-          .eq("id", projectId);
-
-        if (error) throw error;
-
-        toast({
-          title: "¡Proyecto actualizado!",
-          description: "Los cambios han sido guardados exitosamente",
-        });
-      } else {
-        // Create new project
-        const { error } = await supabase.from("projects").insert({
-          user_id: user.id,
+        await api.patch(`/projects/${projectId}`, {
           nombre: data.nombre,
           descripcion: data.descripcion || null,
           tipo: data.tipo,
@@ -208,7 +179,22 @@ const ProjectSpecBuilder = () => {
           alcance_geografico: data.alcance_geografico,
         });
 
-        if (error) throw error;
+        toast({
+          title: "¡Proyecto actualizado!",
+          description: "Los cambios han sido guardados exitosamente",
+        });
+      } else {
+        // Create new project
+        await api.post("/projects", {
+          nombre: data.nombre,
+          descripcion: data.descripcion || null,
+          tipo: data.tipo,
+          objetivo: data.objetivo,
+          audiencia: data.audiencia,
+          sensibilidad: data.sensibilidad,
+          alcance_temporal: data.alcance_temporal,
+          alcance_geografico: data.alcance_geografico,
+        });
 
         toast({
           title: "¡Proyecto creado!",

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 
 type ProjectType = "monitoreo" | "investigacion" | "crisis" | "benchmark";
@@ -49,13 +49,11 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("activo", true)
-        .order("updated_at", { ascending: false });
-
-      if (error) throw error;
+      const { data } = await api.get("/projects", {
+        params: {
+          activo: true
+        }
+      });
 
       const projectList = (data as Project[]) || [];
       setProjects(projectList);

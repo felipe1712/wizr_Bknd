@@ -1,0 +1,469 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum AppRole {
+  admin
+  analista
+  director
+}
+
+enum ProjectType {
+  monitoreo
+  investigacion
+  crisis
+  benchmark
+}
+
+enum SensitivityLevel {
+  bajo
+  medio
+  alto
+  critico
+}
+
+enum TemporalScope {
+  tiempo_real
+  diario
+  semanal
+  mensual
+  historico
+}
+
+enum EntityType {
+  persona
+  marca
+  institucion
+  tema
+  evento
+}
+
+enum AlertType {
+  sentiment_negative
+  mention_spike
+  keyword_match
+}
+
+enum RequestStatus {
+  pending
+  approved
+  rejected
+}
+
+model User {
+  id         String   @id @default(uuid()) @db.Uuid
+  email      String   @unique
+  password   String
+  created_at DateTime @default(now())
+
+  profile        Profile?
+  roles          UserRole[]
+  projects       Project[]
+  rankings       Ranking[]
+  accessRequests AccessRequest[] @relation("ReviewedBy")
+
+  @@map("users")
+}
+
+model Profile {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @unique @db.Uuid
+  full_name  String?
+  avatar_url String?  @db.Text
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model UserRole {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  role       AppRole  @default(analista)
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, role])
+  @@map("user_roles")
+}
+
+model Project {
+  id                 String           @id @default(uuid()) @db.Uuid
+  user_id            String           @db.Uuid
+  nombre             String
+  tipo               ProjectType      @default(monitoreo)
+  objetivo           String
+  audiencia          String
+  sensibilidad       SensitivityLevel @default(medio)
+  alcance_temporal   TemporalScope    @default(diario)
+  alcance_geografico String[]         @default([])
+  version            Int              @default(1)
+  descripcion        String?
+  activo             Boolean          @default(true)
+  created_at         DateTime         @default(now())
+  updated_at         DateTime         @default(now()) @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  entities               Entity[]
+  mentions               Mention[]
+  alertConfigs           AlertConfig[]
+  alertNotifications     AlertNotification[]
+  thematicCards          ThematicCard[]
+  socialScrapeJobs       SocialScrapeJob[]
+  socialResults          SocialResult[]
+  postComments           PostComment[]
+  fkProfiles             FkProfile[]
+  projectSearchSchedules ProjectSearchSchedule?
+
+  @@map("projects")
+}
+
+model Entity {
+  id             String     @id @default(uuid()) @db.Uuid
+  project_id     String     @db.Uuid
+  tipo           EntityType
+  nombre         String
+  descripcion    String?
+  palabras_clave String[]   @default([])
+  aliases        String[]   @default([])
+  metadata       Json       @default("{}")
+  activo         Boolean    @default(true)
+  created_at     DateTime   @default(now())
+  updated_at     DateTime   @default(now()) @updatedAt
+
+  project  Project   @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  mentions Mention[]
+
+  @@index([project_id])
+  @@index([tipo])
+  @@map("entities")
+}
+
+model Mention {
+  id               String    @id @default(uuid()) @db.Uuid
+  project_id       String    @db.Uuid
+  entity_id        String?   @db.Uuid
+  url              String
+  title            String?
+  description      String?
+  source_domain    String?
+  published_at     DateTime?
+  matched_keywords String[]  @default([])
+  sentiment        String? // positivo, neutral, negativo
+  relevance_score  Decimal?  @default(0.5) @db.Decimal(3, 2)
+  raw_metadata     Json      @default("{}")
+  is_read          Boolean   @default(false)
+  is_archived      Boolean   @default(false)
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @default(now()) @updatedAt
+
+  project      Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  entity       Entity?       @relation(fields: [entity_id], references: [id], onDelete: SetNull)
+  postComments PostComment[]
+
+  @@unique([project_id, url])
+  @@index([project_id])
+  @@index([entity_id])
+  @@index([published_at])
+  @@index([source_domain])
+  @@index([sentiment])
+  @@index([created_at])
+  @@map("mentions")
+}
+
+model AlertConfig {
+  id                String    @id @default(uuid()) @db.Uuid
+  project_id        String    @db.Uuid
+  name              String
+  description       String?
+  alert_type        AlertType
+  threshold_percent Int?
+  keywords          String[]  @default([])
+  entity_ids        String[]  @default([]) @db.Uuid
+  is_active         Boolean   @default(true)
+  last_triggered_at DateTime?
+  trigger_count     Int       @default(0)
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @default(now()) @updatedAt
+
+  project       Project             @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  notifications AlertNotification[]
+
+  @@index([project_id])
+  @@map("alert_configs")
+}
+
+model AlertNotification {
+  id              String    @id @default(uuid()) @db.Uuid
+  alert_config_id String    @db.Uuid
+  project_id      String    @db.Uuid
+  title           String
+  message         String
+  severity        String    @default("warning")
+  metadata        Json      @default("{}")
+  is_read         Boolean   @default(false)
+  is_dismissed    Boolean   @default(false)
+  triggered_at    DateTime  @default(now())
+  read_at         DateTime?
+
+  alertConfig AlertConfig @relation(fields: [alert_config_id], references: [id], onDelete: Cascade)
+  project     Project     @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@index([alert_config_id])
+  @@map("alert_notifications")
+}
+
+model AccessRequest {
+  id          String        @id @default(uuid()) @db.Uuid
+  email       String        @unique
+  full_name   String
+  reason      String?
+  status      RequestStatus @default(pending)
+  reviewed_by String?       @db.Uuid
+  reviewed_at DateTime?
+  created_at  DateTime      @default(now())
+  updated_at  DateTime      @default(now()) @updatedAt
+
+  reviewer User? @relation("ReviewedBy", fields: [reviewed_by], references: [id], onDelete: SetNull)
+
+  @@map("access_requests")
+}
+
+model ThematicCard {
+  id           String    @id @default(uuid()) @db.Uuid
+  project_id   String    @db.Uuid
+  title        String
+  card_type    String // conversation_analysis, informative
+  period_start DateTime? @db.Date
+  period_end   DateTime? @db.Date
+  status       String    @default("draft") // draft, published
+  content      Json      @default("{}")
+  mention_ids  String[]  @default([]) @db.Uuid
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @default(now()) @updatedAt
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@index([status])
+  @@map("thematic_cards")
+}
+
+model SocialScrapeJob {
+  id            String    @id @default(uuid()) @db.Uuid
+  project_id    String    @db.Uuid
+  platform      String
+  search_type   String
+  search_value  String
+  run_id        String?
+  dataset_id    String?
+  status        String    @default("pending")
+  max_results   Int?      @default(25)
+  results_count Int?      @default(0)
+  started_at    DateTime  @default(now())
+  completed_at  DateTime?
+  error_message String?
+  metadata      Json      @default("{}")
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @default(now()) @updatedAt
+
+  project Project        @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  results SocialResult[]
+
+  @@index([project_id])
+  @@index([status])
+  @@index([platform])
+  @@index([started_at])
+  @@map("social_scrape_jobs")
+}
+
+model SocialResult {
+  id                String    @id @default(uuid()) @db.Uuid
+  job_id            String    @db.Uuid
+  project_id        String    @db.Uuid
+  platform          String
+  external_id       String?
+  title             String?
+  description       String?
+  author_name       String?
+  author_username   String?
+  author_url        String?
+  author_avatar_url String?
+  author_verified   Boolean?  @default(false)
+  author_followers  Int?      @default(0)
+  likes             Int?      @default(0)
+  comments          Int?      @default(0)
+  shares            Int?      @default(0)
+  views             Int?      @default(0)
+  engagement        Decimal?  @default(0) @db.Decimal(10, 2)
+  published_at      DateTime?
+  url               String?
+  content_type      String?   @default("post")
+  hashtags          String[]  @default([])
+  mentions          String[]  @default([])
+  raw_data          Json      @default("{}")
+  created_at        DateTime  @default(now())
+
+  job          SocialScrapeJob @relation(fields: [job_id], references: [id], onDelete: Cascade)
+  project      Project         @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  postComments PostComment[]
+
+  @@unique([job_id, external_id])
+  @@index([job_id])
+  @@index([project_id])
+  @@index([platform])
+  @@index([published_at])
+  @@map("social_results")
+}
+
+model PostComment {
+  id               String    @id @default(uuid()) @db.Uuid
+  project_id       String    @db.Uuid
+  social_result_id String?   @db.Uuid
+  mention_id       String?   @db.Uuid
+  external_id      String?
+  author_name      String?
+  author_username  String?
+  author_url       String?
+  content          String
+  sentiment        String?
+  likes            Int?      @default(0)
+  replies_count    Int?      @default(0)
+  published_at     DateTime?
+  raw_data         Json      @default("{}")
+  created_at       DateTime  @default(now())
+
+  project      Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  socialResult SocialResult? @relation(fields: [social_result_id], references: [id], onDelete: Cascade)
+  mention      Mention?      @relation(fields: [mention_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@index([social_result_id])
+  @@index([mention_id])
+  @@map("post_comments")
+}
+
+model FkProfile {
+  id             String    @id @default(uuid()) @db.Uuid
+  project_id     String?   @db.Uuid
+  ranking_id     String?   @db.Uuid
+  network        String
+  profile_id     String
+  display_name   String?
+  avatar_url     String?
+  is_own_profile Boolean   @default(false)
+  is_active      Boolean   @default(true)
+  last_synced_at DateTime?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @default(now()) @updatedAt
+
+  project       Project?         @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  ranking       Ranking?         @relation(fields: [ranking_id], references: [id], onDelete: Cascade)
+  kpis          FkProfileKpi[]
+  dailyTopPosts FkDailyTopPost[]
+
+  @@unique([project_id, network, profile_id])
+  @@map("fk_profiles")
+}
+
+model FkProfileKpi {
+  id                          String   @id @default(uuid()) @db.Uuid
+  fk_profile_id               String   @db.Uuid
+  period_start                DateTime @db.Date
+  period_end                  DateTime @db.Date
+  followers                   Int?
+  follower_growth_percent     Decimal? @db.Decimal(10, 4)
+  engagement_rate             Decimal? @db.Decimal(10, 4)
+  posts_per_day               Decimal? @db.Decimal(10, 2)
+  reach_per_day               Int?
+  impressions_per_interaction Decimal? @db.Decimal(10, 4)
+  page_performance_index      Decimal? @db.Decimal(10, 4)
+  position                    Int?
+  previous_position           Int?
+  raw_data                    Json     @default("{}")
+  fetched_at                  DateTime @default(now())
+
+  profile FkProfile @relation(fields: [fk_profile_id], references: [id], onDelete: Cascade)
+
+  @@unique([fk_profile_id, period_start, period_end])
+  @@map("fk_profile_kpis")
+}
+
+model FkDailyTopPost {
+  id             String   @id @default(uuid()) @db.Uuid
+  fk_profile_id  String   @db.Uuid
+  network        String
+  post_date      DateTime @db.Date
+  post_url       String?
+  post_content   String?
+  post_image_url String?
+  engagement     Int?     @default(0)
+  likes          Int?     @default(0)
+  comments       Int?     @default(0)
+  shares         Int?     @default(0)
+  views          Int?     @default(0)
+  raw_data       Json     @default("{}")
+  fetched_at     DateTime @default(now())
+
+  profile FkProfile @relation(fields: [fk_profile_id], references: [id], onDelete: Cascade)
+
+  @@unique([fk_profile_id, network, post_date])
+  @@index([fk_profile_id, post_date])
+  @@index([network, post_date])
+  @@map("fk_daily_top_posts")
+}
+
+model Ranking {
+  id          String   @id @default(uuid()) @db.Uuid
+  user_id     String   @db.Uuid
+  name        String
+  description String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now()) @updatedAt
+
+  user       User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  fkProfiles FkProfile[]
+
+  @@map("rankings")
+}
+
+model ProjectSearchSchedule {
+  id                       String    @id @default(uuid()) @db.Uuid
+  project_id               String    @unique @db.Uuid
+  is_enabled               Boolean   @default(false)
+  frequency                String    @default("daily")
+  platforms                String[]  @default(["news", "twitter", "facebook"])
+  max_results_per_platform Int       @default(25)
+  last_run_at              DateTime?
+  next_run_at              DateTime?
+  run_count                Int       @default(0)
+  last_error               String?
+  created_at               DateTime  @default(now())
+  updated_at               DateTime  @default(now()) @updatedAt
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@map("project_search_schedules")
+}
+
+model AutoSaveConfig {
+  id                  String   @id @default(uuid()) @db.Uuid
+  project_id          String   @unique @db.Uuid
+  is_enabled          Boolean  @default(false)
+  required_keywords   String[] @default([])
+  min_relevance_score Int      @default(50)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @default(now()) @updatedAt
+
+  @@map("auto_save_configs")
+}

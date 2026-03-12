@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,25 +17,30 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { signIn } = useAuth();
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    try {
+      const { data } = await api.post('/auth/login', {
+        email: email.trim(),
+        password,
+      });
 
-    if (error) {
-      if (error.message === "Invalid login credentials") {
+      // Save session in context and localStorage
+      signIn(data.token, data.user);
+      navigate("/dashboard");
+    } catch (err: any) {
+      if (err.response?.status === 401) {
         setError("Credenciales incorrectas. Verifica tu correo y contraseña.");
       } else {
-        setError(error.message);
+        setError(err.response?.data?.error || "Ocurrió un error al iniciar sesión.");
       }
+    } finally {
       setLoading(false);
-    } else {
-      navigate("/dashboard");
     }
   };
 

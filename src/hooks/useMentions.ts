@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { SearchResult } from "@/lib/api/firecrawl";
 import type { Json } from "@/integrations/supabase/types";
@@ -64,41 +64,13 @@ export function useMentions(projectId: string | undefined, filters?: MentionFilt
     queryFn: async () => {
       if (!projectId) return [];
 
-      let query = supabase
-        .from("mentions")
-        .select(`
-          *,
-          entity:entities(id, nombre, tipo)
-        `)
-        .eq("project_id", projectId)
-        .order("created_at", { ascending: false });
-
-      // Apply filters
-      if (filters?.entityId) {
-        query = query.eq("entity_id", filters.entityId);
-      }
-      if (filters?.sentiment) {
-        query = query.eq("sentiment", filters.sentiment);
-      }
-      if (filters?.isRead !== undefined) {
-        query = query.eq("is_read", filters.isRead);
-      }
-      if (filters?.isArchived !== undefined) {
-        query = query.eq("is_archived", filters.isArchived);
-      }
-      if (filters?.sourceDomain) {
-        query = query.eq("source_domain", filters.sourceDomain);
-      }
-      if (filters?.startDate) {
-        query = query.gte("created_at", filters.startDate.toISOString());
-      }
-      if (filters?.endDate) {
-        query = query.lte("created_at", filters.endDate.toISOString());
-      }
-
-      const { data, error } = await query.limit(500);
-
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}/mentions`, {
+        params: {
+          ...filters,
+          startDate: filters?.startDate?.toISOString(),
+          endDate: filters?.endDate?.toISOString()
+        }
+      });
       return data as Mention[];
     },
     enabled: !!projectId,
@@ -106,13 +78,7 @@ export function useMentions(projectId: string | undefined, filters?: MentionFilt
 
   const saveMentionMutation = useMutation({
     mutationFn: async (data: CreateMentionData) => {
-      const { data: mention, error } = await supabase
-        .from("mentions")
-        .upsert(data, { onConflict: "project_id,url" })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const { data: mention } = await api.post(`/projects/${data.project_id}/mentions`, data);
       return mention as Mention;
     },
     onSuccess: () => {
@@ -125,61 +91,8 @@ export function useMentions(projectId: string | undefined, filters?: MentionFilt
 
   const saveManyMentionsMutation = useMutation({
     mutationFn: async (params: { mentions: CreateMentionData[]; analyzeSentiment?: boolean }) => {
-      const { mentions, analyzeSentiment = true } = params;
-      if (mentions.length === 0) return [];
-
-      const { data, error } = await supabase
-        .from("mentions")
-        .upsert(mentions, { onConflict: "project_id,url", ignoreDuplicates: true })
-        .select();
-
-      if (error) throw error;
-      const saved = data as Mention[];
-
-      // Auto-analyze sentiment for new mentions from Firecrawl (news)
-      if (analyzeSentiment && saved.length > 0) {
-        try {
-          // Trigger sentiment analysis in background
-          const mentionsForAnalysis = saved
-            .filter((m) => !m.sentiment) // Only analyze those without sentiment
-            .map((m) => ({
-              id: m.id,
-              title: m.title,
-              description: m.description,
-            }));
-
-          if (mentionsForAnalysis.length > 0) {
-            // Fire and forget - don't block save
-            supabase.functions
-              .invoke("analyze-sentiment", {
-                body: { mentions: mentionsForAnalysis },
-              })
-              .then(async (response) => {
-                if (response.data?.success && response.data.results) {
-                  // Update sentiments in DB
-                  const updates = (response.data.results as Array<{ id: string; sentiment: string }>).map((r) =>
-                    supabase
-                      .from("mentions")
-                      .update({ sentiment: r.sentiment })
-                      .eq("id", r.id)
-                  );
-                  await Promise.all(updates);
-                  // Invalidate to refresh UI
-                  queryClient.invalidateQueries({ queryKey: ["mentions", projectId] });
-                  queryClient.invalidateQueries({ queryKey: ["mention-stats", projectId] });
-                }
-              })
-              .catch((err) => {
-                console.error("Background sentiment analysis failed:", err);
-              });
-          }
-        } catch (sentimentError) {
-          console.error("Sentiment analysis error:", sentimentError);
-          // Don't fail the save operation
-        }
-      }
-
-      return saved;
+      const { data } = await api.post(`/projects/mentions/batch`, params);
+      return data as Mention[];
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["mentions", projectId] });
@@ -199,14 +112,7 @@ export function useMentions(projectId: string | undefined, filters?: MentionFilt
 
   const updateMentionMutation = useMutation({
     mutationFn: async ({ id, ...updates }: { id: string; is_read?: boolean; is_archived?: boolean; sentiment?: SentimentType | null }) => {
-      const { data, error } = await supabase
-        .from("mentions")
-        .update(updates)
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const { data } = await api.patch(`/mentions/${id}`, updates);
       return data as Mention;
     },
     onSuccess: () => {
@@ -216,12 +122,7 @@ export function useMentions(projectId: string | undefined, filters?: MentionFilt
 
   const deleteMentionMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("mentions")
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
+      await api.delete(`/mentions/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mentions", projectId] });
@@ -260,57 +161,8 @@ export function useMentions(projectId: string | undefined, filters?: MentionFilt
     mutationFn: async () => {
       if (!projectId) return { analyzed: 0, errors: 0 };
 
-      // Get unanalyzed mentions
-      const unanalyzedMentions = (mentionsQuery.data || [])
-        .filter((m) => !m.sentiment)
-        .map((m) => ({
-          id: m.id,
-          title: m.title,
-          description: m.description,
-        }));
-
-      if (unanalyzedMentions.length === 0) {
-        return { analyzed: 0, errors: 0 };
-      }
-
-      let totalAnalyzed = 0;
-      let totalErrors = 0;
-      const BATCH_SIZE = 25;
-
-      // Process in batches
-      for (let i = 0; i < unanalyzedMentions.length; i += BATCH_SIZE) {
-        const batch = unanalyzedMentions.slice(i, i + BATCH_SIZE);
-        
-        try {
-          const response = await supabase.functions.invoke("analyze-sentiment", {
-            body: { mentions: batch },
-          });
-
-          if (response.data?.success && response.data.results) {
-            const updates = (response.data.results as Array<{ id: string; sentiment: string }>).map((r) =>
-              supabase
-                .from("mentions")
-                .update({ sentiment: r.sentiment })
-                .eq("id", r.id)
-            );
-            const results = await Promise.allSettled(updates);
-            totalAnalyzed += results.filter((r) => r.status === "fulfilled").length;
-            totalErrors += results.filter((r) => r.status === "rejected").length;
-          } else {
-            totalErrors += batch.length;
-          }
-        } catch (err) {
-          console.error("Batch sentiment analysis error:", err);
-          totalErrors += batch.length;
-        }
-
-        // Small delay between batches to avoid rate limiting
-        if (i + BATCH_SIZE < unanalyzedMentions.length) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
-      }
-
-      return { analyzed: totalAnalyzed, errors: totalErrors };
+      const { data } = await api.post(`/projects/${projectId}/mentions/analyze-sentiment`);
+      return data as { analyzed: number; errors: number };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["mentions", projectId] });
@@ -359,41 +211,8 @@ export function useMentionStats(projectId: string | undefined) {
     queryFn: async () => {
       if (!projectId) return null;
 
-      const { data, error } = await supabase
-        .from("mentions")
-        .select("id, sentiment, source_domain, created_at, is_read")
-        .eq("project_id", projectId)
-        .eq("is_archived", false);
-
-      if (error) throw error;
-
-      const mentions = data || [];
-      const now = new Date();
-      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-      return {
-        total: mentions.length,
-        unread: mentions.filter((m) => !m.is_read).length,
-        last24h: mentions.filter((m) => new Date(m.created_at) > oneDayAgo).length,
-        lastWeek: mentions.filter((m) => new Date(m.created_at) > oneWeekAgo).length,
-        bySentiment: {
-          positivo: mentions.filter((m) => m.sentiment === "positivo").length,
-          neutral: mentions.filter((m) => m.sentiment === "neutral").length,
-          negativo: mentions.filter((m) => m.sentiment === "negativo").length,
-          unknown: mentions.filter((m) => !m.sentiment).length,
-        },
-        topDomains: Object.entries(
-          mentions.reduce((acc, m) => {
-            if (m.source_domain) {
-              acc[m.source_domain] = (acc[m.source_domain] || 0) + 1;
-            }
-            return acc;
-          }, {} as Record<string, number>)
-        )
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5),
-      };
+      const { data } = await api.get(`/projects/${projectId}/mentions/stats`);
+      return data;
     },
     enabled: !!projectId,
   });

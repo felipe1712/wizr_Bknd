@@ -24,7 +24,7 @@ import {
   Search
 } from "lucide-react";
 import { FKProfile, FKPost, FKNetwork, getNetworkLabel } from "@/hooks/useFanpageKarma";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { toast } from "sonner";
 import { NetworkFilter } from "./NetworkFilter";
 
@@ -177,13 +177,9 @@ export function NarrativesAnalysisPanel({ profiles, isLoading: profilesLoading, 
     try {
       const profileIds = profilesToFetch.map(p => p.id);
       
-      const { data: dbPosts, error } = await supabase
-        .from("fk_daily_top_posts")
-        .select("*")
-        .in("fk_profile_id", profileIds)
-        .order("post_date", { ascending: false });
-
-      if (error) throw error;
+      const { data: dbPosts } = await api.get('/fanpage-karma/daily-top-posts', { 
+        params: { profileIds: profileIds.join(',') } 
+      });
 
       // Group posts by profile
       for (const post of (dbPosts || [])) {
@@ -246,18 +242,14 @@ export function NarrativesAnalysisPanel({ profiles, isLoading: profilesLoading, 
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke("analyze-narratives", {
-        body: {
+      const { data } = await api.post("/reports/narratives/analyze", {
           profiles: profilesData,
           dateRange: dateRange ? {
             from: dateRange.from.toISOString(),
             to: dateRange.to.toISOString()
           } : null
-        }
       });
 
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error || "Error al analizar narrativas");
 
       if (data.comparative) {
         setComparativeResult(data.comparative);

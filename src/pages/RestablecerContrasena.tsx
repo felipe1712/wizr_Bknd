@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,11 +20,17 @@ const RestablecerContrasena = () => {
   const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    // Check if user has a valid session from the reset link
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setValidSession(!!session);
-      setCheckingSession(false);
-    });
+    // Assuming the reset link includes a token query param: ?token=xyz
+    const queryParams = new URLSearchParams(window.location.search);
+    const token = queryParams.get('token');
+    
+    if (token) {
+      // In a real scenario, you might want to verify the token with the backend here
+      setValidSession(true);
+    } else {
+      setValidSession(false);
+    }
+    setCheckingSession(false);
   }, []);
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
@@ -43,19 +49,23 @@ const RestablecerContrasena = () => {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.updateUser({
-      password,
-    });
+    try {
+      const queryParams = new URLSearchParams(window.location.search);
+      const token = queryParams.get('token');
 
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-    } else {
+      await api.post('/auth/reset-password', {
+        password,
+        token
+      });
+
       setSuccess(true);
-      setLoading(false);
       setTimeout(() => {
-        navigate("/dashboard");
+        navigate("/login");
       }, 2000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Ocurrió un error al restablecer la contraseña.");
+    } finally {
+      setLoading(false);
     }
   };
 

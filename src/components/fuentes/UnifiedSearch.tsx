@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
+import { apifyApi } from "@/lib/api/apify";
 import { firecrawlApi, type EntityForSearch } from "@/lib/api/firecrawl";
 import { cn } from "@/lib/utils";
 import { deduplicateBatch, type DuplicateCandidate } from "@/lib/utils/semanticDedup";
@@ -153,11 +154,12 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
   // Load existing mentions for semantic deduplication
   useEffect(() => {
     const loadExistingMentions = async () => {
-      const { data } = await supabase
-        .from("mentions")
-        .select("id, title, description, url")
-        .eq("project_id", projectId)
-        .limit(500);
+      const { data } = await api.get("/mentions", { 
+        params: { 
+          projectId, 
+          limit: 500 
+        } 
+      });
       
       if (data) {
         setExistingMentions(data);
@@ -311,18 +313,15 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
           // Use Apify for social platforms
           const searchQuery = buildSearchQuery(entity);
           
-          const { data: scrapeResult, error: scrapeError } = await supabase.functions.invoke("apify-scrape", {
-            body: {
-              platform: job.platform,
-              searchType: "query",
-              searchValue: searchQuery,
-              maxResults: maxResultsPerPlatform,
-            },
+          const scrapeResult = await apifyApi.startScrape({
+            platform: job.platform as "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "reddit",
+            query: searchQuery,
+            maxResults: maxResultsPerPlatform,
           });
 
-          if (scrapeError) throw scrapeError;
+          if (!scrapeResult.success) throw new Error(scrapeResult.error || "Search failed to start");
 
-          if (scrapeResult?.runId) {
+          if (scrapeResult.data?.runId) {
             // Poll for completion
             let attempts = 0;
             const maxAttempts = 60; // 2 minutes max
@@ -330,14 +329,17 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
             while (attempts < maxAttempts) {
               await new Promise(resolve => setTimeout(resolve, 2000));
               
-              const { data: statusData, error: statusError } = await supabase.functions.invoke("apify-status", {
-                body: { runId: scrapeResult.runId },
-              });
+              const statusData = await apifyApi.checkStatus(
+                scrapeResult.data.runId, 
+                job.platform as "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "reddit"
+              );
 
-              if (statusError) throw statusError;
+              if (!statusData.success) throw new Error(statusData.error || "Failed to get status");
+              
+              const data = statusData.data;
 
-              if (statusData?.status === "SUCCEEDED" || statusData?.status === "completed") {
-                results = (statusData.results || []).map((r: Record<string, unknown>) => ({
+              if (data?.status === "SUCCEEDED" || data?.status === "completed") {
+                results = (data.items || []).map((r: Record<string, unknown>) => ({
                   url: (r as { url?: string }).url || "",
                   title: (r as { title?: string }).title,
                   description: (r as { description?: string; text?: string }).description || (r as { text?: string }).text,
@@ -347,8 +349,8 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
                 break;
               }
 
-              if (statusData?.status === "FAILED" || statusData?.status === "failed") {
-                throw new Error(statusData?.error || "Search failed");
+              if (data?.status === "FAILED" || data?.status === "failed") {
+                throw new Error(data?.error || "Search failed");
               }
 
               attempts++;
@@ -383,16 +385,13 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
           totalDuplicatesSkipped += duplicates.length;
 
           if (unique.length > 0) {
-            const { error: saveError, data: savedData } = await supabase
-              .from("mentions")
-              .upsert(unique, { onConflict: "project_id,url" })
-              .select("id, title, description, url");
+            const { data: savedData } = await api.post('/mentions/bulk', { mentions: unique });
 
-            if (!saveError) {
+            if (savedData) {
               totalSaved += unique.length;
               // Add newly saved mentions to existing list for cross-job deduplication
-              if (savedData) {
-                allExistingMentions.push(...savedData);
+              if (savedData.mentions) {
+                allExistingMentions.push(...savedData.mentions);
               }
             }
           }

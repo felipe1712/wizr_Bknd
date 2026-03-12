@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -69,13 +69,7 @@ export function useAlertConfigs(projectId: string | undefined) {
     queryFn: async () => {
       if (!projectId) return [];
 
-      const { data, error } = await supabase
-        .from("alert_configs")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}/alert-configs`);
       return data as AlertConfig[];
     },
     enabled: !!projectId,
@@ -83,13 +77,7 @@ export function useAlertConfigs(projectId: string | undefined) {
 
   const createMutation = useMutation({
     mutationFn: async (config: CreateAlertConfigData) => {
-      const { data, error } = await supabase
-        .from("alert_configs")
-        .insert(config)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const { data } = await api.post(`/projects/${config.project_id}/alert-configs`, config);
       return data as AlertConfig;
     },
     onSuccess: () => {
@@ -110,14 +98,7 @@ export function useAlertConfigs(projectId: string | undefined) {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...updates }: UpdateAlertConfigData & { id: string }) => {
-      const { data, error } = await supabase
-        .from("alert_configs")
-        .update(updates)
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const { data } = await api.patch(`/alert-configs/${id}`, updates);
       return data as AlertConfig;
     },
     onSuccess: () => {
@@ -138,12 +119,7 @@ export function useAlertConfigs(projectId: string | undefined) {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("alert_configs")
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
+      await api.delete(`/alert-configs/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alert-configs", projectId] });
@@ -156,12 +132,7 @@ export function useAlertConfigs(projectId: string | undefined) {
 
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase
-        .from("alert_configs")
-        .update({ is_active })
-        .eq("id", id);
-
-      if (error) throw error;
+      await api.patch(`/alert-configs/${id}/toggle`, { is_active });
     },
     onSuccess: (_, { is_active }) => {
       queryClient.invalidateQueries({ queryKey: ["alert-configs", projectId] });
@@ -196,18 +167,7 @@ export function useAlertNotifications(projectId: string | undefined) {
     queryFn: async () => {
       if (!projectId) return [];
 
-      const { data, error } = await supabase
-        .from("alert_notifications")
-        .select(`
-          *,
-          alert_config:alert_configs(name, alert_type)
-        `)
-        .eq("project_id", projectId)
-        .eq("is_dismissed", false)
-        .order("triggered_at", { ascending: false })
-        .limit(100);
-
-      if (error) throw error;
+      const { data } = await api.get(`/projects/${projectId}/alert-notifications`);
       return data as AlertNotification[];
     },
     enabled: !!projectId,
@@ -215,12 +175,7 @@ export function useAlertNotifications(projectId: string | undefined) {
 
   const markAsReadMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("alert_notifications")
-        .update({ is_read: true, read_at: new Date().toISOString() })
-        .eq("id", id);
-
-      if (error) throw error;
+      await api.patch(`/alert-notifications/${id}/read`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alert-notifications", projectId] });
@@ -229,12 +184,7 @@ export function useAlertNotifications(projectId: string | undefined) {
 
   const dismissMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("alert_notifications")
-        .update({ is_dismissed: true })
-        .eq("id", id);
-
-      if (error) throw error;
+      await api.patch(`/alert-notifications/${id}/dismiss`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alert-notifications", projectId] });
@@ -247,13 +197,7 @@ export function useAlertNotifications(projectId: string | undefined) {
   const markAllAsReadMutation = useMutation({
     mutationFn: async () => {
       if (!projectId) return;
-      const { error } = await supabase
-        .from("alert_notifications")
-        .update({ is_read: true, read_at: new Date().toISOString() })
-        .eq("project_id", projectId)
-        .eq("is_read", false);
-
-      if (error) throw error;
+      await api.patch(`/projects/${projectId}/alert-notifications/read-all`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alert-notifications", projectId] });

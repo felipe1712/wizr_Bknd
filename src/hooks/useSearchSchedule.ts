@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 export type ScheduleFrequency = "hourly" | "twice_daily" | "daily" | "weekly";
@@ -46,14 +46,7 @@ export function useSearchSchedule(projectId: string | undefined): UseSearchSched
 
     try {
       setIsLoading(true);
-      const { data, error: fetchError } = await supabase
-        .from("project_search_schedules")
-        .select("*")
-        .eq("project_id", projectId)
-        .maybeSingle();
-
-      if (fetchError) throw fetchError;
-      
+      const { data } = await api.get(`/projects/${projectId}/search-schedules`);
       setSchedule(data as SearchSchedule | null);
       setError(null);
     } catch (err) {
@@ -75,29 +68,20 @@ export function useSearchSchedule(projectId: string | undefined): UseSearchSched
     try {
       if (schedule) {
         // Update existing
-        const { error: updateError } = await supabase
-          .from("project_search_schedules")
-          .update({
-            ...data,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", schedule.id);
-
-        if (updateError) throw updateError;
+        await api.patch(`/project-search-schedules/${schedule.id}`, {
+          ...data,
+          updated_at: new Date().toISOString(),
+        });
       } else {
         // Create new
-        const { error: insertError } = await supabase
-          .from("project_search_schedules")
-          .insert({
-            project_id: projectId,
-            is_enabled: false,
-            frequency: "daily",
-            platforms: ["news", "twitter", "facebook"],
-            max_results_per_platform: 50,
-            ...data,
-          });
-
-        if (insertError) throw insertError;
+        await api.post(`/project-search-schedules`, {
+          project_id: projectId,
+          is_enabled: false,
+          frequency: "daily",
+          platforms: ["news", "twitter", "facebook"],
+          max_results_per_platform: 50,
+          ...data,
+        });
       }
 
       await fetchSchedule();
@@ -127,16 +111,11 @@ export function useSearchSchedule(projectId: string | undefined): UseSearchSched
     const nextRun = newEnabled ? new Date().toISOString() : null;
 
     try {
-      const { error: updateError } = await supabase
-        .from("project_search_schedules")
-        .update({
-          is_enabled: newEnabled,
-          next_run_at: nextRun,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", schedule.id);
-
-      if (updateError) throw updateError;
+      await api.patch(`/project-search-schedules/${schedule.id}`, {
+        is_enabled: newEnabled,
+        next_run_at: nextRun,
+        updated_at: new Date().toISOString(),
+      });
 
       await fetchSchedule();
       toast({
@@ -168,11 +147,7 @@ export function useSearchSchedule(projectId: string | undefined): UseSearchSched
       }
 
       // Invoke the edge function
-      const { data, error: invokeError } = await supabase.functions.invoke("scheduled-unified-search", {
-        body: { projectId },
-      });
-
-      if (invokeError) throw invokeError;
+      const { data } = await api.post(`/project-search-schedules/${projectId}/run-now`);
 
       await fetchSchedule();
       
