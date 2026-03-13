@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 
 import authRoutes from './routes/auth.routes';
+import scrapingRoutes from './routes/scraping.routes';
 
 dotenv.config();
 
@@ -14,6 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
+app.use('/api/scraping', scrapingRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Wizr API is running' });
