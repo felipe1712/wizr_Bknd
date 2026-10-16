@@ -53,12 +53,22 @@ function getFilteredKpis(profiles: FKProfile[], kpis: FKProfileKPI[], filterNetw
   const filteredProfileIds = filterNetwork === "all" 
     ? profiles.map(p => p.id)
     : profiles.filter(p => p.network === filterNetwork).map(p => p.id);
+
+  const shouldReplaceKpi = (candidate: FKProfileKPI, existing: FKProfileKPI) => {
+    const candidateEnd = new Date(`${candidate.period_end}T00:00:00Z`).getTime();
+    const existingEnd = new Date(`${existing.period_end}T00:00:00Z`).getTime();
+
+    if (candidateEnd !== existingEnd) return candidateEnd > existingEnd;
+    if (!!candidate.isFallback !== !!existing.isFallback) return !candidate.isFallback;
+
+    return new Date(candidate.fetched_at).getTime() > new Date(existing.fetched_at).getTime();
+  };
   
   const latestKpiByProfile = new Map<string, FKProfileKPI>();
   kpis.forEach(kpi => {
     if (!filteredProfileIds.includes(kpi.fk_profile_id)) return;
     const existing = latestKpiByProfile.get(kpi.fk_profile_id);
-    if (!existing || new Date(kpi.period_end) > new Date(existing.period_end)) {
+    if (!existing || shouldReplaceKpi(kpi, existing)) {
       latestKpiByProfile.set(kpi.fk_profile_id, kpi);
     }
   });

@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callClaudeTool } from "../_shared/anthropic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -65,9 +66,9 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_API_KEY) {
+      throw new Error("ANTHROPIC_API_KEY is not configured");
     }
 
     // Prepare content for analysis
@@ -87,116 +88,95 @@ serve(async (req) => {
 4. Un resumen ejecutivo de 2-3 oraciones
 5. El sentimiento individual de cada mención (usando su ID) con nivel de confianza (0-100)
 
-Responde ÚNICAMENTE con JSON válido.`;
+Responde ÚNICAMENTE invocando la herramienta semantic_analysis.`;
 
     const userPrompt = `Analiza estas ${mentions.length} menciones:
 
 ${contentForAnalysis}`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "semantic_analysis",
-              description: "Return semantic analysis of mentions",
-              parameters: {
-                type: "object",
-                properties: {
-                  topics: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        name: { type: "string" },
-                        relevance: { type: "number" },
-                        mentionCount: { type: "number" },
-                      },
-                      required: ["name", "relevance", "mentionCount"],
-                    },
-                  },
-                  keywords: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        word: { type: "string" },
-                        frequency: { type: "number" },
-                        sentiment: { type: "string", enum: ["positivo", "neutral", "negativo"] },
-                      },
-                      required: ["word", "frequency", "sentiment"],
-                    },
-                  },
-                  sentimentDistribution: {
-                    type: "object",
-                    properties: {
-                      positivo: { type: "number" },
-                      neutral: { type: "number" },
-                      negativo: { type: "number" },
-                    },
-                    required: ["positivo", "neutral", "negativo"],
-                  },
-                  summary: { type: "string" },
-                  mentionSentiments: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        id: { type: "string" },
-                        sentiment: { type: "string", enum: ["positivo", "neutral", "negativo"] },
-                        confidence: { type: "number" },
-                      },
-                      required: ["id", "sentiment", "confidence"],
-                    },
-                  },
-                },
-                required: ["topics", "keywords", "sentimentDistribution", "summary", "mentionSentiments"],
-              },
+    const toolSchema = {
+      type: "object",
+      properties: {
+        topics: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              relevance: { type: "number" },
+              mentionCount: { type: "number" },
             },
+            required: ["name", "relevance", "mentionCount"],
           },
-        ],
-        tool_choice: { type: "function", function: { name: "semantic_analysis" } },
-      }),
-    });
+        },
+        keywords: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              word: { type: "string" },
+              frequency: { type: "number" },
+              sentiment: { type: "string", enum: ["positivo", "neutral", "negativo"] },
+            },
+            required: ["word", "frequency", "sentiment"],
+          },
+        },
+        sentimentDistribution: {
+          type: "object",
+          properties: {
+            positivo: { type: "number" },
+            neutral: { type: "number" },
+            negativo: { type: "number" },
+          },
+          required: ["positivo", "neutral", "negativo"],
+        },
+        summary: { type: "string" },
+        mentionSentiments: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              sentiment: { type: "string", enum: ["positivo", "neutral", "negativo"] },
+              confidence: { type: "number" },
+            },
+            required: ["id", "sentiment", "confidence"],
+          },
+        },
+      },
+      required: ["topics", "keywords", "sentimentDistribution", "summary", "mentionSentiments"],
+    };
 
-    if (!response.ok) {
-      if (response.status === 429) {
+    let analysis: SemanticAnalysis;
+    try {
+      analysis = await callClaudeTool<SemanticAnalysis>({
+        apiKey: ANTHROPIC_API_KEY,
+        systemPrompt,
+        userPrompt,
+        toolName: "semantic_analysis",
+        toolDescription: "Return semantic analysis of mentions",
+        toolSchema,
+        maxTokens: 6000,
+        temperature: 0.2,
+        timeoutMs: 110000,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "RATE_LIMIT") {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
+      if (msg === "PAYMENT_REQUIRED") {
         return new Response(
           JSON.stringify({ error: "Payment required. Please add credits to your workspace." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+      console.error("Claude error:", msg);
+      throw err;
     }
-
-    const aiResponse = await response.json();
-    
-    // Extract the function call result
-    const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall || toolCall.function.name !== "semantic_analysis") {
-      throw new Error("Invalid AI response structure");
-    }
-
-    const analysis: SemanticAnalysis = JSON.parse(toolCall.function.arguments);
 
     return new Response(
       JSON.stringify({ success: true, analysis }),

@@ -13,7 +13,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import { FKProfile, FKProfileKPI } from "@/hooks/useFanpageKarma";
-import api from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 import ReactMarkdown from "react-markdown";
 
 interface Message {
@@ -32,10 +32,20 @@ interface RankingAIChatProps {
 
 function buildContextFromData(profiles: FKProfile[], kpis: FKProfileKPI[]): string {
   // Get latest KPI for each profile
+  const shouldReplaceKpi = (candidate: FKProfileKPI, existing: FKProfileKPI) => {
+    const candidateEnd = new Date(`${candidate.period_end}T00:00:00Z`).getTime();
+    const existingEnd = new Date(`${existing.period_end}T00:00:00Z`).getTime();
+
+    if (candidateEnd !== existingEnd) return candidateEnd > existingEnd;
+    if (!!candidate.isFallback !== !!existing.isFallback) return !candidate.isFallback;
+
+    return new Date(candidate.fetched_at).getTime() > new Date(existing.fetched_at).getTime();
+  };
+
   const latestKpiByProfile = new Map<string, FKProfileKPI>();
   kpis.forEach(kpi => {
     const existing = latestKpiByProfile.get(kpi.fk_profile_id);
-    if (!existing || new Date(kpi.period_end) > new Date(existing.period_end)) {
+    if (!existing || shouldReplaceKpi(kpi, existing)) {
       latestKpiByProfile.set(kpi.fk_profile_id, kpi);
     }
   });
@@ -107,13 +117,17 @@ INSTRUCCIONES DE FORMATO:
 - Destaca solo lo más importante, evita relleno
 - Si no hay datos suficientes, indícalo brevemente`;
 
-      const { data } = await api.post("/reports/ranking/chat", {
+      const { data, error } = await supabase.functions.invoke("ranking-ai-chat", {
+        body: {
           messages: [
             ...messages.map(m => ({ role: m.role, content: m.content })),
             { role: "user", content: text }
           ],
           systemPrompt
+        }
       });
+
+      if (error) throw error;
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),

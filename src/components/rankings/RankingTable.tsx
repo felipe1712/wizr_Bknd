@@ -12,11 +12,85 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Trophy, TrendingUp, TrendingDown, Minus, BarChart3, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
-import { FKProfile, FKProfileKPI, FKNetwork, getNetworkLabel } from "@/hooks/useFanpageKarma";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Trophy, TrendingUp, TrendingDown, Minus, BarChart3, ArrowUpDown, ArrowUp, ArrowDown, Clock, AlertTriangle, ExternalLink, FileText } from "lucide-react";
+import { FKProfile, FKProfileKPI, FKNetwork, FKPeriodPostMetrics, getNetworkLabel } from "@/hooks/useFanpageKarma";
 import { NetworkFilter } from "./NetworkFilter";
+import { format, differenceInDays, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
 
-type SortMetric = "followers" | "engagement_rate" | "follower_growth_percent" | "posts_per_day";
+function shouldReplaceKpi(candidate: FKProfileKPI, existing: FKProfileKPI) {
+  const candidateEnd = new Date(`${candidate.period_end}T00:00:00Z`).getTime();
+  const existingEnd = new Date(`${existing.period_end}T00:00:00Z`).getTime();
+
+  if (candidateEnd !== existingEnd) return candidateEnd > existingEnd;
+  if (!!candidate.isFallback !== !!existing.isFallback) return !candidate.isFallback;
+
+  const candidateFetched = new Date(candidate.fetched_at).getTime();
+  const existingFetched = new Date(existing.fetched_at).getTime();
+  return candidateFetched > existingFetched;
+}
+
+function formatPeriod(start: string, end: string): string {
+  try {
+    const s = parseISO(start);
+    const e = parseISO(end);
+    const sameMonth = s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear();
+    if (sameMonth) {
+      return `${format(s, "d", { locale: es })}–${format(e, "d MMM", { locale: es })}`;
+    }
+    return `${format(s, "d MMM", { locale: es })} – ${format(e, "d MMM", { locale: es })}`;
+  } catch {
+    return `${start} – ${end}`;
+  }
+}
+
+interface FallbackBadgeProps {
+  periodStart: string;
+  periodEnd: string;
+}
+
+function FallbackBadge({ periodStart, periodEnd }: FallbackBadgeProps) {
+  const ageDays = (() => {
+    try {
+      return differenceInDays(new Date(), parseISO(periodEnd));
+    } catch {
+      return 0;
+    }
+  })();
+  const isStale = ageDays > 90;
+
+  // Only show the badge when the snapshot is actually stale (>90 days).
+  // For normal fallbacks within the selected range, the badge would just
+  // repeat the global period filter on every row, which is redundant noise.
+  if (!isStale) return null;
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge
+            variant="outline"
+            className="ml-2 gap-1 border-destructive/40 bg-destructive/10 text-destructive text-[10px] px-1.5 py-0"
+          >
+            <AlertTriangle className="h-2.5 w-2.5" />
+            {formatPeriod(periodStart, periodEnd)}
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs">
+          {`Dato desactualizado (${ageDays} días). Mostrando el snapshot importado ${formatPeriod(periodStart, periodEnd)} porque no hay un corte más reciente para el rango seleccionado.`}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+type SortMetric =
+  | "followers"
+  | "engagement_rate"
+  | "follower_growth_percent"
+  | "posts_per_day"
+  | "period_avg_engagement";
 type SortDirection = "asc" | "desc";
 
 interface RankingTableProps {
@@ -26,6 +100,10 @@ interface RankingTableProps {
   sortBy?: SortMetric;
   filterNetwork?: FKNetwork | "all";
   onNetworkChange?: (network: FKNetwork | "all") => void;
+  /** Period-derived metrics computed from fk_posts.published_at within the active filter. */
+  periodMetrics?: Map<string, FKPeriodPostMetrics>;
+  /** Loading state for periodMetrics (shown as inline placeholder). */
+  isLoadingPeriodMetrics?: boolean;
 }
 
 const MEDAL_COLORS = ["🥇", "🥈", "🥉"];
@@ -49,13 +127,31 @@ const GrowthIndicator = ({ value }: { value: number | null | undefined }) => {
   return <Minus className="h-4 w-4 text-muted-foreground" />;
 };
 
+const getSortLabel = (metric: SortMetric) => {
+  switch (metric) {
+    case "followers":
+      return "Seguidores";
+    case "follower_growth_percent":
+      return "Crecimiento";
+    case "posts_per_day":
+      return "Posts/día";
+    case "period_avg_engagement":
+      return "Eng. promedio (período)";
+    case "engagement_rate":
+    default:
+      return "Engagement";
+  }
+};
+
 export function RankingTable({ 
   profiles, 
   kpis, 
   isLoading, 
   sortBy: initialSortBy = "engagement_rate",
   filterNetwork: externalFilterNetwork = "all",
-  onNetworkChange
+  onNetworkChange,
+  periodMetrics,
+  isLoadingPeriodMetrics = false,
 }: RankingTableProps) {
   const [sortMetric, setSortMetric] = useState<SortMetric>(initialSortBy);
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
@@ -94,39 +190,60 @@ export function RankingTable({
   );
 
   const rankedData = useMemo(() => {
-    // Create a map of profile ID to latest KPIs
     const kpiMap = new Map<string, FKProfileKPI>();
     kpis.forEach((kpi) => {
       const existing = kpiMap.get(kpi.fk_profile_id);
-      if (!existing || new Date(kpi.fetched_at) > new Date(existing.fetched_at)) {
+      if (!existing || shouldReplaceKpi(kpi, existing)) {
         kpiMap.set(kpi.fk_profile_id, kpi);
       }
     });
 
-    // Filter and combine profiles with KPIs
-    let data = profiles
+    const data = profiles
       .filter((p) => filterNetwork === "all" || p.network === filterNetwork)
       .map((profile) => ({
         profile,
         kpi: kpiMap.get(profile.id) || null,
+        periodMetric: periodMetrics?.get(profile.id),
       }));
 
-    // Sort by the selected metric
     data.sort((a, b) => {
-      const aVal = a.kpi?.[sortMetric] ?? -Infinity;
-      const bVal = b.kpi?.[sortMetric] ?? -Infinity;
+      const aVal =
+        sortMetric === "period_avg_engagement"
+          ? a.periodMetric?.avgEngagement ?? -Infinity
+          : (a.kpi?.[sortMetric] ?? -Infinity);
+      const bVal =
+        sortMetric === "period_avg_engagement"
+          ? b.periodMetric?.avgEngagement ?? -Infinity
+          : (b.kpi?.[sortMetric] ?? -Infinity);
       const comparison = (bVal as number) - (aVal as number);
       return sortDirection === "desc" ? comparison : -comparison;
     });
 
     return data;
-  }, [profiles, kpis, sortMetric, sortDirection, filterNetwork]);
+  }, [profiles, kpis, sortMetric, sortDirection, filterNetwork, periodMetrics]);
+
+  const hasAnyKpi = useMemo(() => rankedData.some((item) => item.kpi !== null), [rankedData]);
+
+  const fallbackSummary = useMemo(() => {
+    const fallbackRows = rankedData.filter((item) => item.kpi?.isFallback);
+    if (fallbackRows.length === 0) return null;
+
+    const uniquePeriods = Array.from(
+      new Set(fallbackRows.map((item) => `${item.kpi?.period_start}|${item.kpi?.period_end}`)),
+    );
+
+    if (fallbackRows.length === rankedData.length && uniquePeriods.length === 1) {
+      const [periodStart, periodEnd] = uniquePeriods[0].split("|");
+      return `Todos los perfiles usan el snapshot importado ${formatPeriod(periodStart, periodEnd)}. Seguidores y crecimiento permanecen fijos hasta que existan otros cortes KPI para ese período.`;
+    }
+
+    return `${fallbackRows.length} perfil${fallbackRows.length === 1 ? "" : "es"} muestran el snapshot importado más cercano porque no hay un corte exacto en el rango aplicado.`;
+  }, [rankedData]);
 
   const profileNetworks = profiles.map(p => p.network as FKNetwork);
 
-  // Calculate max values for relative bars
   const maxEngagement = useMemo(() => {
-    const values = rankedData.map((d) => d.kpi?.engagement_rate ?? 0);
+    const values = rankedData.map((d) => d.periodMetric?.avgEngagement ?? d.kpi?.engagement_rate ?? 0);
     return Math.max(...values, 0.01);
   }, [rankedData]);
 
@@ -145,14 +262,16 @@ export function RankingTable({
     );
   }
 
-  if (rankedData.length === 0) {
+  if (rankedData.length === 0 || !hasAnyKpi) {
     return (
       <Card className="py-12">
         <CardContent className="text-center">
           <BarChart3 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium mb-2">Sin datos de ranking</h3>
           <p className="text-muted-foreground max-w-md mx-auto">
-            Sincroniza los perfiles para obtener sus métricas y generar el ranking.
+            {profiles.length > 0
+              ? "Hay perfiles cargados, pero todavía no existen snapshots KPI importados o sincronizados para este conjunto."
+              : "Sincroniza los perfiles para obtener sus métricas y generar el ranking."}
           </p>
         </CardContent>
       </Card>
@@ -169,10 +288,14 @@ export function RankingTable({
               Ranking de Perfiles
             </CardTitle>
             <CardDescription className="mt-1">
-              {rankedData.length} perfiles · Ordenado por {sortMetric === "engagement_rate" ? "Engagement" : 
-                sortMetric === "followers" ? "Seguidores" :
-                sortMetric === "follower_growth_percent" ? "Crecimiento" : "Posts/día"}
+              {rankedData.length} perfiles · Ordenado por {getSortLabel(sortMetric)}
             </CardDescription>
+            {fallbackSummary && (
+              <p className="mt-2 flex items-start gap-2 text-xs text-muted-foreground">
+                <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{fallbackSummary}</span>
+              </p>
+            )}
           </div>
           <NetworkFilter
             networks={profileNetworks}
@@ -197,15 +320,31 @@ export function RankingTable({
               <TableHead className="text-right">
                 <SortableHeader metric="engagement_rate">Engagement</SortableHeader>
               </TableHead>
+              {periodMetrics && (
+                <>
+                  <TableHead className="text-right">
+                    <span className="text-xs">Posts <span className="text-muted-foreground font-normal">(período)</span></span>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <SortableHeader metric="period_avg_engagement">
+                      <span className="text-xs">Eng. promedio <span className="text-muted-foreground font-normal">(período)</span></span>
+                    </SortableHeader>
+                  </TableHead>
+                  <TableHead>
+                    <span className="text-xs">Top post <span className="text-muted-foreground font-normal">(período)</span></span>
+                  </TableHead>
+                </>
+              )}
               <TableHead className="w-32">Relativo</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rankedData.map((item, index) => {
-              const { profile, kpi } = item;
+              const { profile, kpi, periodMetric } = item;
               const network = profile.network as FKNetwork;
-              const engagementPercent = kpi?.engagement_rate 
-                ? (kpi.engagement_rate / maxEngagement) * 100 
+              const relativeValue = periodMetric?.avgEngagement ?? kpi?.engagement_rate ?? 0;
+              const engagementPercent = relativeValue > 0
+                ? (relativeValue / maxEngagement) * 100
                 : 0;
 
               return (
@@ -214,10 +353,14 @@ export function RankingTable({
                     {index < 3 ? MEDAL_COLORS[index] : index + 1}
                   </TableCell>
                   <TableCell>
-                    <div className="font-medium">@{profile.profile_id}</div>
-                    {profile.display_name && profile.display_name !== profile.profile_id && (
-                      <div className="text-sm text-muted-foreground">{profile.display_name}</div>
-                    )}
+                    <div className="flex items-center flex-wrap gap-1">
+                      <span className="font-medium" title={profile.profile_id}>
+                        {profile.display_name || profile.profile_id}
+                      </span>
+                      {kpi?.isFallback && (
+                        <FallbackBadge periodStart={kpi.period_start} periodEnd={kpi.period_end} />
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline">
@@ -238,6 +381,64 @@ export function RankingTable({
                   <TableCell className="text-right font-medium">
                     {formatPercent(kpi?.engagement_rate)}
                   </TableCell>
+                  {periodMetrics && (() => {
+                    const pm = periodMetrics.get(profile.id);
+                    if (isLoadingPeriodMetrics && !pm) {
+                      return (
+                        <>
+                          <TableCell className="text-right"><Skeleton className="h-4 w-10 ml-auto" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="h-4 w-14 ml-auto" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                        </>
+                      );
+                    }
+                    if (!pm || pm.postCount === 0) {
+                      return (
+                        <>
+                          <TableCell className="text-right text-muted-foreground">0</TableCell>
+                          <TableCell className="text-right text-muted-foreground">—</TableCell>
+                          <TableCell className="text-muted-foreground text-xs italic">Sin posts en el período</TableCell>
+                        </>
+                      );
+                    }
+                    const snippet = pm.topPost?.message
+                      ? pm.topPost.message.slice(0, 60) + (pm.topPost.message.length > 60 ? "…" : "")
+                      : "(sin texto)";
+                    return (
+                      <>
+                        <TableCell className="text-right font-medium">{pm.postCount}</TableCell>
+                        <TableCell className="text-right font-medium">{formatNumber(pm.avgEngagement)}</TableCell>
+                        <TableCell className="max-w-xs">
+                          {pm.topPost ? (
+                            <div className="flex items-start gap-1.5 text-xs">
+                              <FileText className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground" />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate" title={pm.topPost.message ?? ""}>
+                                  {snippet}
+                                </p>
+                                <p className="text-muted-foreground mt-0.5 flex items-center gap-1">
+                                  <span>{formatNumber(pm.topPost.engagement)} eng.</span>
+                                  {pm.topPost.link && (
+                                    <a
+                                      href={pm.topPost.link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center hover:text-primary"
+                                      aria-label="Abrir post"
+                                    >
+                                      <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+                      </>
+                    );
+                  })()}
                   <TableCell>
                     <Progress value={engagementPercent} className="h-2" />
                   </TableCell>

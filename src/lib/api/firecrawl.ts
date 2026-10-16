@@ -1,4 +1,4 @@
-import api from "@/lib/api";
+﻿import api from "@/lib/api";
 
 export type FirecrawlResponse<T = unknown> = {
   success: boolean;
@@ -154,7 +154,7 @@ export const firecrawlApi = {
         } catch (err) {
           clearTimeout(timeoutId);
           if (err?.code === 'ECONNABORTED' || err?.message?.includes('canceled')) {
-            throw new Error('La búsqueda tardó demasiado. Por favor intenta de nuevo.');
+            throw new Error('La bÃºsqueda tardÃ³ demasiado. Por favor intenta de nuevo.');
           }
           throw err;
         }
@@ -170,7 +170,7 @@ export const firecrawlApi = {
       return { 
         success: false, 
         error: errorMessage.includes('Failed to fetch') || errorMessage.includes('Failed to send')
-          ? 'La búsqueda tardó demasiado. Por favor intenta de nuevo.'
+          ? 'La bÃºsqueda tardÃ³ demasiado. Por favor intenta de nuevo.'
           : errorMessage
       };
     }
@@ -309,9 +309,9 @@ export const firecrawlApi = {
         return {
           success: false,
           error:
-            errors.find((e) => e.includes('tardó demasiado')) ||
+            errors.find((e) => e.includes('tardÃ³ demasiado')) ||
             errors[0] ||
-            'No se pudo completar la búsqueda. Intenta de nuevo.',
+            'No se pudo completar la bÃºsqueda. Intenta de nuevo.',
         };
       }
 
@@ -331,3 +331,4 @@ export const firecrawlApi = {
     }
   },
 };
+

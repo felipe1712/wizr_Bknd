@@ -22,6 +22,7 @@ import {
 import { FKProfile, FKProfileKPI, FKNetwork } from "@/hooks/useFanpageKarma";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { getFKProfileDisplayName, getFKProfileSeriesLabel } from "@/lib/fkProfileUtils";
 
 // Network icon component
 const NetworkIcon = ({ network, className = "h-3 w-3" }: { network: string; className?: string }) => {
@@ -83,9 +84,9 @@ export function TrendsTab({ profiles, kpis, isLoading }: TrendsTabProps) {
   const filteredProfiles = useMemo(() => {
     if (!profileSearch.trim()) return profiles;
     const searchLower = profileSearch.toLowerCase();
-    return profiles.filter(p => 
-      p.profile_id.toLowerCase().includes(searchLower) ||
-      (p.display_name && p.display_name.toLowerCase().includes(searchLower)) ||
+      return profiles.filter(p => 
+        p.profile_id.toLowerCase().includes(searchLower) ||
+        getFKProfileDisplayName(p).toLowerCase().includes(searchLower) ||
       p.network.toLowerCase().includes(searchLower)
     );
   }, [profiles, profileSearch]);
@@ -114,7 +115,7 @@ export function TrendsTab({ profiles, kpis, isLoading }: TrendsTabProps) {
       
       const profile = profiles.find(p => p.id === kpi.fk_profile_id);
       if (profile) {
-        const profileName = profile.display_name || profile.profile_id;
+        const profileName = getFKProfileSeriesLabel(profile);
         dateMap.get(dateKey)![profileName] = kpi[selectedMetric];
       }
     });

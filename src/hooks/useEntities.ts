@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 export type EntityType = "persona" | "marca" | "institucion" | "tema" | "evento";
@@ -12,6 +12,7 @@ export interface Entity {
   descripcion: string | null;
   palabras_clave: string[];
   aliases: string[];
+  platform_keywords: Record<string, string[]>;
   metadata: Record<string, unknown>;
   activo: boolean;
   created_at: string;
@@ -25,6 +26,7 @@ interface CreateEntityData {
   descripcion?: string;
   palabras_clave: string[];
   aliases: string[];
+  platform_keywords?: Record<string, string[]>;
 }
 
 interface UpdateEntityData extends Partial<CreateEntityData> {
@@ -40,7 +42,14 @@ export function useEntities(projectId: string | undefined) {
     queryFn: async () => {
       if (!projectId) return [];
 
-      const { data } = await api.get(`/projects/${projectId}/entities`);
+      const { data, error } = await supabase
+        .from("entities")
+        .select("*")
+        .eq("project_id", projectId)
+        .eq("activo", true)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
       return data as Entity[];
     },
     enabled: !!projectId,
@@ -48,7 +57,13 @@ export function useEntities(projectId: string | undefined) {
 
   const createMutation = useMutation({
     mutationFn: async (data: CreateEntityData) => {
-      const { data: entity } = await api.post(`/projects/${projectId}/entities`, data);
+      const { data: entity, error } = await supabase
+        .from("entities")
+        .insert(data)
+        .select()
+        .single();
+
+      if (error) throw error;
       return entity as Entity;
     },
     onSuccess: () => {
@@ -69,7 +84,14 @@ export function useEntities(projectId: string | undefined) {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...data }: UpdateEntityData) => {
-      const { data: entity } = await api.patch(`/entities/${id}`, data);
+      const { data: entity, error } = await supabase
+        .from("entities")
+        .update(data)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
       return entity as Entity;
     },
     onSuccess: () => {
@@ -91,7 +113,12 @@ export function useEntities(projectId: string | undefined) {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       // Soft delete by setting activo to false
-      await api.delete(`/entities/${id}`);
+      const { error } = await supabase
+        .from("entities")
+        .update({ activo: false })
+        .eq("id", id);
+
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entities", projectId] });

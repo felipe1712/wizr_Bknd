@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,14 +17,10 @@ import {
   ExternalLink,
   Sparkles,
   Calendar,
-  RefreshCw,
-  Loader2,
   Clock,
   AlertCircle
 } from "lucide-react";
 import { FKProfile, FKDailyTopPost, getNetworkLabel, FKNetwork } from "@/hooks/useFanpageKarma";
-import api from "@/lib/api";
-import { toast } from "sonner";
 import { 
   SiFacebook, 
   SiInstagram, 
@@ -65,52 +62,6 @@ const networkColors: Record<string, string> = {
 const ALL_NETWORKS: FKNetwork[] = ["facebook", "instagram", "twitter", "tiktok", "youtube", "linkedin", "threads"];
 
 export function DailyTopPostsPanel({ profiles, topPosts, isLoading, onRefresh }: DailyTopPostsPanelProps) {
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  // Sync top posts manually
-  const handleSyncTopPosts = async () => {
-    if (profiles.length === 0) {
-      toast.error("No hay perfiles para sincronizar");
-      return;
-    }
-
-    setIsSyncing(true);
-    toast.info("Sincronizando posts... Esto puede tardar 2-3 minutos con muchos perfiles.");
-    
-    try {
-      // Create AbortController with longer timeout for large syncs
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 minutes
-      
-      const response = await api.post("/rankings/sync", {}, { signal: controller.signal });
-      
-      clearTimeout(timeoutId);
-      
-      const data = response.data;
-
-      if (data?.success && data?.started) {
-        toast.success("Sincronización iniciada. En unos minutos verás los posts top.");
-        // Try refreshing a couple of times automatically
-        setTimeout(() => onRefresh?.(), 30_000);
-        setTimeout(() => onRefresh?.(), 90_000);
-      } else if (data?.success) {
-        toast.success("Sincronización completada.");
-        onRefresh?.();
-      } else {
-        throw new Error(data?.error || "Error en la sincronización");
-      }
-    } catch (err) {
-      console.error("Error syncing top posts:", err);
-      if (err instanceof Error && err.name === 'AbortError') {
-        toast.error("La sincronización tardó demasiado. Intenta de nuevo o espera al corte automático.");
-      } else {
-        toast.error(`Error al sincronizar: ${err instanceof Error ? err.message : "Error desconocido"}`);
-      }
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   // Create a map of profile ID to profile for quick lookup
   const profileMap = useMemo(() => {
     const map = new Map<string, FKProfile>();
@@ -125,7 +76,45 @@ export function DailyTopPostsPanel({ profiles, topPosts, isLoading, onRefresh }:
     return Array.from(networks);
   }, [profiles]);
 
-  // Get the top post per network (yesterday or most recent)
+  // Fallback: si no hay daily top posts, traemos los mejores 20 desde fk_posts.
+  const profileIds = useMemo(() => profiles.map((p) => p.id), [profiles]);
+  const needsFallback = !isLoading && topPosts.length === 0 && profileIds.length > 0;
+
+  const { data: fallbackPosts = [] } = useQuery({
+    queryKey: ["fk-daily-top-posts-fallback", profileIds],
+    enabled: needsFallback,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("fk_posts")
+        .select("id, fk_profile_id, network, published_at, message, link, post_image_url, engagement, likes, comments, shares, raw_data")
+        .in("fk_profile_id", profileIds)
+        .order("engagement", { ascending: false, nullsFirst: false })
+        .limit(20);
+      if (error) throw error;
+      return (data || []).map((p: any) => ({
+        id: p.id,
+        fk_profile_id: p.fk_profile_id,
+        network: p.network,
+        post_date: (p.published_at || "").slice(0, 10),
+        post_url: p.link || null,
+        post_content: p.message || null,
+        post_image_url: p.post_image_url || null,
+        engagement: p.engagement || 0,
+        likes: p.likes || 0,
+        comments: p.comments || 0,
+        shares: p.shares || 0,
+        views: 0,
+        raw_data: p.raw_data || {},
+        fetched_at: p.published_at || new Date().toISOString(),
+      })) as FKDailyTopPost[];
+    },
+  });
+
+  const effectiveTopPosts = topPosts.length > 0 ? topPosts : fallbackPosts;
+  const usingFallback = topPosts.length === 0 && fallbackPosts.length > 0;
+
+  // Get the top post per network within the already-filtered period
   const topPostsByNetwork = useMemo(() => {
     const result = new Map<FKNetwork, FKDailyTopPost | null>();
     
@@ -134,50 +123,29 @@ export function DailyTopPostsPanel({ profiles, topPosts, isLoading, onRefresh }:
       result.set(network, null);
     });
 
-    // Filter to yesterday's posts first
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = format(yesterday, "yyyy-MM-dd");
-
     // Group posts by network
     const postsByNetwork = new Map<string, FKDailyTopPost[]>();
-    topPosts.forEach(post => {
+    effectiveTopPosts.forEach(post => {
       const existing = postsByNetwork.get(post.network) || [];
       existing.push(post);
       postsByNetwork.set(post.network, existing);
     });
 
-    // For each network, find the top post (highest engagement from yesterday, or most recent)
+    // For each network, find the highest-engagement post within the selected period
     postsByNetwork.forEach((posts, network) => {
-      // Prefer yesterday's posts
-      const yesterdayPosts = posts.filter(p => p.post_date === yesterdayStr);
-      
-      if (yesterdayPosts.length > 0) {
-        // Get the one with highest engagement
-        const topPost = yesterdayPosts.reduce((best, current) => 
-          (current.engagement || 0) > (best.engagement || 0) ? current : best
-        );
-        result.set(network as FKNetwork, topPost);
-      } else if (posts.length > 0) {
-        // No yesterday posts, get most recent with highest engagement
+      if (posts.length > 0) {
         const sorted = [...posts].sort((a, b) => {
-          const dateDiff = new Date(b.post_date).getTime() - new Date(a.post_date).getTime();
-          if (dateDiff !== 0) return dateDiff;
-          return (b.engagement || 0) - (a.engagement || 0);
+          const engagementDiff = (b.engagement || 0) - (a.engagement || 0);
+          if (engagementDiff !== 0) return engagementDiff;
+
+          return new Date(b.post_date).getTime() - new Date(a.post_date).getTime();
         });
         result.set(network as FKNetwork, sorted[0]);
       }
     });
 
     return result;
-  }, [topPosts, networksInRanking]);
-
-  // Calculate yesterday's date for display
-  const yesterdayDate = useMemo(() => {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    return format(yesterday, "EEEE d 'de' MMMM, yyyy", { locale: es });
-  }, []);
+  }, [effectiveTopPosts, networksInRanking]);
 
   if (isLoading) {
     return (
@@ -226,31 +194,14 @@ export function DailyTopPostsPanel({ profiles, topPosts, isLoading, onRefresh }:
         <div>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5 text-amber-500" />
-            Top Posts por Red Social
+            Top Post por Red Social
           </CardTitle>
-          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-            <Calendar className="h-3 w-3" />
-            {yesterdayDate}
+          <p className="text-xs text-muted-foreground mt-1">
+            {usingFallback
+              ? "Sin snapshot diario para el período: mostramos los 20 posts con mayor engagement importados."
+              : "Mejor publicación por red dentro del período seleccionado."}
           </p>
         </div>
-        <Button 
-          size="sm" 
-          variant="outline" 
-          onClick={handleSyncTopPosts}
-          disabled={isSyncing}
-        >
-          {isSyncing ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Sincronizando...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Sincronizar
-            </>
-          )}
-        </Button>
       </CardHeader>
       <CardContent>
         <ScrollArea className="max-h-[600px] pr-2">

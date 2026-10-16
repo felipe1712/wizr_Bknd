@@ -201,6 +201,45 @@ export type Database = {
           },
         ]
       }
+      clients: {
+        Row: {
+          client_type: string
+          created_at: string
+          description: string | null
+          id: string
+          kimediamx_profile_id: string | null
+          logo_url: string | null
+          name: string
+          services_enabled: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_type?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          kimediamx_profile_id?: string | null
+          logo_url?: string | null
+          name: string
+          services_enabled?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_type?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          kimediamx_profile_id?: string | null
+          logo_url?: string | null
+          name?: string
+          services_enabled?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       entities: {
         Row: {
           activo: boolean
@@ -211,6 +250,7 @@ export type Database = {
           metadata: Json | null
           nombre: string
           palabras_clave: string[]
+          platform_keywords: Json
           project_id: string
           tipo: Database["public"]["Enums"]["entity_type"]
           updated_at: string
@@ -224,6 +264,7 @@ export type Database = {
           metadata?: Json | null
           nombre: string
           palabras_clave?: string[]
+          platform_keywords?: Json
           project_id: string
           tipo: Database["public"]["Enums"]["entity_type"]
           updated_at?: string
@@ -237,6 +278,7 @@ export type Database = {
           metadata?: Json | null
           nombre?: string
           palabras_clave?: string[]
+          platform_keywords?: Json
           project_id?: string
           tipo?: Database["public"]["Enums"]["entity_type"]
           updated_at?: string
@@ -310,6 +352,83 @@ export type Database = {
           },
         ]
       }
+      fk_posts: {
+        Row: {
+          comments: number | null
+          created_at: string
+          engagement: number | null
+          external_id: string | null
+          fk_profile_id: string
+          id: string
+          imported_at: string
+          interaction_per_impression: number | null
+          interaction_rate: number | null
+          likes: number | null
+          link: string | null
+          message: string | null
+          network: string
+          post_image_url: string | null
+          post_type: string | null
+          published_at: string
+          raw_data: Json | null
+          reach: number | null
+          shares: number | null
+          updated_at: string
+        }
+        Insert: {
+          comments?: number | null
+          created_at?: string
+          engagement?: number | null
+          external_id?: string | null
+          fk_profile_id: string
+          id?: string
+          imported_at?: string
+          interaction_per_impression?: number | null
+          interaction_rate?: number | null
+          likes?: number | null
+          link?: string | null
+          message?: string | null
+          network: string
+          post_image_url?: string | null
+          post_type?: string | null
+          published_at: string
+          raw_data?: Json | null
+          reach?: number | null
+          shares?: number | null
+          updated_at?: string
+        }
+        Update: {
+          comments?: number | null
+          created_at?: string
+          engagement?: number | null
+          external_id?: string | null
+          fk_profile_id?: string
+          id?: string
+          imported_at?: string
+          interaction_per_impression?: number | null
+          interaction_rate?: number | null
+          likes?: number | null
+          link?: string | null
+          message?: string | null
+          network?: string
+          post_image_url?: string | null
+          post_type?: string | null
+          published_at?: string
+          raw_data?: Json | null
+          reach?: number | null
+          shares?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_posts_fk_profile_id_fkey"
+            columns: ["fk_profile_id"]
+            isOneToOne: false
+            referencedRelation: "fk_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fk_profile_kpis: {
         Row: {
           engagement_rate: number | null
@@ -327,6 +446,7 @@ export type Database = {
           previous_position: number | null
           raw_data: Json | null
           reach_per_day: number | null
+          snapshot_date: string
         }
         Insert: {
           engagement_rate?: number | null
@@ -344,6 +464,7 @@ export type Database = {
           previous_position?: number | null
           raw_data?: Json | null
           reach_per_day?: number | null
+          snapshot_date?: string
         }
         Update: {
           engagement_rate?: number | null
@@ -361,6 +482,7 @@ export type Database = {
           previous_position?: number | null
           raw_data?: Json | null
           reach_per_day?: number | null
+          snapshot_date?: string
         }
         Relationships: [
           {
@@ -375,10 +497,16 @@ export type Database = {
       fk_profiles: {
         Row: {
           avatar_url: string | null
+          canonical_name: string | null
+          canonical_name_normalized: string | null
+          classification_status: string
+          client_id: string | null
           created_at: string
           display_name: string | null
+          display_name_normalized: string | null
           id: string
           is_active: boolean
+          is_competitor: boolean
           is_own_profile: boolean
           last_synced_at: string | null
           network: string
@@ -389,10 +517,16 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          canonical_name?: string | null
+          canonical_name_normalized?: string | null
+          classification_status?: string
+          client_id?: string | null
           created_at?: string
           display_name?: string | null
+          display_name_normalized?: string | null
           id?: string
           is_active?: boolean
+          is_competitor?: boolean
           is_own_profile?: boolean
           last_synced_at?: string | null
           network: string
@@ -403,10 +537,16 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          canonical_name?: string | null
+          canonical_name_normalized?: string | null
+          classification_status?: string
+          client_id?: string | null
           created_at?: string
           display_name?: string | null
+          display_name_normalized?: string | null
           id?: string
           is_active?: boolean
+          is_competitor?: boolean
           is_own_profile?: boolean
           last_synced_at?: string | null
           network?: string
@@ -416,6 +556,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fk_profiles_project_id_fkey"
             columns: ["project_id"]
@@ -666,6 +813,7 @@ export type Database = {
           alcance_geografico: string[]
           alcance_temporal: Database["public"]["Enums"]["temporal_scope"]
           audiencia: string
+          contexto_estrategico: string | null
           created_at: string
           descripcion: string | null
           id: string
@@ -682,6 +830,7 @@ export type Database = {
           alcance_geografico?: string[]
           alcance_temporal?: Database["public"]["Enums"]["temporal_scope"]
           audiencia: string
+          contexto_estrategico?: string | null
           created_at?: string
           descripcion?: string | null
           id?: string
@@ -698,6 +847,7 @@ export type Database = {
           alcance_geografico?: string[]
           alcance_temporal?: Database["public"]["Enums"]["temporal_scope"]
           audiencia?: string
+          contexto_estrategico?: string | null
           created_at?: string
           descripcion?: string | null
           id?: string
@@ -733,6 +883,110 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      shared_reports: {
+        Row: {
+          client_id: string | null
+          content: Json
+          created_at: string
+          created_by: string
+          date_range: Json
+          expires_at: string | null
+          id: string
+          is_revoked: boolean
+          last_viewed_at: string | null
+          project_id: string | null
+          project_name: string
+          public_token: string
+          report_kind: string
+          title: string
+          updated_at: string
+          view_count: number
+        }
+        Insert: {
+          client_id?: string | null
+          content: Json
+          created_at?: string
+          created_by: string
+          date_range: Json
+          expires_at?: string | null
+          id?: string
+          is_revoked?: boolean
+          last_viewed_at?: string | null
+          project_id?: string | null
+          project_name: string
+          public_token?: string
+          report_kind?: string
+          title: string
+          updated_at?: string
+          view_count?: number
+        }
+        Update: {
+          client_id?: string | null
+          content?: Json
+          created_at?: string
+          created_by?: string
+          date_range?: Json
+          expires_at?: string | null
+          id?: string
+          is_revoked?: boolean
+          last_viewed_at?: string | null
+          project_id?: string | null
+          project_name?: string
+          public_token?: string
+          report_kind?: string
+          title?: string
+          updated_at?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_reports_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      smart_report_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          request_payload: Json
+          result: Json | null
+          started_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          request_payload: Json
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          request_payload?: Json
+          result?: Json | null
+          started_at?: string | null
+          status?: string
           updated_at?: string
           user_id?: string
         }
@@ -993,6 +1247,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_report_view: { Args: { _token: string }; Returns: undefined }
+      normalize_text: { Args: { _t: string }; Returns: string }
     }
     Enums: {
       alert_status: "active" | "paused" | "triggered"
@@ -1022,12 +1278,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1051,11 +1307,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1076,11 +1332,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1101,11 +1357,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1118,11 +1374,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

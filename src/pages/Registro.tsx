@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import api from "@/lib/api";
@@ -25,12 +25,12 @@ const Registro = () => {
     setError(null);
 
     if (password !== confirmPassword) {
-      setError("Las contraseñas no coinciden");
+      setError("Las contraseÃ±as no coinciden");
       return;
     }
 
     if (password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres");
+      setError("La contraseÃ±a debe tener al menos 6 caracteres");
       return;
     }
 
@@ -46,7 +46,7 @@ const Registro = () => {
       signIn(data.token, data.user);
       navigate("/dashboard");
     } catch (err: any) {
-      setError(err.response?.data?.error || "Ocurrió un error al crear la cuenta.");
+      setError(err.response?.data?.error || "OcurriÃ³ un error al crear la cuenta.");
     } finally {
       setLoading(false);
     }
@@ -79,7 +79,7 @@ const Registro = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Correo electrónico</Label>
+              <Label htmlFor="email">Correo electrÃ³nico</Label>
               <Input
                 id="email"
                 type="email"
@@ -93,14 +93,14 @@ const Registro = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
+              <Label htmlFor="password">ContraseÃ±a</Label>
               <div className="relative">
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                   required
                   autoComplete="new-password"
                   className="bg-card pr-10"
@@ -116,13 +116,13 @@ const Registro = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
+              <Label htmlFor="confirmPassword">Confirmar contraseÃ±a</Label>
               <Input
                 id="confirmPassword"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                 required
                 autoComplete="new-password"
                 className="bg-card"
@@ -149,9 +149,9 @@ const Registro = () => {
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
-          ¿Ya tienes cuenta?{" "}
+          Â¿Ya tienes cuenta?{" "}
           <Link to="/login" className="text-accent hover:underline">
-            Inicia sesión
+            Inicia sesiÃ³n
           </Link>
         </p>
 
@@ -164,3 +164,4 @@ const Registro = () => {
 };
 
 export default Registro;
+

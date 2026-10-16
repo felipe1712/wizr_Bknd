@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export type FKNetwork = "facebook" | "instagram" | "youtube" | "linkedin" | "tiktok" | "threads" | "twitter";
@@ -35,6 +35,119 @@ export interface FKProfileKPI {
   previous_position: number | null;
   raw_data: Record<string, unknown>;
   fetched_at: string;
+  /** True cuando el KPI no cae dentro del rango solicitado y se devolvió como fallback (último snapshot disponible). */
+  isFallback?: boolean;
+}
+
+function getKpiRangeDays(kpi: Pick<FKProfileKPI, "period_start" | "period_end">): number {
+  const start = new Date(`${kpi.period_start}T00:00:00Z`).getTime();
+  const end = new Date(`${kpi.period_end}T00:00:00Z`).getTime();
+
+  if (Number.isNaN(start) || Number.isNaN(end)) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  return Math.max(0, Math.round((end - start) / (1000 * 60 * 60 * 24)));
+}
+
+type RequestedKpiRange = {
+  start: string;
+  end: string;
+};
+
+type KpiSelectionKind = "exact" | "overlap" | "latest";
+
+function getKpiSelectionKind(kpi: Pick<FKProfileKPI, "period_start" | "period_end">, requested: RequestedKpiRange): KpiSelectionKind {
+  if (kpi.period_start === requested.start && kpi.period_end === requested.end) {
+    return "exact";
+  }
+
+  if (kpi.period_start <= requested.end && kpi.period_end >= requested.start) {
+    return "overlap";
+  }
+
+  return "latest";
+}
+
+function getKpiOverlapDays(kpi: Pick<FKProfileKPI, "period_start" | "period_end">, requested: RequestedKpiRange): number {
+  const overlapStart = Math.max(
+    new Date(`${kpi.period_start}T00:00:00Z`).getTime(),
+    new Date(`${requested.start}T00:00:00Z`).getTime(),
+  );
+  const overlapEnd = Math.min(
+    new Date(`${kpi.period_end}T00:00:00Z`).getTime(),
+    new Date(`${requested.end}T00:00:00Z`).getTime(),
+  );
+
+  if (Number.isNaN(overlapStart) || Number.isNaN(overlapEnd) || overlapEnd < overlapStart) {
+    return 0;
+  }
+
+  return Math.round((overlapEnd - overlapStart) / (1000 * 60 * 60 * 24)) + 1;
+}
+
+function shouldReplaceRequestedKpi(candidate: FKProfileKPI, existing: FKProfileKPI, requested: RequestedKpiRange) {
+  const priority: Record<KpiSelectionKind, number> = {
+    exact: 0,
+    overlap: 1,
+    latest: 2,
+  };
+
+  const candidateKind = getKpiSelectionKind(candidate, requested);
+  const existingKind = getKpiSelectionKind(existing, requested);
+
+  if (candidateKind !== existingKind) {
+    return priority[candidateKind] < priority[existingKind];
+  }
+
+  if (candidateKind === "overlap") {
+    const candidateOverlap = getKpiOverlapDays(candidate, requested);
+    const existingOverlap = getKpiOverlapDays(existing, requested);
+
+    if (candidateOverlap !== existingOverlap) {
+      return candidateOverlap > existingOverlap;
+    }
+  }
+
+  const candidateRangeDays = getKpiRangeDays(candidate);
+  const existingRangeDays = getKpiRangeDays(existing);
+
+  if (candidateRangeDays !== existingRangeDays) {
+    return candidateRangeDays < existingRangeDays;
+  }
+
+  return shouldReplaceLatestKpi(candidate, existing);
+}
+
+function shouldReplaceLatestKpi(candidate: FKProfileKPI, existing: FKProfileKPI) {
+  const candidateEnd = new Date(`${candidate.period_end}T00:00:00Z`).getTime();
+  const existingEnd = new Date(`${existing.period_end}T00:00:00Z`).getTime();
+
+  if (candidateEnd !== existingEnd) {
+    return candidateEnd > existingEnd;
+  }
+
+  const candidateRangeDays = getKpiRangeDays(candidate);
+  const existingRangeDays = getKpiRangeDays(existing);
+
+  if (candidateRangeDays !== existingRangeDays) {
+    return candidateRangeDays < existingRangeDays;
+  }
+
+  return new Date(candidate.fetched_at).getTime() > new Date(existing.fetched_at).getTime();
+}
+
+function selectLatestKpisByProfile(rows: FKProfileKPI[]) {
+  const latestByProfile = new Map<string, FKProfileKPI>();
+
+  rows.forEach((row) => {
+    const existing = latestByProfile.get(row.fk_profile_id);
+    if (!existing || shouldReplaceLatestKpi(row, existing)) {
+      latestByProfile.set(row.fk_profile_id, row);
+    }
+  });
+
+  return latestByProfile;
 }
 
 export interface FKPost {
@@ -75,7 +188,15 @@ export function useFKProfilesByRanking(rankingId: string | undefined) {
     queryFn: async () => {
       if (!rankingId) return [];
       
-      const { data } = await api.get(`/rankings/${rankingId}/fk-profiles`);
+      const { data, error } = await supabase
+        .from("fk_profiles")
+        .select("*")
+        .eq("ranking_id", rankingId)
+        .eq("is_active", true)
+        .order("network", { ascending: true })
+        .order("display_name", { ascending: true });
+
+      if (error) throw error;
       return data as FKProfile[];
     },
     enabled: !!rankingId,
@@ -89,7 +210,15 @@ export function useFKProfiles(projectId: string | undefined) {
     queryFn: async () => {
       if (!projectId) return [];
       
-      const { data } = await api.get(`/projects/${projectId}/fk-profiles`);
+      const { data, error } = await supabase
+        .from("fk_profiles")
+        .select("*")
+        .eq("project_id", projectId)
+        .eq("is_active", true)
+        .order("network", { ascending: true })
+        .order("display_name", { ascending: true });
+
+      if (error) throw error;
       return data as FKProfile[];
     },
     enabled: !!projectId,
@@ -102,14 +231,51 @@ export function useFKProfileKPIs(profileIds: string[], periodStart?: string, per
     queryFn: async () => {
       if (profileIds.length === 0) return [];
 
-      const { data } = await api.get('/fk-profiles/kpis', {
-        params: {
-          profileIds: profileIds.join(','),
-          periodStart,
-          periodEnd
+      if (!periodStart || !periodEnd) {
+        const { data, error } = await supabase
+          .from("fk_profile_kpis")
+          .select("*")
+          .in("fk_profile_id", profileIds)
+          .order("period_end", { ascending: false })
+          .order("fetched_at", { ascending: false });
+
+        if (error) throw error;
+
+        return Array.from(selectLatestKpisByProfile((data as FKProfileKPI[]) || []).values());
+      }
+
+      const requestedRange: RequestedKpiRange = {
+        start: periodStart,
+        end: periodEnd,
+      };
+
+      const { data, error } = await supabase
+        .from("fk_profile_kpis")
+        .select("*")
+        .in("fk_profile_id", profileIds)
+        .order("period_end", { ascending: false })
+        .order("fetched_at", { ascending: false });
+
+      if (error) throw error;
+
+      const selectedByProfile = new Map<string, FKProfileKPI>();
+
+      ((data as FKProfileKPI[]) || []).forEach((row) => {
+        const existing = selectedByProfile.get(row.fk_profile_id);
+        if (!existing || shouldReplaceRequestedKpi(row, existing, requestedRange)) {
+          selectedByProfile.set(row.fk_profile_id, row);
         }
       });
-      return data as FKProfileKPI[];
+
+      return profileIds.flatMap((id) => {
+        const row = selectedByProfile.get(id);
+        if (!row) return [];
+
+        return [{
+          ...row,
+          isFallback: getKpiSelectionKind(row, requestedRange) !== "exact",
+        }];
+      });
     },
     enabled: profileIds.length > 0,
   });
@@ -139,9 +305,12 @@ export function useAddFKProfilesToRanking() {
         is_active: true,
       }));
 
-      const { data } = await api.post(`/rankings/${rankingId}/fk-profiles/batch`, { 
-        profiles: profilesToInsert 
-      });
+      const { data, error } = await supabase
+        .from("fk_profiles")
+        .insert(profilesToInsert)
+        .select();
+
+      if (error) throw error;
       return { inserted: data.length, network: batch.network };
     },
     onSuccess: (result, variables) => {
@@ -179,9 +348,12 @@ export function useAddFKProfiles() {
         is_active: true,
       }));
 
-      const { data } = await api.post(`/projects/${projectId}/fk-profiles/batch`, { 
-        profiles: profilesToInsert 
-      });
+      const { data, error } = await supabase
+        .from("fk_profiles")
+        .upsert(profilesToInsert, { onConflict: "project_id,network,profile_id" })
+        .select();
+
+      if (error) throw error;
       return { inserted: data.length, network: batch.network };
     },
     onSuccess: (result, variables) => {
@@ -199,7 +371,12 @@ export function useDeleteFKProfile() {
 
   return useMutation({
     mutationFn: async ({ profileId, rankingId }: { profileId: string; rankingId?: string }) => {
-      await api.delete(`/fk-profiles/${profileId}`);
+      const { error } = await supabase
+        .from("fk_profiles")
+        .delete()
+        .eq("id", profileId);
+
+      if (error) throw error;
       return rankingId;
     },
     onSuccess: (rankingId) => {
@@ -222,7 +399,12 @@ export function useBulkDeleteFKProfiles() {
         throw new Error("No se seleccionaron perfiles");
       }
 
-      await api.post(`/fk-profiles/batch-delete`, { profileIds });
+      const { error } = await supabase
+        .from("fk_profiles")
+        .delete()
+        .in("id", profileIds);
+
+      if (error) throw error;
       return { count: profileIds.length, rankingId };
     },
     onSuccess: (result) => {
@@ -263,12 +445,16 @@ export function useSyncFKProfile() {
 
       const period = `${startDate.toISOString().split("T")[0]}_${endDate.toISOString().split("T")[0]}`;
 
-      const { data } = await api.post("/fanpage-karma/kpi", {
-        network: profile.network,
-        profileId: profile.profile_id,
-        period,
+      const { data, error } = await supabase.functions.invoke("fanpage-karma", {
+        body: {
+          action: "kpi",
+          network: profile.network,
+          profileId: profile.profile_id,
+          period,
+        },
       });
 
+      if (error) throw error;
       if (!data.success) throw new Error(data.error || "Error al obtener KPIs");
 
       // Store the KPIs - extract values from Fanpage Karma response structure
@@ -328,7 +514,10 @@ export function useSyncFKProfile() {
             performanceIndex = extractValue('page_performance_index');
           }
 
-      await api.post(`/fk-profiles/${profile.id}/kpis`, {
+      const { error: insertError } = await supabase
+        .from("fk_profile_kpis")
+        .upsert({
+          fk_profile_id: profile.id,
           period_start: startDate.toISOString().split("T")[0],
           period_end: endDate.toISOString().split("T")[0],
           followers: followers,
@@ -340,7 +529,9 @@ export function useSyncFKProfile() {
           page_performance_index: performanceIndex,
           raw_data: kpiData,
           fetched_at: new Date().toISOString(),
-      });
+        }, { onConflict: "fk_profile_id,period_start,period_end" });
+
+      if (insertError) throw insertError;
 
       // Extract display_name from metadata if available
       const metadata = data.metadata || {};
@@ -370,8 +561,8 @@ export function useSyncFKProfile() {
       }
 
       // Update last_synced_at and display_name if found
-      const updateData: Record<string, unknown> = { 
-        last_synced_at: new Date().toISOString() 
+      const updateData: { last_synced_at: string; display_name?: string; avatar_url?: string } = {
+        last_synced_at: new Date().toISOString(),
       };
       if (displayName && displayName !== profile.profile_id) {
         updateData.display_name = displayName;
@@ -380,7 +571,10 @@ export function useSyncFKProfile() {
         updateData.avatar_url = avatarUrl;
       }
       
-      await api.patch(`/fk-profiles/${profile.id}`, updateData);
+      await supabase
+        .from("fk_profiles")
+        .update(updateData)
+        .eq("id", profile.id);
 
       return { profile, kpiData };
     },
@@ -428,12 +622,16 @@ export function useSyncAllProfiles() {
         try {
           const period = `${startDate.toISOString().split("T")[0]}_${endDate.toISOString().split("T")[0]}`;
 
-          const { data } = await api.post("/fanpage-karma/kpi", {
-            network: profile.network,
-            profileId: profile.profile_id,
-            period,
+          const { data, error } = await supabase.functions.invoke("fanpage-karma", {
+            body: {
+              action: "kpi",
+              network: profile.network,
+              profileId: profile.profile_id,
+              period,
+            },
           });
 
+          if (error) throw error;
           if (!data.success) throw new Error(data.error || "Error al obtener KPIs");
 
           const kpiData = data.data || {};
@@ -488,7 +686,10 @@ export function useSyncAllProfiles() {
             performanceIndex = extractValue('page_performance_index');
           }
 
-           await api.post(`/fk-profiles/${profile.id}/kpis`, {
+           const { error: upsertError } = await supabase
+            .from("fk_profile_kpis")
+            .upsert({
+              fk_profile_id: profile.id,
               period_start: startDate.toISOString().split("T")[0],
               period_end: endDate.toISOString().split("T")[0],
                followers,
@@ -500,7 +701,10 @@ export function useSyncAllProfiles() {
                page_performance_index: performanceIndex,
               raw_data: kpiData,
               fetched_at: new Date().toISOString(),
-            });
+            }, { onConflict: "fk_profile_id,period_start,period_end" });
+
+           // IMPORTANT: upsert can fail silently unless we check the returned error
+           if (upsertError) throw upsertError;
 
           // Extract display_name from metadata if available
           const metadata = data.metadata || {};
@@ -527,8 +731,8 @@ export function useSyncAllProfiles() {
             avatarUrl = metadata.avatar;
           }
 
-          const updateData: Record<string, unknown> = { 
-            last_synced_at: new Date().toISOString() 
+          const updateData: { last_synced_at: string; display_name?: string; avatar_url?: string } = {
+            last_synced_at: new Date().toISOString(),
           };
           if (displayName && displayName !== profile.profile_id) {
             updateData.display_name = displayName;
@@ -537,7 +741,10 @@ export function useSyncAllProfiles() {
             updateData.avatar_url = avatarUrl;
           }
 
-          await api.patch(`/fk-profiles/${profile.id}`, updateData);
+          await supabase
+            .from("fk_profiles")
+            .update(updateData)
+            .eq("id", profile.id);
 
           results.success++;
         } catch (err) {
@@ -584,12 +791,16 @@ export function useFetchProfilePosts(profile: FKProfile | undefined) {
 
       const period = `${startDate.toISOString().split("T")[0]}_${endDate.toISOString().split("T")[0]}`;
 
-      const { data } = await api.post("/fanpage-karma/posts", {
-        network: profile.network,
-        profileId: profile.profile_id,
-        period,
+      const { data, error } = await supabase.functions.invoke("fanpage-karma", {
+        body: {
+          action: "posts",
+          network: profile.network,
+          profileId: profile.profile_id,
+          period,
+        },
       });
 
+      if (error) throw error;
       if (!data.success) throw new Error(data.error || "Error al obtener posts");
 
       // Fanpage Karma returns posts inside data.data.posts array
@@ -658,11 +869,13 @@ export function useFKAllKPIs(profileIds: string[]) {
     queryFn: async () => {
       if (profileIds.length === 0) return [];
 
-      const { data } = await api.get('/fk-profile-kpis/all', {
-        params: {
-          profileIds: profileIds.join(',')
-        }
-      });
+      const { data, error } = await supabase
+        .from("fk_profile_kpis")
+        .select("*")
+        .in("fk_profile_id", profileIds)
+        .order("period_end", { ascending: true });
+
+      if (error) throw error;
       return data as FKProfileKPI[];
     },
     enabled: profileIds.length > 0,
@@ -688,19 +901,105 @@ export interface FKDailyTopPost {
   fetched_at: string;
 }
 
+export function useFKTopPosts(profileIds: string[], startDate?: string, endDate?: string) {
+  return useQuery({
+    queryKey: ["fk-top-posts", profileIds, startDate, endDate],
+    queryFn: async () => {
+      if (profileIds.length === 0) return [];
+
+      const PAGE = 1000;
+      const allPosts: Array<{
+        id: string;
+        fk_profile_id: string;
+        network: string;
+        published_at: string;
+        message: string | null;
+        link: string | null;
+        post_image_url: string | null;
+        engagement: number | null;
+        likes: number | null;
+        comments: number | null;
+        shares: number | null;
+        raw_data: unknown;
+      }> = [];
+
+      let from = 0;
+      while (from < 50000) {
+        let query = supabase
+          .from("fk_posts")
+          .select("id, fk_profile_id, network, published_at, message, link, post_image_url, engagement, likes, comments, shares, raw_data")
+          .in("fk_profile_id", profileIds)
+          .order("published_at", { ascending: false })
+          .range(from, from + PAGE - 1);
+
+        if (startDate) {
+          query = query.gte("published_at", `${startDate}T00:00:00`);
+        }
+        if (endDate) {
+          query = query.lte("published_at", `${endDate}T23:59:59`);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+
+        allPosts.push(...data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+
+      return allPosts.map((post) => {
+        const rawData = (post.raw_data && typeof post.raw_data === "object" ? post.raw_data : {}) as Record<string, unknown>;
+        const rawViews = rawData.views ?? rawData.view_count ?? rawData.video_views;
+        const views = typeof rawViews === "number" ? rawViews : Number(rawViews || 0);
+
+        return {
+          id: post.id,
+          fk_profile_id: post.fk_profile_id,
+          network: post.network,
+          post_date: post.published_at?.slice(0, 10) || "",
+          post_url: post.link,
+          post_content: post.message,
+          post_image_url: post.post_image_url,
+          engagement: post.engagement || ((post.likes || 0) + (post.comments || 0) + (post.shares || 0)),
+          likes: post.likes || 0,
+          comments: post.comments || 0,
+          shares: post.shares || 0,
+          views,
+          raw_data: {
+            ...rawData,
+            published_at: post.published_at,
+          },
+          fetched_at: post.published_at,
+        } satisfies FKDailyTopPost;
+      });
+    },
+    enabled: profileIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useFKDailyTopPosts(profileIds: string[], startDate?: string, endDate?: string) {
   return useQuery({
     queryKey: ["fk-daily-top-posts", profileIds, startDate, endDate],
     queryFn: async () => {
       if (profileIds.length === 0) return [];
 
-      const { data } = await api.get('/fk-daily-top-posts', {
-        params: {
-          profileIds: profileIds.join(','),
-          startDate,
-          endDate
-        }
-      });
+      let query = supabase
+        .from("fk_daily_top_posts")
+        .select("*")
+        .in("fk_profile_id", profileIds)
+        .order("post_date", { ascending: false });
+
+      if (startDate) {
+        query = query.gte("post_date", startDate);
+      }
+      if (endDate) {
+        query = query.lte("post_date", endDate);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
       return data as FKDailyTopPost[];
     },
     enabled: profileIds.length > 0,
@@ -713,11 +1012,126 @@ export function useFKDailyTopPostsByRanking(rankingId: string | undefined, start
     queryFn: async () => {
       if (!rankingId) return [];
 
-      const { data } = await api.get(`/rankings/${rankingId}/fk-daily-top-posts`, {
-        params: { startDate, endDate }
-      });
+      // First get profile IDs for this ranking
+      const { data: profiles, error: profilesError } = await supabase
+        .from("fk_profiles")
+        .select("id")
+        .eq("ranking_id", rankingId)
+        .eq("is_active", true);
+
+      if (profilesError) throw profilesError;
+      if (!profiles || profiles.length === 0) return [];
+
+      const profileIds = profiles.map(p => p.id);
+
+      let query = supabase
+        .from("fk_daily_top_posts")
+        .select("*")
+        .in("fk_profile_id", profileIds)
+        .order("post_date", { ascending: false });
+
+      if (startDate) {
+        query = query.gte("post_date", startDate);
+      }
+      if (endDate) {
+        query = query.lte("post_date", endDate);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
       return data as FKDailyTopPost[];
     },
     enabled: !!rankingId,
+  });
+}
+
+// =====================================================
+// Period post metrics — computed from fk_posts in real time
+// =====================================================
+export interface FKPeriodPostMetrics {
+  postCount: number;
+  avgEngagement: number;
+  topPost: {
+    engagement: number;
+    message: string | null;
+    link: string | null;
+    published_at: string;
+  } | null;
+}
+
+export function useFKPeriodPostMetrics(
+  profileIds: string[],
+  startDate?: string,
+  endDate?: string,
+) {
+  return useQuery({
+    queryKey: ["fk-period-post-metrics", profileIds, startDate, endDate],
+    queryFn: async () => {
+      const result = new Map<string, FKPeriodPostMetrics>();
+      if (profileIds.length === 0 || !startDate || !endDate) return result;
+
+      const startISO = `${startDate}T00:00:00Z`;
+      const endISO = `${endDate}T23:59:59Z`;
+
+      // Paginate to bypass 1000 row default limit
+      const pageSize = 1000;
+      let from = 0;
+      const allPosts: Array<{
+        fk_profile_id: string;
+        engagement: number | null;
+        message: string | null;
+        link: string | null;
+        published_at: string;
+      }> = [];
+
+      while (true) {
+        const { data, error } = await supabase
+          .from("fk_posts")
+          .select("fk_profile_id, engagement, message, link, published_at")
+          .in("fk_profile_id", profileIds)
+          .gte("published_at", startISO)
+          .lte("published_at", endISO)
+          .order("engagement", { ascending: false, nullsFirst: false })
+          .range(from, from + pageSize - 1);
+
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allPosts.push(...data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+
+      // Group by profile
+      const byProfile = new Map<string, typeof allPosts>();
+      for (const p of allPosts) {
+        const arr = byProfile.get(p.fk_profile_id) ?? [];
+        arr.push(p);
+        byProfile.set(p.fk_profile_id, arr);
+      }
+
+      for (const [pid, posts] of byProfile.entries()) {
+        const engagements = posts.map((p) => p.engagement ?? 0);
+        const total = engagements.reduce((a, b) => a + b, 0);
+        const top = posts.reduce<typeof posts[number] | null>(
+          (best, p) => (!best || (p.engagement ?? 0) > (best.engagement ?? 0) ? p : best),
+          null,
+        );
+        result.set(pid, {
+          postCount: posts.length,
+          avgEngagement: posts.length > 0 ? Math.round(total / posts.length) : 0,
+          topPost: top
+            ? {
+                engagement: top.engagement ?? 0,
+                message: top.message,
+                link: top.link,
+                published_at: top.published_at,
+              }
+            : null,
+        });
+      }
+
+      return result;
+    },
+    enabled: profileIds.length > 0 && !!startDate && !!endDate,
   });
 }

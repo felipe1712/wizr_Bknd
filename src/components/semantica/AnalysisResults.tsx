@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { RefreshCw, Save, TrendingUp, Hash, PieChart, FileText, MousePointerClick } from "lucide-react";
 import { TopicsCloud } from "./TopicsCloud";
-import { KeywordsChart } from "./KeywordsChart";
+import { KeywordsCloud } from "./KeywordsCloud";
 import { SentimentPieChart } from "./SentimentPieChart";
 import { MentionsDrawer, type MentionsFilter } from "./MentionsDrawer";
 import type { SemanticAnalysisResult } from "@/hooks/useSemanticAnalysis";
@@ -143,26 +143,26 @@ export function AnalysisResults({
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Hash className="h-5 w-5" />
-            Palabras Clave
+            Términos Destacados
           </CardTitle>
           <CardDescription>
-            Términos más frecuentes coloreados por sentimiento asociado
+            Nube de términos clave: tamaño según frecuencia, color según sentimiento asociado
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <KeywordsChart keywords={result.keywords} onKeywordClick={handleKeywordClick} />
+          <KeywordsCloud keywords={result.keywords} onKeywordClick={handleKeywordClick} />
           <Separator className="my-4" />
-          <div className="flex items-center justify-center gap-4 text-sm">
+          <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded-full bg-green-600" />
+              <div className="h-3 w-3 rounded-full bg-emerald-500" />
               <span>Positivo</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded-full bg-blue-600" />
+              <div className="h-3 w-3 rounded-full bg-slate-400" />
               <span>Neutral</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded-full bg-red-500" />
+              <div className="h-3 w-3 rounded-full bg-rose-500" />
               <span>Negativo</span>
             </div>
           </div>

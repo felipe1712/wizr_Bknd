@@ -16,7 +16,7 @@ interface RankingDateFilterProps {
   customRange?: DateRange;
   onPresetChange: (preset: DateRangePreset) => void;
   onCustomRangeChange: (range: DateRange | undefined) => void;
-  onApply?: () => void;
+  onApply?: (preset?: DateRangePreset, customRange?: DateRange) => void;
 }
 
 const presetLabels: Record<DateRangePreset, string> = {
@@ -76,9 +76,12 @@ export function RankingDateFilter({
   }, [preset, customRange, appliedPreset, appliedCustomRange]);
 
   const handlePresetChange = (value: string) => {
-    onPresetChange(value as DateRangePreset);
-    if (value !== "custom") {
+    const next = value as DateRangePreset;
+    onPresetChange(next);
+    if (next !== "custom") {
       onCustomRangeChange(undefined);
+      setHasChanges(true);
+      return;
     }
     setHasChanges(true);
   };
@@ -94,10 +97,13 @@ export function RankingDateFilter({
   const handleApply = () => {
     setAppliedPreset(preset);
     setAppliedCustomRange(customRange);
-    onApply?.();
+    onApply?.(preset, customRange);
   };
 
   const canApply = hasChanges && (preset !== "custom" || (!!customRange?.from && !!customRange?.to));
+
+  const effectiveRange = getDateRangeFromPreset(preset, customRange);
+  const rangeLabel = `${format(effectiveRange.from, "d MMM", { locale: es })} – ${format(effectiveRange.to, "d MMM yyyy", { locale: es })}`;
 
   return (
     <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg border">
@@ -154,14 +160,22 @@ export function RankingDateFilter({
         </Popover>
       )}
 
+      <span className="text-xs text-muted-foreground hidden md:inline">
+        {rangeLabel}
+      </span>
+
       <Button 
         onClick={handleApply}
         size="sm"
         className="ml-auto"
         disabled={!canApply}
+        variant={canApply ? "default" : "outline"}
       >
         <Check className="h-4 w-4 mr-1" />
-        Aplicar
+        {canApply ? "Aplicar cambios" : "Aplicar"}
+        {canApply && (
+          <span className="ml-2 inline-flex h-2 w-2 rounded-full bg-primary-foreground animate-pulse" aria-hidden />
+        )}
       </Button>
     </div>
   );

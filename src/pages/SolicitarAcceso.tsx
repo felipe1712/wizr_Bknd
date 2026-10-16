@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link } from "react-router-dom";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -32,9 +32,9 @@ const SolicitarAcceso = () => {
       setSuccess(true);
     } catch (err: any) {
       if (err.response?.status === 409) {
-        setError("Ya existe una solicitud con este correo electrónico");
+        setError("Ya existe una solicitud con este correo electrÃ³nico");
       } else {
-        setError(err.response?.data?.error || "Ocurrió un error al enviar la solicitud.");
+        setError(err.response?.data?.error || "OcurriÃ³ un error al enviar la solicitud.");
       }
     } finally {
       setLoading(false);
@@ -55,7 +55,7 @@ const SolicitarAcceso = () => {
           <div className="space-y-3">
             <h1 className="text-2xl font-bold text-foreground">Solicitud enviada</h1>
             <p className="text-sm text-muted-foreground">
-              Hemos recibido tu solicitud de acceso. Un administrador la revisará y te notificará por correo cuando sea aprobada.
+              Hemos recibido tu solicitud de acceso. Un administrador la revisarÃ¡ y te notificarÃ¡ por correo cuando sea aprobada.
             </p>
           </div>
           <Link to="/login">
@@ -94,19 +94,19 @@ const SolicitarAcceso = () => {
             </div>
             
             <h1 className="text-4xl xl:text-5xl font-bold leading-tight">
-              Únete a la plataforma de{" "}
-              <span className="text-accent">inteligencia</span> estratégica
+              Ãšnete a la plataforma de{" "}
+              <span className="text-accent">inteligencia</span> estratÃ©gica
             </h1>
             
             <p className="text-lg text-white/80 max-w-md">
               Wizr es una herramienta exclusiva para equipos que necesitan 
-              entender y actuar sobre la conversación pública.
+              entender y actuar sobre la conversaciÃ³n pÃºblica.
             </p>
 
             <div className="flex items-center gap-4 pt-6">
               <div className="h-1 w-16 bg-accent rounded-full" />
               <span className="text-sm text-white/60">
-                Solicita acceso y un administrador revisará tu petición
+                Solicita acceso y un administrador revisarÃ¡ tu peticiÃ³n
               </span>
             </div>
           </motion.div>
@@ -141,7 +141,7 @@ const SolicitarAcceso = () => {
           {/* Security badge */}
           <div className="flex items-center justify-center gap-2 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
             <Shield size={14} className="text-primary" />
-            <span>Acceso restringido - Requiere aprobación de administrador</span>
+            <span>Acceso restringido - Requiere aprobaciÃ³n de administrador</span>
           </div>
 
           {/* Form */}
@@ -168,7 +168,7 @@ const SolicitarAcceso = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">
-                  Correo electrónico
+                  Correo electrÃ³nico
                 </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -195,7 +195,7 @@ const SolicitarAcceso = () => {
                     id="reason"
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
-                    placeholder="¿Por qué necesitas acceso a Wizr?"
+                    placeholder="Â¿Por quÃ© necesitas acceso a Wizr?"
                     className="bg-card pl-10 min-h-[100px] resize-none"
                   />
                 </div>
@@ -231,14 +231,14 @@ const SolicitarAcceso = () => {
               </div>
               <div className="relative flex justify-center text-xs">
                 <span className="bg-background px-2 text-muted-foreground">
-                  ¿Ya tienes cuenta?
+                  Â¿Ya tienes cuenta?
                 </span>
               </div>
             </div>
 
             <Link to="/login" className="block">
               <Button variant="outline" className="w-full">
-                Iniciar sesión
+                Iniciar sesiÃ³n
               </Button>
             </Link>
           </div>
@@ -261,3 +261,4 @@ const SolicitarAcceso = () => {
 };
 
 export default SolicitarAcceso;
+

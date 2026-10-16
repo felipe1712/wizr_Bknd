@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Table,
   TableBody,
@@ -10,7 +10,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { TrendingUp, TrendingDown, Minus, AlertCircle, ExternalLink } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { TrendingUp, TrendingDown, Minus, AlertCircle, ExternalLink, Heart, Eye, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { InfluencerMetrics } from "@/hooks/useInfluencersData";
 import { SourceMentionsDrawer } from "./SourceMentionsDrawer";
 import { formatDistanceToNow } from "date-fns";
@@ -39,27 +40,76 @@ interface InfluencerTableProps {
   mentions?: Mention[];
 }
 
+type SortField = "mentions" | "engagement" | "sentiment" | "date";
+type SortDir = "asc" | "desc";
+
+function SortableHead({ label, field, current, dir, onSort }: { label: string; field: SortField; current: SortField; dir: SortDir; onSort: (f: SortField) => void }) {
+  const isActive = current === field;
+  const Icon = isActive ? (dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <TableHead className="text-center cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => onSort(field)}>
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <Icon className={`h-3 w-3 ${isActive ? "text-primary" : "text-muted-foreground/50"}`} />
+      </span>
+    </TableHead>
+  );
+}
+
 export function InfluencerTable({ influencers, maxMentions, mentions = [] }: InfluencerTableProps) {
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sortField, setSortField] = useState<SortField>("mentions");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const handleDomainClick = (domain: string) => {
-    setSelectedDomain(domain);
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("desc");
+    }
+  };
+
+  const sortedInfluencers = useMemo(() => {
+    const sorted = [...influencers];
+    sorted.sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case "mentions":
+          cmp = a.totalMentions - b.totalMentions;
+          break;
+        case "engagement":
+          cmp = (a.totalEngagement + a.totalViews) - (b.totalEngagement + b.totalViews);
+          break;
+        case "sentiment":
+          cmp = a.sentimentScore - b.sentimentScore;
+          break;
+        case "date":
+          cmp = new Date(a.lastMentionDate || 0).getTime() - new Date(b.lastMentionDate || 0).getTime();
+          break;
+      }
+      return sortDir === "desc" ? -cmp : cmp;
+    });
+    return sorted;
+  }, [influencers, sortField, sortDir]);
+
+  const handleRowClick = (influencer: InfluencerMetrics) => {
+    setSelectedDomain(influencer.platform.toLowerCase().replace("/", ""));
     setDrawerOpen(true);
   };
 
-  // Check if any mentions have sentiment analyzed
   const hasSentimentData = mentions.some((m) => m.sentiment !== null);
 
   if (influencers.length === 0) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Ranking de Fuentes</CardTitle>
-          <CardDescription>Tabla detallada de todas las fuentes</CardDescription>
+          <CardTitle>Ranking de Influenciadores</CardTitle>
+          <CardDescription>Perfiles con mayor impacto</CardDescription>
         </CardHeader>
         <CardContent className="h-[200px] flex items-center justify-center">
-          <p className="text-muted-foreground">No hay datos de fuentes disponibles</p>
+          <p className="text-muted-foreground">No hay datos de influenciadores disponibles</p>
         </CardContent>
       </Card>
     );
@@ -82,7 +132,7 @@ export function InfluencerTable({ influencers, maxMentions, mentions = [] }: Inf
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            Ranking de Fuentes
+            Ranking de Influenciadores
             {!hasSentimentData && (
               <TooltipProvider>
                 <Tooltip>
@@ -94,14 +144,13 @@ export function InfluencerTable({ influencers, maxMentions, mentions = [] }: Inf
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Las menciones no han sido analizadas semánticamente.</p>
-                    <p>Ve a Semántica para ejecutar el análisis.</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}
           </CardTitle>
           <CardDescription>
-            {influencers.length} fuentes identificadas ordenadas por impacto • Clic en una fila para ver menciones
+            {influencers.length} perfiles identificados — clic en columna para ordenar
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -109,24 +158,17 @@ export function InfluencerTable({ influencers, maxMentions, mentions = [] }: Inf
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12">#</TableHead>
-                <TableHead>Fuente</TableHead>
-                <TableHead className="text-center">Menciones</TableHead>
-                <TableHead className="text-center">
-                  <div className="flex items-center justify-center gap-1">
-                    Sentimiento
-                    {!hasSentimentData && (
-                      <AlertCircle className="h-3 w-3 text-amber-500" />
-                    )}
-                  </div>
-                </TableHead>
-                <TableHead className="text-center">Score</TableHead>
+                <TableHead>Perfil</TableHead>
+                <TableHead className="text-center">Red Social</TableHead>
+                <SortableHead label="Publicaciones" field="mentions" current={sortField} dir={sortDir} onSort={handleSort} />
+                <SortableHead label="Engagement" field="engagement" current={sortField} dir={sortDir} onSort={handleSort} />
+                <SortableHead label="Sentimiento" field="sentiment" current={sortField} dir={sortDir} onSort={handleSort} />
                 <TableHead className="text-center">Tendencia</TableHead>
-                <TableHead>Última Mención</TableHead>
-                <TableHead className="w-10"></TableHead>
+                <SortableHead label="Última Actividad" field="date" current={sortField} dir={sortDir} onSort={handleSort} />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {influencers.map((influencer, index) => {
+              {sortedInfluencers.map((influencer, index) => {
                 const TrendIcon = influencer.trend === "up"
                   ? TrendingUp
                   : influencer.trend === "down"
@@ -149,47 +191,46 @@ export function InfluencerTable({ influencers, maxMentions, mentions = [] }: Inf
                   ? (influencer.totalMentions / maxMentions) * 100
                   : 0;
 
-                const faviconUrl = `https://www.google.com/s2/favicons?domain=${influencer.domain}&sz=32`;
-
-                // Check if this domain has sentiment data
-                const domainMentions = mentions.filter(m => m.source_domain === influencer.domain);
-                const domainHasSentiment = domainMentions.some(m => m.sentiment !== null);
+                const initials = influencer.authorName.slice(0, 2).toUpperCase();
 
                 return (
                   <TableRow 
-                    key={influencer.domain}
+                    key={influencer.authorKey}
                     className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => handleDomainClick(influencer.domain)}
+                    onClick={() => handleRowClick(influencer)}
                   >
                     <TableCell className="font-bold text-primary">{index + 1}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <img 
-                          src={faviconUrl} 
-                          alt="" 
-                          className="h-5 w-5 rounded"
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
+                        <Avatar className="h-8 w-8">
+                          {influencer.authorAvatarUrl && <AvatarImage src={influencer.authorAvatarUrl} />}
+                          <AvatarFallback className="text-xs bg-primary/10 text-primary">{initials}</AvatarFallback>
+                        </Avatar>
                         <div>
-                          <div className="font-medium text-foreground">{influencer.domain}</div>
-                          {influencer.entities.length > 0 && (
-                            <div className="flex gap-1 mt-1">
-                              {influencer.entities.slice(0, 2).map((e) => (
-                                <Badge key={e} variant="outline" className="text-xs">
-                                  {e}
-                                </Badge>
-                              ))}
-                              {influencer.entities.length > 2 && (
-                                <span className="text-xs text-muted-foreground">
-                                  +{influencer.entities.length - 2}
-                                </span>
-                              )}
-                            </div>
+                          <div className="font-medium text-foreground flex items-center gap-1">
+                            {influencer.authorUrl ? (
+                              <a
+                                href={influencer.authorUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-primary transition-colors"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {influencer.authorName}
+                              </a>
+                            ) : (
+                              influencer.authorName
+                            )}
+                            {influencer.authorUrl && <ExternalLink className="h-3 w-3 text-muted-foreground" />}
+                          </div>
+                          {influencer.authorUsername && (
+                            <span className="text-xs text-muted-foreground">@{influencer.authorUsername}</span>
                           )}
                         </div>
                       </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="secondary" className="text-xs">{influencer.platform}</Badge>
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1">
@@ -202,32 +243,28 @@ export function InfluencerTable({ influencers, maxMentions, mentions = [] }: Inf
                         <Progress value={mentionPercentage} className="h-1.5" />
                       </div>
                     </TableCell>
-                    <TableCell>
-                      {domainHasSentiment ? (
-                        <div className="flex justify-center gap-2 text-xs">
-                          <span className="text-emerald-600 font-medium">{influencer.sentiment.positivo}</span>
-                          <span className="text-muted-foreground">/</span>
-                          <span className="text-muted-foreground">{influencer.sentiment.neutral}</span>
-                          <span className="text-muted-foreground">/</span>
-                          <span className="text-red-600 font-medium">{influencer.sentiment.negativo}</span>
-                        </div>
-                      ) : (
-                        <div className="flex justify-center">
-                          <Badge variant="outline" className="text-xs text-muted-foreground">
-                            Sin analizar
-                          </Badge>
-                        </div>
-                      )}
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-2 text-xs">
+                        {influencer.totalEngagement > 0 && (
+                          <span className="flex items-center gap-0.5 text-muted-foreground">
+                            <Heart className="h-3 w-3" /> {influencer.totalEngagement.toLocaleString()}
+                          </span>
+                        )}
+                        {influencer.totalViews > 0 && (
+                          <span className="flex items-center gap-0.5 text-muted-foreground">
+                            <Eye className="h-3 w-3" /> {influencer.totalViews.toLocaleString()}
+                          </span>
+                        )}
+                        {influencer.totalEngagement === 0 && influencer.totalViews === 0 && (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      {domainHasSentiment ? (
-                        <span className={`px-2 py-1 rounded-full text-xs ${getSentimentColor(influencer.sentimentScore)} ${getSentimentBg(influencer.sentimentScore)}`}>
-                          {influencer.sentimentScore > 0 ? "+" : ""}
-                          {(influencer.sentimentScore * 100).toFixed(0)}%
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                      <span className={`px-2 py-1 rounded-full text-xs ${getSentimentColor(influencer.sentimentScore)} ${getSentimentBg(influencer.sentimentScore)}`}>
+                        {influencer.sentimentScore > 0 ? "+" : ""}
+                        {(influencer.sentimentScore * 100).toFixed(0)}%
+                      </span>
                     </TableCell>
                     <TableCell className="text-center">
                       <div className={`inline-flex items-center justify-center gap-1 px-2 py-1 rounded-full ${trendBg}`}>
@@ -246,9 +283,6 @@ export function InfluencerTable({ influencers, maxMentions, mentions = [] }: Inf
                             locale: es,
                           })
                         : "-"}
-                    </TableCell>
-                    <TableCell>
-                      <ExternalLink className="h-4 w-4 text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 );

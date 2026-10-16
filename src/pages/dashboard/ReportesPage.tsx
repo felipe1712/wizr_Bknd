@@ -5,6 +5,7 @@ import { useMentions, useMentionStats } from "@/hooks/useMentions";
 import { useEntities } from "@/hooks/useEntities";
 import { DateRangeSelector, DateRangeConfig, calculateDateRange } from "@/components/reports/DateRangeSelector";
 import { SmartReportGenerator } from "@/components/reports/SmartReportGenerator";
+import { SharedReportsList } from "@/components/reports/SharedReportsList";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -251,9 +252,11 @@ const ReportesPage = () => {
       ) : (
         <SmartReportGenerator
           mentions={filteredMentions}
+          projectId={selectedProject.id}
           projectName={selectedProject.nombre}
           projectAudience={selectedProject.audiencia}
           projectObjective={selectedProject.objetivo}
+          strategicContext={selectedProject.contexto_estrategico || undefined}
           entityNames={entityNames}
           entities={entities}
           dateRange={{
@@ -263,6 +266,22 @@ const ReportesPage = () => {
           }}
         />
       )}
+
+      {/* Reportes publicados */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <FileBarChart className="h-4 w-4 text-primary" />
+            Reportes publicados
+          </CardTitle>
+          <CardDescription>
+            Links públicos compartidos para este proyecto. Puedes revocarlos o eliminarlos en cualquier momento.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SharedReportsList projectId={selectedProject.id} />
+        </CardContent>
+      </Card>
     </div>
   );
 };

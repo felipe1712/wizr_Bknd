@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -69,13 +69,27 @@ export function useSocialScrapeJobs(projectId: string | null) {
     queryFn: async () => {
       if (!projectId) return [];
 
-      const { data } = await api.get(`/projects/${projectId}/social-scrape-jobs`, {
-        params: {
-          ...filters,
-          dateFrom: filters.dateFrom?.toISOString(),
-          dateTo: filters.dateTo?.toISOString()
-        }
-      });
+      let query = supabase
+        .from("social_scrape_jobs")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("started_at", { ascending: false });
+
+      if (filters.platform) {
+        query = query.eq("platform", filters.platform);
+      }
+      if (filters.status) {
+        query = query.eq("status", filters.status);
+      }
+      if (filters.dateFrom) {
+        query = query.gte("started_at", filters.dateFrom.toISOString());
+      }
+      if (filters.dateTo) {
+        query = query.lte("started_at", filters.dateTo.toISOString());
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
       return data as SocialScrapeJob[];
     },
     enabled: !!projectId,
@@ -83,7 +97,13 @@ export function useSocialScrapeJobs(projectId: string | null) {
 
   // Fetch results for a specific job
   const fetchJobResults = async (jobId: string) => {
-    const { data } = await api.get(`/social-scrape-jobs/${jobId}/results`);
+    const { data, error } = await supabase
+      .from("social_results")
+      .select("*")
+      .eq("job_id", jobId)
+      .order("published_at", { ascending: false });
+
+    if (error) throw error;
     return data as SocialResult[];
   };
 
@@ -96,10 +116,16 @@ export function useSocialScrapeJobs(projectId: string | null) {
       search_value: string;
       max_results: number;
     }) => {
-      const { data } = await api.post(`/social-scrape-jobs`, {
-        ...job,
-        status: "pending",
-      });
+      const { data, error } = await supabase
+        .from("social_scrape_jobs")
+        .insert({
+          ...job,
+          status: "pending",
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
       return data as SocialScrapeJob;
     },
     onSuccess: () => {
@@ -124,7 +150,14 @@ export function useSocialScrapeJobs(projectId: string | null) {
         metadata?: Json;
       };
     }) => {
-      const { data } = await api.patch(`/social-scrape-jobs/${id}`, updates);
+      const { data, error } = await supabase
+        .from("social_scrape_jobs")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
       return data as SocialScrapeJob;
     },
     onSuccess: () => {
@@ -201,9 +234,12 @@ export function useSocialScrapeJobs(projectId: string | null) {
         raw_data: r.raw_data as Json,
       }));
 
-      const { data } = await api.post(`/social-scrape-jobs/${jobId}/results`, {
-        results: formattedResults
-      });
+      const { data, error } = await supabase
+        .from("social_results")
+        .upsert(formattedResults, { onConflict: "job_id,external_id" })
+        .select();
+
+      if (error) throw error;
       return data;
     },
     onSuccess: (data, variables) => {
@@ -226,7 +262,12 @@ export function useSocialScrapeJobs(projectId: string | null) {
   // Delete a job and its results
   const deleteJobMutation = useMutation({
     mutationFn: async (jobId: string) => {
-      await api.delete(`/social-scrape-jobs/${jobId}`);
+      const { error } = await supabase
+        .from("social_scrape_jobs")
+        .delete()
+        .eq("id", jobId);
+
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["social-scrape-jobs", projectId] });
@@ -251,9 +292,12 @@ export function useSocialScrapeJobs(projectId: string | null) {
     queryFn: async () => {
       if (!projectId) return null;
 
-      const { data } = await api.get(`/projects/${projectId}/social-scrape-stats`);
-      
-      const jobs = data || [];
+      const { data: jobs, error: jobsError } = await supabase
+        .from("social_scrape_jobs")
+        .select("platform, status, results_count")
+        .eq("project_id", projectId);
+
+      if (jobsError) throw jobsError;
 
       const totalJobs = jobs?.length || 0;
       const completedJobs = jobs?.filter((j) => j.status === "completed").length || 0;

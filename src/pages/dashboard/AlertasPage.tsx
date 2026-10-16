@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import api from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   AlertCircle,
@@ -58,9 +58,9 @@ const AlertasPage = () => {
   const handleRunMonitoring = async () => {
     setIsRunningMonitoring(true);
     try {
-      const { data, error } = await api.post('/monitoring/scheduled', { manual: true })
-        .then(res => ({ data: res.data, error: null }))
-        .catch(err => ({ data: null, error: err as Error }));
+      const { data, error } = await supabase.functions.invoke('scheduled-unified-search', {
+        body: { manual: true },
+      });
 
       if (error) {
         toast.error('Error al ejecutar monitoreo', {
@@ -70,8 +70,10 @@ const AlertasPage = () => {
       }
 
       if (data?.success) {
+        const totalAlerts = (data.results || []).reduce((sum: number, r: any) => sum + (r.alertsTriggered || 0), 0);
+        const totalMentions = (data.results || []).reduce((sum: number, r: any) => sum + (r.mentionsSaved || 0), 0);
         toast.success('Monitoreo completado', {
-          description: `Procesados: ${data.processed.entities} entidades, ${data.processed.newMentions} menciones nuevas, ${data.processed.alertsTriggered} alertas activadas`,
+          description: `${totalMentions} menciones nuevas, ${totalAlerts} alertas activadas`,
         });
         refetchNotifications();
       } else {

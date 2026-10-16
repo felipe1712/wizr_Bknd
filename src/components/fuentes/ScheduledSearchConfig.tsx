@@ -56,8 +56,9 @@ const PLATFORMS = [
 
 const FREQUENCIES: Array<{ value: ScheduleFrequency; label: string; description: string }> = [
   { value: "hourly", label: "Cada hora", description: "Para monitoreo de crisis" },
+  { value: "every_3_hours", label: "Cada 3 horas", description: "Recomendado — balance cobertura/costo" },
   { value: "twice_daily", label: "2 veces al día", description: "Mañana y tarde" },
-  { value: "daily", label: "Diariamente", description: "Recomendado" },
+  { value: "daily", label: "Diariamente", description: "Para proyectos de bajo volumen" },
   { value: "weekly", label: "Semanalmente", description: "Para proyectos de bajo volumen" },
 ];
 

@@ -53,7 +53,7 @@ const REPORT_TYPES: { value: RankingReportType; label: string; icon: typeof File
 ];
 
 const EXTENSIONS: { value: ReportExtension; label: string; description: string }[] = [
-  { value: "micro", label: "Micro", description: "1-2 párrafos • WhatsApp" },
+  { value: "micro", label: "Micro", description: "1-2 párrafos • Resumen breve" },
   { value: "short", label: "Corto", description: "1 página • Executive summary" },
   { value: "medium", label: "Medio", description: "2-3 páginas • Análisis detallado" },
 ];
@@ -158,15 +158,6 @@ export function RankingReportGenerator({
         title: "Copiado",
         description: "Texto copiado al portapapeles",
       });
-    }
-  };
-
-  const handleWhatsAppShare = () => {
-    const template = editedTemplates?.[selectedTemplate] || report?.templates[selectedTemplate];
-    if (template) {
-      const encodedText = encodeURIComponent(template);
-      const whatsappUrl = `https://wa.me/?text=${encodedText}`;
-      window.open(whatsappUrl, "_blank");
     }
   };
 
@@ -413,7 +404,7 @@ export function RankingReportGenerator({
                 <TabsList className="grid grid-cols-3 w-full">
                   <TabsTrigger value="executive">Ejecutivo</TabsTrigger>
                   <TabsTrigger value="technical">Técnico</TabsTrigger>
-                  <TabsTrigger value="public">WhatsApp</TabsTrigger>
+                  <TabsTrigger value="public">Resumen Público</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value={selectedTemplate} className="mt-4">
@@ -430,10 +421,6 @@ export function RankingReportGenerator({
                       <Button variant="outline" size="sm" onClick={handleCopyToClipboard}>
                         <Copy className="mr-2 h-4 w-4" />
                         Copiar
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={handleWhatsAppShare}>
-                        <MessageCircle className="mr-2 h-4 w-4" />
-                        WhatsApp
                       </Button>
                       <RankingReportPDFGenerator
                         report={report}

@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
-import api from "@/lib/api";
-import { n8nApi } from "@/lib/api/n8n";
+import { supabase } from "@/integrations/supabase/client";
 import { firecrawlApi, type EntityForSearch } from "@/lib/api/firecrawl";
+import { apifyApi } from "@/lib/api/apify";
 import { cn } from "@/lib/utils";
 import { deduplicateBatch, type DuplicateCandidate } from "@/lib/utils/semanticDedup";
 import {
@@ -154,12 +154,11 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
   // Load existing mentions for semantic deduplication
   useEffect(() => {
     const loadExistingMentions = async () => {
-      const { data } = await api.get("/mentions", { 
-        params: { 
-          projectId, 
-          limit: 500 
-        } 
-      });
+      const { data } = await supabase
+        .from("mentions")
+        .select("id, title, description, url")
+        .eq("project_id", projectId)
+        .limit(500);
       
       if (data) {
         setExistingMentions(data);
@@ -220,12 +219,37 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
   };
 
   // Build search query from entity keywords
-  const buildSearchQuery = (entity: Entity): string => {
-    // Prioritize keywords, fallback to name + aliases
+  const buildSearchQuery = (entity: Entity, platform?: string): string => {
+    // 1. Check platform-specific keywords first
+    const pk = (entity as any).platform_keywords as Record<string, string[]> | undefined;
+    if (pk && platform && pk[platform] && pk[platform].length > 0) {
+      return pk[platform].join(", ");
+    }
+    // 2. Fallback to general keywords
     if (entity.palabras_clave && entity.palabras_clave.length > 0) {
+      // For Twitter: wrap multi-word terms in quotes for exact matching, add name variations
+      if (platform === "twitter") {
+        const terms = new Set<string>();
+        entity.palabras_clave.forEach(kw => {
+          terms.add(kw.includes(" ") ? `"${kw}"` : kw);
+        });
+        // Also add entity name in quotes if not already present
+        if (!entity.palabras_clave.some(kw => kw.toLowerCase() === entity.nombre.toLowerCase())) {
+          terms.add(entity.nombre.includes(" ") ? `"${entity.nombre}"` : entity.nombre);
+        }
+        // Add aliases
+        entity.aliases?.forEach(alias => {
+          if (alias.trim()) terms.add(alias.includes(" ") ? `"${alias}"` : alias);
+        });
+        return Array.from(terms).join(", ");
+      }
       return entity.palabras_clave.join(", ");
     }
+    // 3. Fallback to name + aliases
     const terms = [entity.nombre, ...entity.aliases].filter(Boolean);
+    if (platform === "twitter") {
+      return terms.map(t => t.includes(" ") ? `"${t}"` : t).join(", ");
+    }
     return terms.join(", ");
   };
 
@@ -272,6 +296,9 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
 
     let totalSaved = 0;
     let totalDuplicatesSkipped = 0;
+    let totalFound = 0;
+    let successCount = 0;
+    let failedCount = 0;
     const allExistingMentions = [...existingMentions];
 
     // Execute searches in parallel (batched)
@@ -287,7 +314,7 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
       updateJob(job.id, { status: "running" });
 
       try {
-        let results: Array<{ url: string; title?: string; description?: string; source_domain?: string; published_at?: string }> = [];
+        let results: Array<{ url: string; title?: string; description?: string; source_domain?: string; published_at?: string; date_confidence?: string; author?: string; authorUsername?: string; authorUrl?: string; likes?: number; comments?: number; shares?: number; views?: number }> = [];
 
         if (job.platform === "news") {
           // Use Firecrawl for news
@@ -301,33 +328,120 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
           const response = await firecrawlApi.searchMultipleEntities([entityForSearch], timeRange, maxResultsPerPlatform);
           
           if (response.success && response.data) {
-            results = response.data.map(r => ({
-              url: r.url,
-              title: r.title,
-              description: r.description,
-              source_domain: r.url ? new URL(r.url).hostname.replace("www.", "") : undefined,
-              published_at: r.metadata?.publishedDate,
-            }));
+            results = response.data.map(r => {
+              const enriched = r as unknown as { publishedAt?: string; dateConfidence?: string };
+              return {
+                url: r.url,
+                title: r.title,
+                description: r.description,
+                source_domain: r.url ? new URL(r.url).hostname.replace("www.", "") : undefined,
+                published_at: enriched.publishedAt || r.metadata?.publishedDate,
+                date_confidence: enriched.dateConfidence,
+              };
+            });
           }
         } else {
-          // Asynchronously trigger n8n for social platforms
-          const searchQuery = buildSearchQuery(entity);
-          
-          const scrapeResult = await n8nApi.startScrape({
-            platform: job.platform as "twitter" | "facebook" | "tiktok" | "instagram" | "linkedin" | "youtube" | "reddit",
+          // Use Apify for social platforms through the dedicated client.
+          const searchQuery = buildSearchQuery(entity, job.platform);
+          const scrapeResult = await apifyApi.startScrape({
+            platform: job.platform,
             query: searchQuery,
             maxResults: maxResultsPerPlatform,
           });
 
-          if (!scrapeResult.success) throw new Error(scrapeResult.error || "Search failed to delegate to n8n");
-          
-          // No results are returned immediately since n8n operates asynchronously.
-          // n8n will fetch, deduplicate, and insert directly into the database.
+          if (!scrapeResult.success || !scrapeResult.data?.runId) {
+            throw new Error(scrapeResult.error || scrapeResult.data?.error || "No se pudo iniciar la búsqueda");
+          }
+
+          // Poll for completion
+          let attempts = 0;
+          const maxAttempts = 60; // 2 minutes max
+
+          while (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            const statusResult = await apifyApi.checkStatus(
+              scrapeResult.data.runId,
+              job.platform,
+              searchQuery,
+            );
+
+            if (!statusResult.success || !statusResult.data) {
+              throw new Error(statusResult.error || "No se pudo consultar el estado de la búsqueda");
+            }
+
+            const statusData = statusResult.data;
+
+            if (statusData.status === "SUCCEEDED" || statusData.status === "completed") {
+              results = (statusData.items || []).map((r: Record<string, unknown>) => {
+                const item = r as Record<string, unknown>;
+                const authorObj = item.author as Record<string, unknown> | undefined;
+                const metricsObj = item.metrics as Record<string, unknown> | undefined;
+                return {
+                  url: String(item.url || ""),
+                  title: item.title ? String(item.title) : undefined,
+                  description: item.description ? String(item.description) : (item.text ? String(item.text) : undefined),
+                  source_domain: job.platform,
+                  published_at: item.publishedAt ? String(item.publishedAt) : (item.timestamp ? String(item.timestamp) : undefined),
+                  author: authorObj?.name ? String(authorObj.name) : undefined,
+                  authorUsername: authorObj?.username ? String(authorObj.username) : undefined,
+                  authorUrl: authorObj?.url ? String(authorObj.url) : undefined,
+                  likes: Number(metricsObj?.likes || 0) || undefined,
+                  comments: Number(metricsObj?.comments || 0) || undefined,
+                  shares: Number(metricsObj?.shares || 0) || undefined,
+                  views: Number(metricsObj?.views || 0) || undefined,
+                };
+              });
+              break;
+            }
+
+            if (statusData.status === "FAILED" || statusData.status === "failed" || statusData.status === "ABORTED" || statusData.status === "TIMED-OUT") {
+              throw new Error(statusData.error || `Search ${statusData.status.toLowerCase()}`);
+            }
+
+            attempts++;
+          }
+
+          if (attempts >= maxAttempts) {
+            throw new Error("Search timeout");
+          }
+        }
+
+        // Post-validate: token-based filter so frases largas (ej. "Turismo en León, Guanajuato")
+        // no descarten todo. Cualquier token significativo (≥4 chars) basta.
+        const STOPWORDS = new Set(["para","con","los","las","del","una","por","que","sus","sin","mas","muy","como","este","esta","entre","sobre","desde","hasta"]);
+        const tokenize = (s: string) => s
+          .toLowerCase()
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .split(/[^a-z0-9]+/)
+          .filter(t => t.length >= 4 && !STOPWORDS.has(t));
+
+        const rawKeywords = [
+          entity.nombre,
+          ...(entity.aliases || []),
+          ...(entity.palabras_clave || []),
+        ].filter(Boolean);
+
+        const tokenSet = new Set<string>();
+        rawKeywords.forEach(k => tokenize(k).forEach(t => tokenSet.add(t)));
+
+        const relevantResults = tokenSet.size === 0 ? results : results.filter(r => {
+          const text = [r.title, r.description, r.url].filter(Boolean).join(" ").toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          for (const t of tokenSet) {
+            if (text.includes(t)) return true;
+          }
+          return false;
+        });
+
+        const filtered = results.length - relevantResults.length;
+        if (filtered > 0) {
+          console.log(`Filtered ${filtered}/${results.length} irrelevant results for ${entity.nombre} (tokens: ${Array.from(tokenSet).join(",")})`);
         }
 
         // Save results to mentions table with semantic deduplication
-        if (results.length > 0) {
-          const mentionsToCheck = results.map(r => ({
+        if (relevantResults.length > 0) {
+          const mentionsToCheck = relevantResults.map(r => ({
             project_id: projectId,
             url: r.url,
             title: r.title || null,
@@ -336,6 +450,16 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
             entity_id: entity.id,
             matched_keywords: entity.palabras_clave || [],
             published_at: r.published_at || null,
+            raw_metadata: {
+              ...(r.date_confidence ? { date_confidence: r.date_confidence } : { date_confidence: r.published_at ? "high" : "unknown" }),
+              ...(r.author ? { author: r.author } : {}),
+              ...(r.authorUsername ? { authorUsername: r.authorUsername } : {}),
+              ...(r.authorUrl ? { authorUrl: r.authorUrl } : {}),
+              ...(r.likes != null ? { likes: r.likes } : {}),
+              ...(r.comments != null ? { comments: r.comments } : {}),
+              ...(r.shares != null ? { shares: r.shares } : {}),
+              ...(r.views != null ? { views: r.views } : {}),
+            },
           }));
 
           // Apply semantic deduplication
@@ -348,21 +472,28 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
           totalDuplicatesSkipped += duplicates.length;
 
           if (unique.length > 0) {
-            const { data: savedData } = await api.post('/mentions/bulk', { mentions: unique });
+            const { error: saveError, data: savedData } = await supabase
+              .from("mentions")
+              .upsert(unique, { onConflict: "project_id,url" })
+              .select("id, title, description, url");
 
-            if (savedData) {
+            if (saveError) {
+              console.error(`Save error for ${entity.nombre}/${job.platform}:`, saveError);
+            } else {
               totalSaved += unique.length;
-              // Add newly saved mentions to existing list for cross-job deduplication
-              if (savedData.mentions) {
-                allExistingMentions.push(...savedData.mentions);
+              if (savedData) {
+                allExistingMentions.push(...savedData);
               }
             }
           }
         }
 
+        totalFound += results.length;
+        successCount += 1;
         updateJob(job.id, { status: "completed", resultCount: results.length });
       } catch (error) {
         console.error(`Error in job ${job.id}:`, error);
+        failedCount += 1;
         updateJob(job.id, { 
           status: "failed", 
           error: error instanceof Error ? error.message : "Unknown error" 
@@ -376,16 +507,47 @@ export function UnifiedSearch({ projectId, entities, onSearchComplete }: Unified
     setIsRunning(false);
     setDuplicatesSkipped(totalDuplicatesSkipped);
 
-    // Calculate final stats
-    const finalJobs = jobList;
-    const totalFound = finalJobs.reduce((sum, j) => sum + j.resultCount, 0);
-    const successCount = finalJobs.filter(j => j.status === "completed").length;
-    const failedCount = finalJobs.filter(j => j.status === "failed").length;
-
     toast({
       title: "Búsqueda completada",
-      description: `${totalFound} menciones encontradas, ${totalSaved} guardadas${totalDuplicatesSkipped > 0 ? `, ${totalDuplicatesSkipped} duplicados omitidos` : ""}. ${successCount} búsquedas exitosas${failedCount > 0 ? `, ${failedCount} fallidas` : ""}.`,
+      description: `${totalFound} menciones encontradas, ${totalSaved} guardadas${totalDuplicatesSkipped > 0 ? `, ${totalDuplicatesSkipped} duplicados omitidos` : ""}. ${successCount} búsquedas exitosas${failedCount > 0 ? `, ${failedCount} fallidas` : ""}. Analizando sentimiento...`,
     });
+
+    // Auto-analyze sentiment for newly saved mentions (fire and forget)
+    if (totalSaved > 0) {
+      try {
+        const { data: unanalyzed } = await supabase
+          .from("mentions")
+          .select("id, title, description")
+          .eq("project_id", projectId)
+          .is("sentiment", null)
+          .order("created_at", { ascending: false })
+          .limit(100);
+
+        if (unanalyzed && unanalyzed.length > 0) {
+          const BATCH_SIZE = 25;
+          for (let i = 0; i < unanalyzed.length; i += BATCH_SIZE) {
+            const batch = unanalyzed.slice(i, i + BATCH_SIZE);
+            supabase.functions
+              .invoke("analyze-sentiment", { body: { mentions: batch } })
+              .then(async (response) => {
+                if (response.data?.success && response.data.results) {
+                  const updates = (response.data.results as Array<{ id: string; sentiment: string }>).map((r) =>
+                    supabase.from("mentions").update({ sentiment: r.sentiment }).eq("id", r.id)
+                  );
+                  await Promise.all(updates);
+                }
+              })
+              .catch((err) => console.error("Auto sentiment analysis error:", err));
+
+            if (i + BATCH_SIZE < unanalyzed.length) {
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to trigger auto sentiment analysis:", err);
+      }
+    }
 
     onSearchComplete(totalFound, totalSaved);
   }, [entities, selectedEntities, selectedPlatforms, timeRange, maxResultsPerPlatform, projectId, toast, onSearchComplete, existingMentions]);

@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Settings, Plus, User, Building2, Briefcase, Filter } from "lucide-react";
+import { NoProjectState } from "@/components/layout/NoProjectState";
+import { useState, useEffect } from "react";
+import { Settings, Plus, User, Building2, Briefcase, Filter, Save, Target, Trash2, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,13 +12,31 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { useProject } from "@/contexts/ProjectContext";
 import { useEntities, EntityType } from "@/hooks/useEntities";
 import { EntityForm } from "@/components/entities/EntityForm";
 import { EntityList, Entity } from "@/components/entities/EntityList";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
 
 const ConfiguracionPage = () => {
-  const { selectedProject } = useProject();
+  const { selectedProject, refreshProjects } = useProject();
+  const { toast } = useToast();
+  const navigate = useNavigate();
   const {
     entities,
     isLoading,
@@ -32,6 +51,51 @@ const ConfiguracionPage = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editingEntity, setEditingEntity] = useState<Entity | null>(null);
   const [filterType, setFilterType] = useState<"all" | EntityType>("all");
+  const [strategicContext, setStrategicContext] = useState(selectedProject?.contexto_estrategico || "");
+  const [isSavingContext, setIsSavingContext] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [isDeletingProject, setIsDeletingProject] = useState(false);
+
+  useEffect(() => {
+    setStrategicContext(selectedProject?.contexto_estrategico || "");
+  }, [selectedProject?.id]);
+
+  const handleSaveStrategicContext = async () => {
+    if (!selectedProject) return;
+    setIsSavingContext(true);
+    try {
+      const { error } = await supabase
+        .from("projects")
+        .update({ contexto_estrategico: strategicContext.trim() || null })
+        .eq("id", selectedProject.id);
+      if (error) throw error;
+      await refreshProjects();
+      toast({ title: "Guardado", description: "Contexto estratégico actualizado" });
+    } catch {
+      toast({ title: "Error", description: "No se pudo guardar", variant: "destructive" });
+    } finally {
+      setIsSavingContext(false);
+    }
+  };
+  const handleDeleteProject = async () => {
+    if (!selectedProject || deleteConfirmName !== selectedProject.nombre) return;
+    setIsDeletingProject(true);
+    try {
+      const { error } = await supabase
+        .from("projects")
+        .delete()
+        .eq("id", selectedProject.id);
+      if (error) throw error;
+      toast({ title: "Proyecto eliminado", description: `"${selectedProject.nombre}" ha sido eliminado permanentemente.` });
+      await refreshProjects();
+      navigate("/dashboard/proyectos");
+    } catch {
+      toast({ title: "Error", description: "No se pudo eliminar el proyecto", variant: "destructive" });
+    } finally {
+      setIsDeletingProject(false);
+      setDeleteConfirmName("");
+    }
+  };
 
   const handleCreateEntity = (data: {
     nombre: string;
@@ -39,14 +103,16 @@ const ConfiguracionPage = () => {
     descripcion?: string;
     palabras_clave: string[];
     aliases: string[];
+    platform_keywords: Record<string, string[]>;
   }) => {
     if (!selectedProject) return;
     
     createEntity({
       project_id: selectedProject.id,
       ...data,
+    }, {
+      onSuccess: () => setFormOpen(false),
     });
-    setFormOpen(false);
   };
 
   const handleUpdateEntity = (data: {
@@ -55,14 +121,16 @@ const ConfiguracionPage = () => {
     descripcion?: string;
     palabras_clave: string[];
     aliases: string[];
+    platform_keywords: Record<string, string[]>;
   }) => {
     if (!editingEntity) return;
     
     updateEntity({
       id: editingEntity.id,
       ...data,
+    }, {
+      onSuccess: () => setEditingEntity(null),
     });
-    setEditingEntity(null);
   };
 
   const handleEditClick = (entity: Entity) => {
@@ -86,17 +154,7 @@ const ConfiguracionPage = () => {
   };
 
   if (!selectedProject) {
-    return (
-      <div className="p-6">
-        <div className="text-center py-12">
-          <Settings className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-          <h2 className="text-xl font-semibold mb-2">Sin proyecto seleccionado</h2>
-          <p className="text-muted-foreground">
-            Selecciona un proyecto para configurar sus entidades.
-          </p>
-        </div>
-      </div>
-    );
+    return <NoProjectState action="configurar entidades y palabras clave" />;
   }
 
   return (
@@ -228,10 +286,41 @@ const ConfiguracionPage = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="preferences">
+        <TabsContent value="preferences" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Preferencias</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-primary" />
+                Contexto Estratégico
+              </CardTitle>
+              <CardDescription>
+                Define el contexto estratégico del proyecto. Esta información se usará automáticamente 
+                en todos los reportes para orientar el análisis de IA.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Textarea
+                value={strategicContext}
+                onChange={(e) => setStrategicContext(e.target.value)}
+                placeholder="Ej: Actinver está en un litigio activo con Rafael Zaga Tawil por fraude millonario al Infonavit. Todo el monitoreo debe evaluarse desde el impacto reputacional para Actinver y su posición en el caso legal."
+                className="min-h-[120px]"
+              />
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground max-w-md">
+                  Este contexto se incluye automáticamente en cada reporte generado. 
+                  Además, al generar un reporte puedes agregar un enfoque específico adicional.
+                </p>
+                <Button onClick={handleSaveStrategicContext} disabled={isSavingContext} size="sm">
+                  <Save className="h-4 w-4 mr-2" />
+                  {isSavingContext ? "Guardando..." : "Guardar"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Preferencias Generales</CardTitle>
               <CardDescription>
                 Configuración general del proyecto
               </CardDescription>
@@ -240,6 +329,75 @@ const ConfiguracionPage = () => {
               <p className="text-muted-foreground text-center py-8">
                 Próximamente: Configuración de alertas, notificaciones y más.
               </p>
+            </CardContent>
+          </Card>
+
+          {/* Danger Zone */}
+          <Card className="border-destructive/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                Zona de Peligro
+              </CardTitle>
+              <CardDescription>
+                Acciones irreversibles para este proyecto
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Eliminar proyecto</p>
+                  <p className="text-sm text-muted-foreground">
+                    Se eliminarán permanentemente todas las menciones, entidades, alertas y datos asociados.
+                  </p>
+                </div>
+                <AlertDialog onOpenChange={() => setDeleteConfirmName("")}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Eliminar proyecto
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-destructive" />
+                        ¿Eliminar "{selectedProject.nombre}"?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription className="space-y-3">
+                        <span className="block">
+                          Esta acción es <strong>permanente e irreversible</strong>. Se eliminarán:
+                        </span>
+                        <ul className="list-disc list-inside text-sm space-y-1">
+                          <li>Todas las menciones capturadas</li>
+                          <li>Todas las entidades configuradas</li>
+                          <li>Alertas, fichas temáticas y reportes</li>
+                          <li>Búsquedas programadas y configuración</li>
+                        </ul>
+                        <span className="block mt-3">
+                          Escribe <strong>{selectedProject.nombre}</strong> para confirmar:
+                        </span>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <Input
+                      value={deleteConfirmName}
+                      onChange={(e) => setDeleteConfirmName(e.target.value)}
+                      placeholder={selectedProject.nombre}
+                      className="mt-2"
+                    />
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDeleteProject}
+                        disabled={deleteConfirmName !== selectedProject.nombre || isDeletingProject}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {isDeletingProject ? "Eliminando..." : "Eliminar permanentemente"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -265,6 +423,7 @@ const ConfiguracionPage = () => {
             descripcion: editingEntity.descripcion || undefined,
             palabras_clave: editingEntity.palabras_clave,
             aliases: editingEntity.aliases,
+            platform_keywords: editingEntity.platform_keywords || {},
           }}
           isLoading={isUpdating}
         />

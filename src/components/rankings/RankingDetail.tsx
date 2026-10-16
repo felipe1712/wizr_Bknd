@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, BarChart3, Settings, Trophy, TrendingUp, FileText, Sparkles, MessageCircle, BookOpen, FileBarChart } from "lucide-react";
 import { Ranking } from "@/hooks/useRankings";
-import { useFKProfilesByRanking, useFKProfileKPIs, useFKAllKPIs, useFKDailyTopPosts, FKNetwork } from "@/hooks/useFanpageKarma";
+import { useFKProfilesByRanking, useFKProfileKPIs, useFKAllKPIs, useFKTopPosts, FKNetwork } from "@/hooks/useFanpageKarma";
 import { RankingBatchForm } from "./RankingBatchForm";
+import { FKCSVImporter } from "./FKCSVImporter";
 import { ProfilesList } from "./ProfilesList";
 import { RankingTable } from "./RankingTable";
 import { RankingChart } from "./RankingChart";
@@ -42,20 +43,11 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
   const periodStart = formatDate(dateRange.from, "yyyy-MM-dd");
   const periodEnd = formatDate(dateRange.to, "yyyy-MM-dd");
 
-  // For Daily Top Posts we query the last 7 days (sync captures 7 days of history)
-  const topPostsEnd = new Date();
-  topPostsEnd.setDate(topPostsEnd.getDate() - 1); // yesterday (today's data isn't available yet)
-  const topPostsStart = new Date();
-  topPostsStart.setDate(topPostsStart.getDate() - 7);
-  const topPostsStartStr = formatDate(topPostsStart, "yyyy-MM-dd");
-  const topPostsEndStr = formatDate(topPostsEnd, "yyyy-MM-dd");
-
   const { data: profiles = [], isLoading: loadingProfiles } = useFKProfilesByRanking(ranking.id);
   const profileIds = profiles.map((p) => p.id);
   const { data: kpis = [], isLoading: loadingKPIs } = useFKProfileKPIs(profileIds, periodStart, periodEnd);
   const { data: allKpis = [], isLoading: loadingAllKpis } = useFKAllKPIs(profileIds);
-  // Query last 7 days of top posts
-  const { data: dailyTopPosts = [], isLoading: loadingTopPosts } = useFKDailyTopPosts(profileIds, topPostsStartStr, topPostsEndStr);
+  const { data: dailyTopPosts = [], isLoading: loadingTopPosts } = useFKTopPosts(profileIds, periodStart, periodEnd);
 
   const syncedCount = profiles.filter((p) => p.last_synced_at).length;
 
@@ -64,9 +56,9 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
     setActiveTab("ai");
   };
 
-  const handleApplyDateRange = () => {
-    setAppliedPreset(datePreset);
-    setAppliedCustomRange(customDateRange);
+  const handleApplyDateRange = (preset?: DateRangePreset, custom?: DateRange) => {
+    setAppliedPreset(preset ?? datePreset);
+    setAppliedCustomRange(custom ?? customDateRange);
   };
 
   const handleRefreshTopPosts = () => {
@@ -246,6 +238,7 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
             profiles={profiles} 
             isLoading={loadingProfiles}
             dateRange={dateRange}
+            analysisContext="benchmark"
           />
         </TabsContent>
 
@@ -279,6 +272,7 @@ export function RankingDetail({ ranking, onBack }: RankingDetailProps) {
 
         <TabsContent value="config" className="mt-6">
           <div className="space-y-6">
+            <FKCSVImporter rankingId={ranking.id} />
             <RankingBatchForm rankingId={ranking.id} />
             <ProfilesList 
               profiles={profiles} 

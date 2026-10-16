@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -506,10 +506,43 @@ serve(async (req) => {
     // Normalize results
     const normalizedItems = normalizeResults(items, platform);
 
-    // Sort by date (newest first)
-    normalizedItems.sort((a, b) => 
-      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
-    );
+    // TikTok relevance scoring - rank results by keyword match quality
+    if (platform === "tiktok") {
+      for (const item of normalizedItems) {
+        // Extract search keyword from the raw input if available
+        const searchKw = (item.raw as Record<string, unknown>)?.search_keyword as string || "";
+        const lowerKw = searchKw.toLowerCase().replace(/^#/, "");
+        
+        if (lowerKw) {
+          let relevanceScore = 0;
+          const desc = (item.description || "").toLowerCase();
+          const hashtags = (item.hashtags || []).map(h => h.toLowerCase());
+          const username = (item.author?.username || "").toLowerCase();
+          
+          // Keyword in description (highest weight)
+          if (desc.includes(lowerKw)) relevanceScore += 3;
+          // Keyword in hashtags
+          if (hashtags.some(h => h.includes(lowerKw))) relevanceScore += 2;
+          // Keyword in username
+          if (username.includes(lowerKw)) relevanceScore += 1;
+          
+          (item.raw as Record<string, unknown>)._relevanceScore = relevanceScore;
+        }
+      }
+      
+      // Sort by relevance score (descending), then by date
+      normalizedItems.sort((a, b) => {
+        const scoreA = ((a.raw as Record<string, unknown>)?._relevanceScore as number) || 0;
+        const scoreB = ((b.raw as Record<string, unknown>)?._relevanceScore as number) || 0;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
+      });
+    } else {
+      // Sort by date (newest first)
+      normalizedItems.sort((a, b) => 
+        new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+      );
+    }
 
     return new Response(
       JSON.stringify({

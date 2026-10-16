@@ -4,6 +4,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { BarChart3 } from "lucide-react";
 import { FKProfile, FKProfileKPI, FKNetwork, getNetworkLabel } from "@/hooks/useFanpageKarma";
+import { getFKProfileDisplayName } from "@/lib/fkProfileUtils";
+
+function shouldReplaceKpi(candidate: FKProfileKPI, existing: FKProfileKPI) {
+  const candidateEnd = new Date(`${candidate.period_end}T00:00:00Z`).getTime();
+  const existingEnd = new Date(`${existing.period_end}T00:00:00Z`).getTime();
+
+  if (candidateEnd !== existingEnd) return candidateEnd > existingEnd;
+  if (!!candidate.isFallback !== !!existing.isFallback) return !candidate.isFallback;
+
+  return new Date(candidate.fetched_at).getTime() > new Date(existing.fetched_at).getTime();
+}
 
 interface RankingChartProps {
   profiles: FKProfile[];
@@ -12,6 +23,16 @@ interface RankingChartProps {
   filterNetwork?: FKNetwork | "all";
   metric?: "engagement_rate" | "followers" | "follower_growth_percent";
 }
+
+const NETWORK_SHORT: Record<FKNetwork, string> = {
+  facebook: "FB",
+  instagram: "IG",
+  youtube: "YT",
+  linkedin: "LI",
+  tiktok: "TT",
+  threads: "TH",
+  twitter: "X",
+};
 
 const NETWORK_COLORS: Record<FKNetwork, string> = {
   facebook: "#1877F2",
@@ -42,7 +63,7 @@ export function RankingChart({
     const kpiMap = new Map<string, FKProfileKPI>();
     kpis.forEach((kpi) => {
       const existing = kpiMap.get(kpi.fk_profile_id);
-      if (!existing || new Date(kpi.fetched_at) > new Date(existing.fetched_at)) {
+      if (!existing || shouldReplaceKpi(kpi, existing)) {
         kpiMap.set(kpi.fk_profile_id, kpi);
       }
     });
@@ -62,10 +83,14 @@ export function RankingChart({
           value = kpi?.follower_growth_percent || 0;
         }
         
+        const baseName = getFKProfileDisplayName(profile);
+        const net = profile.network as FKNetwork;
+        const short = NETWORK_SHORT[net] ?? net.slice(0, 2).toUpperCase();
         return {
-          name: `@${profile.profile_id}`,
+          name: `${baseName} · ${short}`,
+          fullName: baseName,
           value,
-          network: profile.network as FKNetwork,
+          network: net,
           displayValue: metric === "followers" 
             ? (value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : value >= 1000 ? `${(value / 1000).toFixed(0)}K` : value.toString())
             : `${value.toFixed(2)}%`,
@@ -121,9 +146,15 @@ export function RankingChart({
             <YAxis 
               dataKey="name" 
               type="category" 
-              width={55}
+              width={90}
               fontSize={10}
-              tickFormatter={(v) => v.length > 10 ? `${v.slice(0, 10)}...` : v}
+              tickFormatter={(v) => {
+                const parts = String(v).split(" · ");
+                const base = parts[0] ?? "";
+                const suffix = parts[1] ? ` · ${parts[1]}` : "";
+                const trimmed = base.length > 12 ? `${base.slice(0, 12)}…` : base;
+                return `${trimmed}${suffix}`;
+              }}
             />
             <Tooltip
               contentStyle={{

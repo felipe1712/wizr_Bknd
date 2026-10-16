@@ -20,7 +20,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { X, Plus } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { X, Plus, ChevronDown, Newspaper } from "lucide-react";
 
 const entitySchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido").max(100),
@@ -30,16 +31,30 @@ const entitySchema = z.object({
 
 type EntityFormData = z.infer<typeof entitySchema>;
 
+type PlatformId = "twitter" | "facebook" | "instagram" | "tiktok" | "youtube" | "linkedin" | "reddit" | "news";
+
+const PLATFORM_OPTIONS: { id: PlatformId; label: string; icon: string; hint: string }[] = [
+  { id: "news", label: "Noticias", icon: "📰", hint: "ej. \"Grupo Financiero Actinver\", \"Actinver resultados\"" },
+  { id: "twitter", label: "Twitter/X", icon: "𝕏", hint: "ej. @actinver, \"Actinver Trade\"" },
+  { id: "facebook", label: "Facebook", icon: "f", hint: "ej. Actinver, \"casa de bolsa\"" },
+  { id: "instagram", label: "Instagram", icon: "📷", hint: "ej. actinver, actinvertrade (hashtags)" },
+  { id: "tiktok", label: "TikTok", icon: "♪", hint: "ej. actinver, inversiones actinver" },
+  { id: "youtube", label: "YouTube", icon: "▶", hint: "ej. \"Actinver análisis\", \"Actinver Trade\"" },
+  { id: "linkedin", label: "LinkedIn", icon: "in", hint: "ej. Actinver, \"Grupo Financiero Actinver\"" },
+  { id: "reddit", label: "Reddit", icon: "🔴", hint: "ej. Actinver, actinver" },
+];
+
 interface EntityFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: EntityFormData & { palabras_clave: string[]; aliases: string[] }) => void;
+  onSubmit: (data: EntityFormData & { palabras_clave: string[]; aliases: string[]; platform_keywords: Record<string, string[]> }) => void;
   initialData?: {
     nombre: string;
     tipo: "persona" | "marca" | "institucion" | "tema" | "evento";
     descripcion?: string;
     palabras_clave: string[];
     aliases: string[];
+    platform_keywords?: Record<string, string[]>;
   };
   isLoading?: boolean;
 }
@@ -55,6 +70,34 @@ export function EntityForm({
   const [aliases, setAliases] = useState<string[]>(initialData?.aliases || []);
   const [newKeyword, setNewKeyword] = useState("");
   const [newAlias, setNewAlias] = useState("");
+  const [platformKeywords, setPlatformKeywords] = useState<Record<string, string[]>>(
+    initialData?.platform_keywords || {}
+  );
+  const [newPlatformKeyword, setNewPlatformKeyword] = useState<Record<string, string>>({});
+  const [showPlatformKeywords, setShowPlatformKeywords] = useState(
+    Object.keys(initialData?.platform_keywords || {}).length > 0
+  );
+
+  const handleAddPlatformKeyword = (platformId: string) => {
+    const value = (newPlatformKeyword[platformId] || "").trim();
+    if (!value) return;
+    const current = platformKeywords[platformId] || [];
+    if (current.includes(value)) return;
+    setPlatformKeywords({ ...platformKeywords, [platformId]: [...current, value] });
+    setNewPlatformKeyword({ ...newPlatformKeyword, [platformId]: "" });
+  };
+
+  const handleRemovePlatformKeyword = (platformId: string, keyword: string) => {
+    const current = platformKeywords[platformId] || [];
+    const updated = current.filter((k) => k !== keyword);
+    if (updated.length === 0) {
+      const copy = { ...platformKeywords };
+      delete copy[platformId];
+      setPlatformKeywords(copy);
+    } else {
+      setPlatformKeywords({ ...platformKeywords, [platformId]: updated });
+    }
+  };
 
   const form = useForm<EntityFormData>({
     resolver: zodResolver(entitySchema),
@@ -92,6 +135,7 @@ export function EntityForm({
       ...data,
       palabras_clave: palabrasClave,
       aliases: aliases,
+      platform_keywords: platformKeywords,
     });
   };
 
@@ -229,6 +273,84 @@ export function EntityForm({
               </div>
             )}
           </div>
+
+          {/* Platform-specific keywords */}
+          <Collapsible open={showPlatformKeywords} onOpenChange={setShowPlatformKeywords}>
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="ghost" size="sm" className="w-full justify-between text-muted-foreground">
+                <span className="flex items-center gap-2">
+                  <Newspaper className="h-4 w-4" />
+                  Keywords por plataforma
+                  {Object.keys(platformKeywords).length > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {Object.keys(platformKeywords).length} configuradas
+                    </Badge>
+                  )}
+                </span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${showPlatformKeywords ? "rotate-180" : ""}`} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-3 pt-2">
+              <p className="text-xs text-muted-foreground">
+                Define términos específicos por plataforma. Si no se definen, se usarán las palabras clave generales.
+              </p>
+              {PLATFORM_OPTIONS.map((platform) => {
+                const keywords = platformKeywords[platform.id] || [];
+                return (
+                  <div key={platform.id} className="space-y-1.5">
+                    <Label className="text-xs flex items-center gap-1.5">
+                      <span>{platform.icon}</span>
+                      {platform.label}
+                      {keywords.length === 0 && (
+                        <span className="text-muted-foreground/60 font-normal">— usa generales</span>
+                      )}
+                    </Label>
+                    <div className="flex gap-1.5">
+                      <Input
+                        className="h-8 text-sm"
+                        value={newPlatformKeyword[platform.id] || ""}
+                        onChange={(e) =>
+                          setNewPlatformKeyword({ ...newPlatformKeyword, [platform.id]: e.target.value })
+                        }
+                        placeholder={platform.hint}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddPlatformKeyword(platform.id);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="outline"
+                        className="h-8 w-8 shrink-0"
+                        onClick={() => handleAddPlatformKeyword(platform.id)}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    {keywords.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {keywords.map((kw) => (
+                          <Badge key={kw} variant="outline" className="gap-1 text-xs">
+                            {kw}
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePlatformKeyword(platform.id, kw)}
+                              className="ml-0.5 hover:text-destructive"
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </CollapsibleContent>
+          </Collapsible>
 
           <div className="flex justify-end gap-2 pt-4">
             <Button

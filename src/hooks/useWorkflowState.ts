@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import api from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
 
 export type WorkflowStep = "define" | "capture" | "analyze" | "report";
@@ -38,8 +38,13 @@ export function useWorkflowState(): WorkflowState {
     queryKey: ["workflow-entities", projectId],
     queryFn: async () => {
       if (!projectId) return { count: 0, keywords: 0 };
-      const { data } = await api.get(`/projects/${projectId}/entities`);
-      const keywords = (data || []).reduce((sum: number, e: any) => sum + (e.palabras_clave?.length || 0), 0);
+      const { data, error } = await supabase
+        .from("entities")
+        .select("id, palabras_clave")
+        .eq("project_id", projectId)
+        .eq("activo", true);
+      if (error) throw error;
+      const keywords = (data || []).reduce((sum, e) => sum + (e.palabras_clave?.length || 0), 0);
       return { count: data?.length || 0, keywords };
     },
     enabled: !!projectId,
@@ -51,13 +56,24 @@ export function useWorkflowState(): WorkflowState {
     queryKey: ["workflow-mentions", projectId],
     queryFn: async () => {
       if (!projectId) return { total: 0, analyzed: 0, unanalyzed: 0 };
-      const { data } = await api.get(`/projects/${projectId}/mentions`);
-      const mentions = data || [];
-      return {
-        total: mentions.length,
-        analyzed: mentions.filter((m) => m.sentiment).length,
-        unanalyzed: mentions.filter((m) => !m.sentiment).length,
-      };
+      const [totalRes, analyzedRes] = await Promise.all([
+        supabase
+          .from("mentions")
+          .select("id", { count: "exact", head: true })
+          .eq("project_id", projectId)
+          .eq("is_archived", false),
+        supabase
+          .from("mentions")
+          .select("id", { count: "exact", head: true })
+          .eq("project_id", projectId)
+          .eq("is_archived", false)
+          .not("sentiment", "is", null),
+      ]);
+      if (totalRes.error) throw totalRes.error;
+      if (analyzedRes.error) throw analyzedRes.error;
+      const total = totalRes.count || 0;
+      const analyzed = analyzedRes.count || 0;
+      return { total, analyzed, unanalyzed: total - analyzed };
     },
     enabled: !!projectId,
     staleTime: 30000,
@@ -68,7 +84,11 @@ export function useWorkflowState(): WorkflowState {
     queryKey: ["workflow-reports", projectId],
     queryFn: async () => {
       if (!projectId) return { cards: 0 };
-      const { data } = await api.get(`/projects/${projectId}/thematic-cards`);
+      const { data, error } = await supabase
+        .from("thematic_cards")
+        .select("id")
+        .eq("project_id", projectId);
+      if (error) throw error;
       return { cards: data?.length || 0 };
     },
     enabled: !!projectId,
@@ -120,9 +140,9 @@ export function useWorkflowState(): WorkflowState {
         description: "Procesar datos e insights",
         status: analyzeStatus,
         count: analyzed,
-        route: "/dashboard/semantica",
+        route: "/dashboard/analizar",
         actionLabel: analyzed > 0 ? "Ver análisis" : "Analizar datos",
-        actionRoute: "/dashboard/semantica",
+        actionRoute: "/dashboard/analizar",
       },
       {
         step: "report",

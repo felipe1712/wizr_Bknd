@@ -1,3 +1,5 @@
+import { enrichWithDate } from "../_shared/normalize.ts";
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -96,6 +98,24 @@ Deno.serve(async (req) => {
     }
 
     console.log('Search successful, found', data.data?.length || 0, 'results');
+
+    // Enrich each result with publishedAt + dateConfidence parsed from
+    // metadata or snippet. Preserves original metadata for downstream use.
+    if (Array.isArray(data.data)) {
+      data.data = data.data.map((r: Record<string, unknown>) => {
+        const enriched = enrichWithDate({
+          title: r.title as string,
+          description: r.description as string,
+          metadata: r.metadata as Record<string, unknown>,
+        });
+        return {
+          ...r,
+          publishedAt: enriched.publishedAt,
+          dateConfidence: enriched.dateConfidence,
+        };
+      });
+    }
+
     return new Response(
       JSON.stringify(data),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

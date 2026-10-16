@@ -1,4 +1,4 @@
-# 🗺️ Roadmap: Mejora de Captura de Menciones
+﻿# 🗺️ Roadmap: Mejora de Captura de Menciones
 
 **Última actualización:** 2026-02-03  
 **Prioridad:** Alta  
@@ -224,6 +224,7 @@ Una vez estabilizada la captura, el flujo **Menciones → Reporte** requiere:
 2. **Análisis de sentimiento en lote** - Ya implementado, optimizar
 3. **Detección de picos** - Alertas automáticas
 4. **Templates de reporte** - 4 formatos (Brief, Crisis, Temático, Comparativo)
-5. **Canales de salida** - PDF, WhatsApp, Clipboard, Web
+5. **Canales de salida** - PDF, Clipboard, Web
 
 Este tema se abordará en documento separado: `docs/REPORTING_WORKFLOW.md`
+

@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -30,11 +30,11 @@ const FACEBOOK_ACTORS_POOL: ActorConfig[] = [
   { id: "microworlds/facebook-post-search-scraper", name: "microworlds", priority: 3, cooldownMinutes: 20 },
 ];
 
-// Instagram actors pool (ordered by priority)
+// Instagram actors pool (ordered by priority - microworlds first for speed)
 const INSTAGRAM_ACTORS_POOL: ActorConfig[] = [
-  { id: "apify/instagram-scraper", name: "apify_scraper", priority: 1, cooldownMinutes: 30 },
+  { id: "microworlds/instagram-scraper", name: "microworlds", priority: 1, cooldownMinutes: 15 },
   { id: "apify/instagram-hashtag-scraper", name: "apify_hashtag", priority: 2, cooldownMinutes: 20 },
-  { id: "microworlds/instagram-scraper", name: "microworlds", priority: 3, cooldownMinutes: 15 },
+  { id: "apify/instagram-scraper", name: "apify_scraper", priority: 3, cooldownMinutes: 30 },
 ];
 
 // In-memory cooldown tracker (resets on cold start, but sufficient for short-term rotation)
@@ -102,8 +102,8 @@ function getNextAvailableActor(pool: ActorConfig[]): ActorConfig | null {
 
 // Apify Actor IDs for different platforms
 const ACTOR_IDS: Record<string, string> = {
-  // Twitter/X: powerai/twitter-search-scraper (rented, $4.99/1000 results)
-  twitter: "powerai/twitter-search-scraper",
+  // Twitter/X: apidojo/tweet-scraper ($0.40/1000 tweets, 30-80 tweets/sec, Latest+Top mode)
+  twitter: "apidojo/tweet-scraper",
   // Facebook: handled by META_RESILIENCE system
   facebook: "__META_RESILIENCE_FACEBOOK__",
   // Facebook fallback markers (for backwards compatibility)
@@ -207,15 +207,14 @@ serve(async (req) => {
 
     switch (platform) {
       case "twitter":
-        // powerai/twitter-search-scraper - uses 'query' parameter (NOT searchTerms)
-        // Combine all search terms into a single OR query for Twitter search
+        // apidojo/tweet-scraper - uses 'searchTerms' array (multiple terms searched in parallel)
+        // Split comma-separated terms into individual search terms for broader coverage
         const searchTerms = query ? query.split(",").map((t: string) => t.trim()).filter(Boolean) : [];
-        // Format: "term1 OR term2 OR term3" for Twitter's search syntax
-        const twitterQuery = searchTerms.join(" OR ");
         input = {
-          query: twitterQuery || "Actinver", // Required parameter
-          searchType: "Latest", // Top, Latest, Media, People, Lists
-          maxTweets: maxResults,
+          searchTerms: searchTerms.length > 0 ? searchTerms : ["Actinver"],
+          maxItems: maxResults,
+          sort: "Latest + Top", // Run both simultaneously for maximum coverage
+          tweetLanguage: "es",
         };
         break;
         
@@ -396,8 +395,17 @@ serve(async (req) => {
           throw new Error("YouTube requiere un término de búsqueda (query).");
         }
 
+        // Actor enforces a hard 30-char limit on query. Truncate at word boundary when possible.
+        let ytQuery = query.trim();
+        if (ytQuery.length > 30) {
+          const truncated = ytQuery.slice(0, 30);
+          const lastSpace = truncated.lastIndexOf(" ");
+          ytQuery = lastSpace > 15 ? truncated.slice(0, lastSpace) : truncated;
+          console.log(`YouTube query truncated from "${query}" to "${ytQuery}" (30-char actor limit)`);
+        }
+
         input = {
-          query,
+          query: ytQuery,
           resultsCount: youtubeResultsCount,
         };
         

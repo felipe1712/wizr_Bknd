@@ -1,200 +1,122 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Loader2 } from "lucide-react";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { Printer, FileDown, Loader2 } from "lucide-react";
+import { useState } from "react";
 import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import type { SmartReportContent } from "@/hooks/useSmartReport";
+import { buildReportHTML } from "@/lib/reports/printReportBuilder";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+
+export type PDFFormat = "summary" | "full";
 
 interface SmartReportPDFGeneratorProps {
   report: SmartReportContent;
   projectName: string;
-  dateRange: {
-    start: string;
-    end: string;
-    label: string;
+  dateRange: { start: string; end: string; label: string };
+  pdfFormat?: PDFFormat;
+}
+
+function trimReportForSummary(report: SmartReportContent): SmartReportContent {
+  return {
+    ...report,
+    keyFindings: report.keyFindings.slice(0, 3),
+    recommendations: report.recommendations.slice(0, 2),
+    conclusions: report.conclusions?.slice(0, 2),
+    narratives: report.narratives.slice(0, 3),
+    influencers: report.influencers.slice(0, 5),
+    mediaOutlets: (report.mediaOutlets || []).slice(0, 5),
+    sourceBreakdown: report.sourceBreakdown.slice(0, 5),
+    entityComparison: undefined,
   };
-  selectedTemplate: "executive" | "technical" | "public";
-  editedTemplate: string;
 }
 
 export function SmartReportPDFGenerator({
   report,
   projectName,
   dateRange,
-  selectedTemplate,
-  editedTemplate,
+  pdfFormat = "full",
 }: SmartReportPDFGeneratorProps) {
   const [isGenerating, setIsGenerating] = useState(false);
+  const { toast } = useToast();
+  const isSummary = pdfFormat === "summary";
 
-  const generatePDF = async () => {
+  /** Web preview via window.open (for quick browser print) */
+  const handlePreview = () => {
+    const reportData = isSummary ? trimReportForSummary(report) : report;
+    const built = buildReportHTML(reportData, projectName, dateRange, isSummary);
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(built.html);
+    win.document.close();
+    win.onload = () => setTimeout(() => win.print(), 300);
+  };
+
+  /** Generate PDF via PDFShift edge function */
+  const handleDownloadPDF = async () => {
     setIsGenerating(true);
-
     try {
-      const doc = new jsPDF();
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      let yPos = 20;
+      const reportData = isSummary ? trimReportForSummary(report) : report;
+      const built = buildReportHTML(reportData, projectName, dateRange, isSummary);
+      const filename = `${isSummary ? "resumen" : "reporte_completo"}_${projectName.replace(/\s+/g, "_")}_${format(new Date(), "yyyyMMdd_HHmm")}.pdf`;
 
-      const checkPageBreak = (required: number = 30) => {
-        if (yPos + required > pageHeight - 20) {
-          doc.addPage();
-          yPos = 20;
-        }
-      };
-
-      // Title
-      doc.setFontSize(24);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(90, 47, 186); // Wizr violet
-      doc.text(report.title, pageWidth / 2, yPos, { align: "center" });
-      yPos += 12;
-
-      // Project & Date
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(107, 114, 128);
-      doc.text(projectName, pageWidth / 2, yPos, { align: "center" });
-      yPos += 6;
-      doc.setFontSize(10);
-      doc.text(`${dateRange.label} • Generado: ${format(new Date(), "PPp", { locale: es })}`, pageWidth / 2, yPos, { align: "center" });
-      yPos += 15;
-
-      // Summary
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(31, 41, 55);
-      const summaryLines = doc.splitTextToSize(report.summary, pageWidth - 40);
-      doc.text(summaryLines, 20, yPos);
-      yPos += summaryLines.length * 5 + 10;
-
-      // Metrics Box
-      doc.setFillColor(248, 250, 252);
-      doc.roundedRect(20, yPos, pageWidth - 40, 25, 3, 3, "F");
-      
-      doc.setFontSize(10);
-      const metricsText = [
-        `Total: ${report.metrics.totalMentions}`,
-        `Positivas: ${report.metrics.positiveCount}`,
-        `Neutrales: ${report.metrics.neutralCount}`,
-        `Negativas: ${report.metrics.negativeCount}`,
-      ];
-      
-      const metricSpacing = (pageWidth - 40) / 4;
-      metricsText.forEach((text, i) => {
-        doc.text(text, 30 + i * metricSpacing, yPos + 15);
-      });
-      yPos += 35;
-
-      // Key Findings
-      checkPageBreak(50);
-      doc.setFontSize(14);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(31, 41, 55);
-      doc.text("Hallazgos Clave", 20, yPos);
-      yPos += 8;
-
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      report.keyFindings.forEach((finding) => {
-        checkPageBreak(15);
-        const lines = doc.splitTextToSize(`• ${finding}`, pageWidth - 50);
-        doc.text(lines, 25, yPos);
-        yPos += lines.length * 5 + 3;
-      });
-      yPos += 5;
-
-      // Recommendations
-      checkPageBreak(50);
-      doc.setFontSize(14);
-      doc.setFont("helvetica", "bold");
-      doc.text("Recomendaciones", 20, yPos);
-      yPos += 8;
-
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      report.recommendations.forEach((rec, i) => {
-        checkPageBreak(15);
-        const lines = doc.splitTextToSize(`${i + 1}. ${rec}`, pageWidth - 50);
-        doc.text(lines, 25, yPos);
-        yPos += lines.length * 5 + 3;
-      });
-      yPos += 10;
-
-      // Selected Template Content
-      checkPageBreak(60);
-      doc.setFontSize(14);
-      doc.setFont("helvetica", "bold");
-      const templateLabels = {
-        executive: "Mensaje Ejecutivo",
-        technical: "Mensaje Técnico",
-        public: "Mensaje Público",
-      };
-      doc.text(templateLabels[selectedTemplate], 20, yPos);
-      yPos += 8;
-
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      const templateLines = doc.splitTextToSize(editedTemplate, pageWidth - 40);
-      
-      templateLines.forEach((line: string) => {
-        checkPageBreak(8);
-        doc.text(line, 20, yPos);
-        yPos += 5;
+      const { data, error } = await supabase.functions.invoke("generate-pdf-pdfshift", {
+        body: { html: built.html, filename, header: built.header, footer: built.footer },
       });
 
-      // Top Sources
-      if (report.metrics.topSources.length > 0) {
-        checkPageBreak(40);
-        yPos += 10;
-        doc.setFontSize(12);
-        doc.setFont("helvetica", "bold");
-        doc.text("Fuentes Principales", 20, yPos);
-        yPos += 8;
+      if (error) throw new Error(error.message);
+      if (!data?.pdf) throw new Error(data?.error || "No PDF returned");
 
-        autoTable(doc, {
-          startY: yPos,
-          head: [["Fuente"]],
-          body: report.metrics.topSources.map(s => [s]),
-          theme: "striped",
-          headStyles: { fillColor: [90, 47, 186] },
-          margin: { left: 20, right: 20 },
-        });
-      }
+      const binary = atob(data.pdf);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
 
-      // Footer
-      const pageCount = doc.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(150);
-        doc.text(
-          `Página ${i} de ${pageCount} | ${projectName} | Generado con Wizr`,
-          pageWidth / 2,
-          pageHeight - 10,
-          { align: "center" }
-        );
-      }
-
-      // Save
-      const fileName = `reporte_inteligente_${projectName.replace(/\s+/g, "_")}_${format(new Date(), "yyyyMMdd_HHmm")}.pdf`;
-      doc.save(fileName);
-    } catch (error) {
-      console.error("Error generating PDF:", error);
+      toast({ title: "PDF generado", description: filename });
+    } catch (err) {
+      console.error("PDFShift error:", err);
+      toast({
+        title: "Error al generar PDF",
+        description: err instanceof Error ? err.message : "Error desconocido",
+        variant: "destructive",
+      });
     } finally {
       setIsGenerating(false);
     }
   };
 
+  const label = isSummary ? "Resumen" : "Completo";
+
   return (
-    <Button variant="outline" size="sm" onClick={generatePDF} disabled={isGenerating}>
-      {isGenerating ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-      ) : (
-        <Download className="mr-2 h-4 w-4" />
-      )}
-      PDF
-    </Button>
+    <div className="flex gap-2 w-full">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleDownloadPDF}
+        disabled={isGenerating}
+        className="flex-1 gap-2"
+      >
+        {isGenerating ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <FileDown className="h-4 w-4" />
+        )}
+        PDF {label}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handlePreview}
+        className="gap-2"
+        title="Vista previa para imprimir"
+      >
+        <Printer className="h-4 w-4" />
+      </Button>
+    </div>
   );
 }

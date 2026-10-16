@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import api from "@/lib/api";
@@ -35,9 +35,9 @@ const Login = () => {
       navigate("/dashboard");
     } catch (err: any) {
       if (err.response?.status === 401) {
-        setError("Credenciales incorrectas. Verifica tu correo y contraseña.");
+        setError("Credenciales incorrectas. Verifica tu correo y contraseÃ±a.");
       } else {
-        setError(err.response?.data?.error || "Ocurrió un error al iniciar sesión.");
+        setError(err.response?.data?.error || "OcurriÃ³ un error al iniciar sesiÃ³n.");
       }
     } finally {
       setLoading(false);
@@ -64,21 +64,21 @@ const Login = () => {
             <div className="flex items-center gap-3">
               <Sparkles className="h-8 w-8 text-accent" />
               <span className="text-sm font-medium uppercase tracking-widest text-white/70">
-                Inteligencia Estratégica
+                Inteligencia EstratÃ©gica
               </span>
             </div>
 
             <h1 className="text-4xl xl:text-5xl font-bold leading-tight">
-              Convierte la conversación pública en <span className="text-accent">conocimiento</span> utilizable
+              Convierte la conversaciÃ³n pÃºblica en <span className="text-accent">conocimiento</span> utilizable
             </h1>
 
             <p className="text-lg text-white/80 max-w-md">
-              Metodología académica + Magia analítica + Producto operativo
+              MetodologÃ­a acadÃ©mica + Magia analÃ­tica + Producto operativo
             </p>
 
             <div className="flex items-center gap-4 pt-6">
               <div className="h-1 w-16 bg-accent rounded-full" />
-              <span className="text-sm text-white/60">Wizard → Wise → Structure + Insight</span>
+              <span className="text-sm text-white/60">Wizard â†’ Wise â†’ Structure + Insight</span>
             </div>
           </motion.div>
         </div>
@@ -108,7 +108,7 @@ const Login = () => {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">
-                  Correo electrónico
+                  Correo electrÃ³nico
                 </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -128,10 +128,10 @@ const Login = () => {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password" className="text-sm font-medium">
-                    Contraseña
+                    ContraseÃ±a
                   </Label>
                   <Link to="/recuperar-contrasena" className="text-xs text-primary hover:underline">
-                    ¿Olvidaste tu contraseña?
+                    Â¿Olvidaste tu contraseÃ±a?
                   </Link>
                 </div>
                 <div className="relative">
@@ -141,7 +141,7 @@ const Login = () => {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                     required
                     autoComplete="current-password"
                     className="bg-card pl-10 pr-10 h-11"
@@ -171,10 +171,10 @@ const Login = () => {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Iniciando sesión...
+                  Iniciando sesiÃ³n...
                 </>
               ) : (
-                "Iniciar sesión"
+                "Iniciar sesiÃ³n"
               )}
             </Button>
           </form>
@@ -185,7 +185,7 @@ const Login = () => {
                 <div className="w-full border-t border-border" />
               </div>
               <div className="relative flex justify-center text-xs">
-                <span className="bg-background px-2 text-muted-foreground">¿No tienes acceso?</span>
+                <span className="bg-background px-2 text-muted-foreground">Â¿No tienes acceso?</span>
               </div>
             </div>
 
@@ -206,3 +206,4 @@ const Login = () => {
 };
 
 export default Login;
+

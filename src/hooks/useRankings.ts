@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -18,7 +18,12 @@ export function useRankings() {
   return useQuery({
     queryKey: ["rankings", user?.id],
     queryFn: async () => {
-      const { data } = await api.get('/rankings');
+      const { data, error } = await supabase
+        .from("rankings")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
       return data as Ranking[];
     },
     enabled: !!user,
@@ -31,7 +36,13 @@ export function useRanking(rankingId: string | undefined) {
     queryFn: async () => {
       if (!rankingId) return null;
 
-      const { data } = await api.get(`/rankings/${rankingId}`);
+      const { data, error } = await supabase
+        .from("rankings")
+        .select("*")
+        .eq("id", rankingId)
+        .single();
+
+      if (error) throw error;
       return data as Ranking;
     },
     enabled: !!rankingId,
@@ -46,10 +57,17 @@ export function useCreateRanking() {
     mutationFn: async ({ name, description }: { name: string; description?: string }) => {
       if (!user) throw new Error("No autenticado");
 
-      const { data } = await api.post('/rankings', {
-        name,
-        description: description || null,
-      });
+      const { data, error } = await supabase
+        .from("rankings")
+        .insert({
+          user_id: user.id,
+          name,
+          description: description || null,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
       return data as Ranking;
     },
     onSuccess: () => {
@@ -67,10 +85,17 @@ export function useUpdateRanking() {
 
   return useMutation({
     mutationFn: async ({ id, name, description }: { id: string; name: string; description?: string }) => {
-      const { data } = await api.patch(`/rankings/${id}`, {
-        name,
-        description: description || null,
-      });
+      const { data, error } = await supabase
+        .from("rankings")
+        .update({
+          name,
+          description: description || null,
+        })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
       return data as Ranking;
     },
     onSuccess: (data) => {
@@ -89,7 +114,12 @@ export function useDeleteRanking() {
 
   return useMutation({
     mutationFn: async (rankingId: string) => {
-      await api.delete(`/rankings/${rankingId}`);
+      const { error } = await supabase
+        .from("rankings")
+        .delete()
+        .eq("id", rankingId);
+
+      if (error) throw error;
       return rankingId;
     },
     onSuccess: () => {

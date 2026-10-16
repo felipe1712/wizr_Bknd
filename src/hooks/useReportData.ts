@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import api from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
 import { subDays, startOfDay, eachDayOfInterval, format, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
@@ -53,7 +53,13 @@ export function useReportData(
     queryFn: async () => {
       if (!projectId) return null;
 
-      const { data } = await api.get(`/projects/${projectId}`);
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, nombre, descripcion, tipo, objetivo")
+        .eq("id", projectId)
+        .single();
+
+      if (error) throw error;
       return data as ProjectInfo;
     },
     enabled: !!projectId,
@@ -65,12 +71,18 @@ export function useReportData(
     queryFn: async () => {
       if (!projectId) return [];
 
-      const { data } = await api.get(`/projects/${projectId}/mentions`, {
-        params: {
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString()
-        }
-      });
+      const { data, error } = await supabase
+        .from("mentions")
+        .select(`
+          *,
+          entity:entities(id, nombre, tipo)
+        `)
+        .eq("project_id", projectId)
+        .eq("is_archived", false)
+        .gte("created_at", startDate.toISOString())
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
       return data as Mention[];
     },
     enabled: !!projectId,
@@ -138,6 +150,12 @@ export function useReportData(
       const lastMentionDate = sortedMentions[0]?.created_at || null;
 
       result.push({
+        authorKey: domain,
+        authorName: domain,
+        authorUsername: "",
+        authorUrl: "",
+        authorAvatarUrl: "",
+        platform: domain,
         domain,
         totalMentions: total,
         sentiment,
@@ -147,6 +165,8 @@ export function useReportData(
         topKeywords: Array.from(data.keywords).slice(0, 5),
         entities: Array.from(data.entities),
         lastMentionDate,
+        totalEngagement: 0,
+        totalViews: 0,
       });
     });
 

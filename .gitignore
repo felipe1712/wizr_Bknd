@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment & Temporary comparison exports
+.env
+Wizr-ZIP-2610/
+

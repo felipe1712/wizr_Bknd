@@ -23,10 +23,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { RefreshCw, Trash2, Users, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
-import { FKProfile, getNetworkLabel, useDeleteFKProfile, useBulkDeleteFKProfiles, useSyncFKProfile, useSyncAllProfiles, FKNetwork } from "@/hooks/useFanpageKarma";
+import { Trash2, Users, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { FKProfile, getNetworkLabel, useDeleteFKProfile, useBulkDeleteFKProfiles, FKNetwork } from "@/hooks/useFanpageKarma";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
+import { getFKProfileDisplayName, getFKProfileTechnicalLabel } from "@/lib/fkProfileUtils";
 
 const NETWORK_COLORS: Record<FKNetwork, string> = {
   facebook: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
@@ -46,29 +47,11 @@ interface ProfilesListProps {
 }
 
 export function ProfilesList({ profiles, isLoading, rankingId, projectId }: ProfilesListProps) {
-  const [syncingId, setSyncingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   
   const deleteProfile = useDeleteFKProfile();
   const bulkDeleteProfiles = useBulkDeleteFKProfiles();
-  const syncProfile = useSyncFKProfile();
-  const syncAllProfiles = useSyncAllProfiles();
-
-  const handleSync = async (profile: FKProfile) => {
-    setSyncingId(profile.id);
-    try {
-      await syncProfile.mutateAsync({ profile, force: false });
-    } catch (err) {
-      // Error already handled by mutation's onError
-    } finally {
-      setSyncingId(null);
-    }
-  };
-
-  const handleSyncAll = async () => {
-    await syncAllProfiles.mutateAsync({ profiles, force: false });
-  };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -184,19 +167,6 @@ export function ProfilesList({ profiles, isLoading, rankingId, projectId }: Prof
                 </AlertDialogContent>
               </AlertDialog>
             )}
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleSyncAll}
-              disabled={syncAllProfiles.isPending || syncingId !== null}
-            >
-              {syncAllProfiles.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="mr-2 h-4 w-4" />
-              )}
-              Sincronizar Todos
-            </Button>
           </div>
         </div>
       </CardHeader>
@@ -222,7 +192,6 @@ export function ProfilesList({ profiles, isLoading, rankingId, projectId }: Prof
           </TableHeader>
           <TableBody>
             {profiles.map((profile) => {
-              const isSyncing = syncingId === profile.id;
               const network = profile.network as FKNetwork;
               const isSelected = selectedIds.has(profile.id);
               
@@ -241,12 +210,9 @@ export function ProfilesList({ profiles, isLoading, rankingId, projectId }: Prof
                     </Badge>
                   </TableCell>
                   <TableCell className="font-medium">
-                    @{profile.profile_id}
-                    {profile.display_name && profile.display_name !== profile.profile_id && (
-                      <span className="ml-2 text-muted-foreground text-sm">
-                        ({profile.display_name})
-                      </span>
-                    )}
+                    <div title={profile.profile_id}>
+                      {getFKProfileDisplayName(profile)}
+                    </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {profile.last_synced_at ? (
@@ -273,18 +239,6 @@ export function ProfilesList({ profiles, isLoading, rankingId, projectId }: Prof
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleSync(profile)}
-                        disabled={isSyncing}
-                      >
-                        {isSyncing ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="h-4 w-4" />
-                        )}
-                      </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
@@ -295,7 +249,7 @@ export function ProfilesList({ profiles, isLoading, rankingId, projectId }: Prof
                           <AlertDialogHeader>
                             <AlertDialogTitle>¿Eliminar perfil?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Se eliminará @{profile.profile_id} y todos sus datos de KPIs almacenados.
+                              Se eliminará {getFKProfileDisplayName(profile)} y todos sus datos de KPIs almacenados.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>

@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
-import api from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -38,10 +38,11 @@ async function analyzeTextSentiment(text: string): Promise<string | null> {
   if (!text?.trim()) return null;
   
   try {
-    const { data } = await api.post("/reports/sentiment/analyze", {
-      mentions: [{ id: "temp", title: text, description: null }],
+    const { data, error } = await supabase.functions.invoke("analyze-sentiment", {
+      body: { mentions: [{ id: "temp", title: text, description: null }] },
     });
 
+    if (error) throw error;
     if (!data?.success || !data.results?.length) return null;
 
     return data.results[0].sentiment;
@@ -89,15 +90,14 @@ export function CommentsAnalysisTab({ projectId }: CommentsAnalysisTabProps) {
   } = useQuery({
     queryKey: ["post-comments", projectId],
     queryFn: async () => {
-      const { data } = await api.get("/comments", {
-        params: {
-          projectId,
-          limit: 500,
-          sortBy: "createdAt",
-          sortDesc: true
-        }
-      });
+      const { data, error } = await supabase
+        .from("post_comments")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false })
+        .limit(500);
 
+      if (error) throw error;
       return data as PostComment[];
     },
     enabled: !!projectId,
@@ -170,7 +170,10 @@ export function CommentsAnalysisTab({ projectId }: CommentsAnalysisTabProps) {
       try {
         const sentiment = await analyzeTextSentiment(comment.content);
         if (sentiment) {
-          await api.patch(`/comments/${comment.id}`, { sentiment });
+          await supabase
+            .from("post_comments")
+            .update({ sentiment })
+            .eq("id", comment.id);
           processed++;
         }
       } catch (err) {

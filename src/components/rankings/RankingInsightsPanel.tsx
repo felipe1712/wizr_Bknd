@@ -13,13 +13,14 @@ import {
   Sparkles,
   BarChart3
 } from "lucide-react";
-import { FKProfile, FKProfileKPI, FKNetwork, getNetworkLabel } from "@/hooks/useFanpageKarma";
+import { FKProfile, FKProfileKPI, FKNetwork, FKPeriodPostMetrics, getNetworkLabel } from "@/hooks/useFanpageKarma";
 import { NetworkFilter } from "./NetworkFilter";
 
 interface RankingInsightsPanelProps {
   profiles: FKProfile[];
   kpis: FKProfileKPI[];
   isLoading: boolean;
+  periodMetrics?: Map<string, FKPeriodPostMetrics>;
 }
 
 interface InsightCard {
@@ -41,79 +42,108 @@ function getProfileInfo(profiles: FKProfile[], profileId: string): { name: strin
   };
 }
 
+function shouldReplaceKpi(candidate: FKProfileKPI, existing: FKProfileKPI) {
+  const candidateEnd = new Date(`${candidate.period_end}T00:00:00Z`).getTime();
+  const existingEnd = new Date(`${existing.period_end}T00:00:00Z`).getTime();
+
+  if (candidateEnd !== existingEnd) return candidateEnd > existingEnd;
+  if (!!candidate.isFallback !== !!existing.isFallback) return !candidate.isFallback;
+
+  return new Date(candidate.fetched_at).getTime() > new Date(existing.fetched_at).getTime();
+}
+
 // Insights automáticos: Top performers y alertas críticas
 // NO duplica las preguntas del RankingQuestionsPanel
-function generateInsights(profiles: FKProfile[], kpis: FKProfileKPI[], filterNetwork: FKNetwork | "all"): InsightCard[] {
+function generateInsights(
+  profiles: FKProfile[],
+  kpis: FKProfileKPI[],
+  filterNetwork: FKNetwork | "all",
+  periodMetrics?: Map<string, FKPeriodPostMetrics>,
+): InsightCard[] {
   const insights: InsightCard[] = [];
-  
+
   if (kpis.length === 0) {
     return [];
   }
 
-  // Filter profiles by network
-  const filteredProfileIds = filterNetwork === "all" 
+  const filteredProfileIds = filterNetwork === "all"
     ? profiles.map(p => p.id)
     : profiles.filter(p => p.network === filterNetwork).map(p => p.id);
 
-  // Get the latest KPI for each filtered profile
   const latestKpiByProfile = new Map<string, FKProfileKPI>();
   kpis.forEach(kpi => {
     if (!filteredProfileIds.includes(kpi.fk_profile_id)) return;
     const existing = latestKpiByProfile.get(kpi.fk_profile_id);
-    if (!existing || new Date(kpi.period_end) > new Date(existing.period_end)) {
+    if (!existing || shouldReplaceKpi(kpi, existing)) {
       latestKpiByProfile.set(kpi.fk_profile_id, kpi);
     }
   });
 
   const latestKpis = Array.from(latestKpiByProfile.values());
-
   if (latestKpis.length === 0) return [];
 
-  // 1. TOP PERFORMER - Best overall (engagement + growth)
-  const withEngagement = latestKpis.filter(k => k.engagement_rate !== null);
-  const withGrowth = latestKpis.filter(k => k.follower_growth_percent !== null);
-  
-  if (withEngagement.length > 0 && withGrowth.length > 0) {
-    // Calculate a combined score
-    const scores = latestKpis.map(kpi => {
-      const engRank = withEngagement.findIndex(k => k.fk_profile_id === kpi.fk_profile_id);
-      const growthRank = withGrowth.findIndex(k => k.fk_profile_id === kpi.fk_profile_id);
+  const enriched = latestKpis.map((kpi) => ({
+    kpi,
+    period: periodMetrics?.get(kpi.fk_profile_id) ?? null,
+  }));
+
+  const withGrowth = [...latestKpis]
+    .filter(k => k.follower_growth_percent !== null)
+    .sort((a, b) => (b.follower_growth_percent || 0) - (a.follower_growth_percent || 0));
+
+  const withPeriodEngagement = enriched
+    .filter(item => (item.period?.postCount || 0) > 0)
+    .sort((a, b) => (b.period?.avgEngagement || 0) - (a.period?.avgEngagement || 0));
+
+  const withSnapshotEngagement = [...latestKpis]
+    .filter(k => k.engagement_rate !== null)
+    .sort((a, b) => (b.engagement_rate || 0) - (a.engagement_rate || 0));
+
+  if (withGrowth.length > 0 && (withPeriodEngagement.length > 0 || withSnapshotEngagement.length > 0)) {
+    const usePeriodEngagement = withPeriodEngagement.length > 0;
+    const scores = enriched.map(item => {
+      const engagementRank = usePeriodEngagement
+        ? withPeriodEngagement.findIndex(entry => entry.kpi.fk_profile_id === item.kpi.fk_profile_id)
+        : withSnapshotEngagement.findIndex(entry => entry.fk_profile_id === item.kpi.fk_profile_id);
+      const growthRank = withGrowth.findIndex(k => k.fk_profile_id === item.kpi.fk_profile_id);
+
       return {
-        kpi,
-        score: (engRank >= 0 ? withEngagement.length - engRank : 0) + 
-               (growthRank >= 0 ? withGrowth.length - growthRank : 0)
+        item,
+        score: (engagementRank >= 0 ? (usePeriodEngagement ? withPeriodEngagement.length : withSnapshotEngagement.length) - engagementRank : 0) +
+          (growthRank >= 0 ? withGrowth.length - growthRank : 0),
       };
     }).sort((a, b) => b.score - a.score);
-    
+
     if (scores.length > 0 && scores[0].score > 0) {
-      const best = scores[0].kpi;
-      const info = getProfileInfo(profiles, best.fk_profile_id);
+      const best = scores[0].item;
+      const info = getProfileInfo(profiles, best.kpi.fk_profile_id);
       insights.push({
         title: "Top Performer",
         question: "¿Quién destaca en rendimiento general?",
         answer: info.name,
-        detail: `Líder en engagement y crecimiento combinado`,
+        detail: usePeriodEngagement
+          ? "Líder en engagement promedio del período y crecimiento combinado"
+          : "Líder en engagement y crecimiento combinado",
         icon: <Crown className="h-5 w-5 text-amber-500" />,
         variant: "success",
-        network: info.network || undefined
+        network: info.network || undefined,
       });
     }
   }
 
-  // 2. RISING STAR - Fastest growing small account
-  const smallAccounts = latestKpis.filter(k => 
-    k.followers !== null && 
-    k.follower_growth_percent !== null && 
-    k.followers > 0
+  const smallAccounts = [...latestKpis].filter(k =>
+    k.followers !== null &&
+    k.follower_growth_percent !== null &&
+    k.followers > 0,
   );
-  const medianFollowers = smallAccounts.length > 0 
-    ? smallAccounts.sort((a, b) => (a.followers || 0) - (b.followers || 0))[Math.floor(smallAccounts.length / 2)]?.followers || 0
+  const medianFollowers = smallAccounts.length > 0
+    ? [...smallAccounts].sort((a, b) => (a.followers || 0) - (b.followers || 0))[Math.floor(smallAccounts.length / 2)]?.followers || 0
     : 0;
-  
+
   const risingStars = smallAccounts
     .filter(k => (k.followers || 0) < medianFollowers && (k.follower_growth_percent || 0) > 0)
     .sort((a, b) => (b.follower_growth_percent || 0) - (a.follower_growth_percent || 0));
-  
+
   if (risingStars.length > 0) {
     const star = risingStars[0];
     const info = getProfileInfo(profiles, star.fk_profile_id);
@@ -125,41 +155,53 @@ function generateInsights(profiles: FKProfile[], kpis: FKProfileKPI[], filterNet
       icon: <Sparkles className="h-5 w-5 text-yellow-500" />,
       variant: "success",
       value: `+${(star.follower_growth_percent || 0).toFixed(2)}%`,
-      network: info.network || undefined
+      network: info.network || undefined,
     });
   }
 
-  // 3. EFFICIENCY CHAMPION - Best engagement per post
-  const withActivity = latestKpis.filter(k => 
-    k.engagement_rate !== null && 
-    k.posts_per_day !== null && 
-    (k.posts_per_day || 0) > 0
-  );
-  
-  if (withActivity.length > 0) {
-    const sorted = withActivity.sort((a, b) => {
-      const effA = (a.engagement_rate || 0) / (a.posts_per_day || 1);
-      const effB = (b.engagement_rate || 0) / (b.posts_per_day || 1);
-      return effB - effA;
-    });
-    const best = sorted[0];
-    const info = getProfileInfo(profiles, best.fk_profile_id);
+  if (withPeriodEngagement.length > 0) {
+    const best = withPeriodEngagement[0];
+    const info = getProfileInfo(profiles, best.kpi.fk_profile_id);
     insights.push({
       title: "Más Eficiente",
       question: "¿Quién logra más con menos publicaciones?",
       answer: info.name,
-      detail: `${((best.engagement_rate || 0) * 100).toFixed(2)}% engagement con ${(best.posts_per_day || 0).toFixed(1)} posts/día`,
+      detail: `${formatNumber(best.period?.avgEngagement || 0)} engagement promedio con ${best.period?.postCount || 0} posts en el período`,
       icon: <Target className="h-5 w-5 text-emerald-500" />,
       variant: "success",
-      network: info.network || undefined
+      network: info.network || undefined,
     });
+  } else {
+    const withActivity = [...latestKpis].filter(k =>
+      k.engagement_rate !== null &&
+      k.posts_per_day !== null &&
+      (k.posts_per_day || 0) > 0,
+    );
+
+    if (withActivity.length > 0) {
+      const sorted = withActivity.sort((a, b) => {
+        const effA = (a.engagement_rate || 0) / (a.posts_per_day || 1);
+        const effB = (b.engagement_rate || 0) / (b.posts_per_day || 1);
+        return effB - effA;
+      });
+      const best = sorted[0];
+      const info = getProfileInfo(profiles, best.fk_profile_id);
+      insights.push({
+        title: "Más Eficiente",
+        question: "¿Quién logra más con menos publicaciones?",
+        answer: info.name,
+        detail: `${((best.engagement_rate || 0) * 100).toFixed(2)}% engagement con ${(best.posts_per_day || 0).toFixed(1)} posts/día`,
+        icon: <Target className="h-5 w-5 text-emerald-500" />,
+        variant: "success",
+        network: info.network || undefined,
+      });
+    }
   }
 
-  // 4. WARNING - Significant follower loss
-  const losingFollowers = latestKpis
+  const losingFollowers = [...latestKpis]
     .filter(k => k.follower_growth_percent !== null && (k.follower_growth_percent || 0) < -1)
     .sort((a, b) => (a.follower_growth_percent || 0) - (b.follower_growth_percent || 0));
-  
+
   if (losingFollowers.length > 0) {
     const worst = losingFollowers[0];
     const info = getProfileInfo(profiles, worst.fk_profile_id);
@@ -171,12 +213,11 @@ function generateInsights(profiles: FKProfile[], kpis: FKProfileKPI[], filterNet
       icon: <AlertTriangle className="h-5 w-5 text-destructive" />,
       variant: "danger",
       value: `${(worst.follower_growth_percent || 0).toFixed(2)}%`,
-      network: info.network || undefined
+      network: info.network || undefined,
     });
   }
 
-  // 5. MARKET SHARE - Total audience distribution
-  const withFollowers = latestKpis.filter(k => k.followers !== null && (k.followers || 0) > 0);
+  const withFollowers = [...latestKpis].filter(k => k.followers !== null && (k.followers || 0) > 0);
   if (withFollowers.length >= 2) {
     const total = withFollowers.reduce((sum, k) => sum + (k.followers || 0), 0);
     const sorted = withFollowers.sort((a, b) => (b.followers || 0) - (a.followers || 0));
@@ -191,32 +232,53 @@ function generateInsights(profiles: FKProfile[], kpis: FKProfileKPI[], filterNet
       icon: <Users className="h-5 w-5 text-blue-500" />,
       variant: "info",
       value: `${share.toFixed(1)}%`,
-      network: info.network || undefined
+      network: info.network || undefined,
     });
   }
 
-  // 6. ACTIVITY INSIGHT - Average vs outliers
-  const sortedByActivity = latestKpis
-    .filter(k => k.posts_per_day !== null)
-    .sort((a, b) => (b.posts_per_day || 0) - (a.posts_per_day || 0));
-  
-  if (sortedByActivity.length >= 2) {
-    const avg = sortedByActivity.reduce((sum, k) => sum + (k.posts_per_day || 0), 0) / sortedByActivity.length;
-    const mostActive = sortedByActivity[0];
-    const leastActive = sortedByActivity[sortedByActivity.length - 1];
-    
-    if ((mostActive.posts_per_day || 0) > avg * 2) {
-      const info = getProfileInfo(profiles, mostActive.fk_profile_id);
+  const withPeriodActivity = enriched
+    .filter(item => (item.period?.postCount || 0) > 0)
+    .sort((a, b) => (b.period?.postCount || 0) - (a.period?.postCount || 0));
+
+  if (withPeriodActivity.length >= 2) {
+    const avg = withPeriodActivity.reduce((sum, item) => sum + (item.period?.postCount || 0), 0) / withPeriodActivity.length;
+    const mostActive = withPeriodActivity[0];
+
+    if (avg > 0 && (mostActive.period?.postCount || 0) > avg * 2) {
+      const info = getProfileInfo(profiles, mostActive.kpi.fk_profile_id);
       insights.push({
         title: "Hiperactividad",
         question: "¿Quién publica muy por encima del promedio?",
         answer: info.name,
-        detail: `${(mostActive.posts_per_day || 0).toFixed(1)} posts/día vs promedio ${avg.toFixed(1)}`,
+        detail: `${mostActive.period?.postCount || 0} posts en el período vs promedio ${avg.toFixed(1)}`,
         icon: <Flame className="h-5 w-5 text-orange-500" />,
         variant: "warning",
-        value: `${((mostActive.posts_per_day || 0) / avg).toFixed(1)}x`,
-        network: info.network || undefined
+        value: `${((mostActive.period?.postCount || 0) / avg).toFixed(1)}x`,
+        network: info.network || undefined,
       });
+    }
+  } else {
+    const sortedByActivity = [...latestKpis]
+      .filter(k => k.posts_per_day !== null)
+      .sort((a, b) => (b.posts_per_day || 0) - (a.posts_per_day || 0));
+
+    if (sortedByActivity.length >= 2) {
+      const avg = sortedByActivity.reduce((sum, k) => sum + (k.posts_per_day || 0), 0) / sortedByActivity.length;
+      const mostActive = sortedByActivity[0];
+
+      if ((mostActive.posts_per_day || 0) > avg * 2) {
+        const info = getProfileInfo(profiles, mostActive.fk_profile_id);
+        insights.push({
+          title: "Hiperactividad",
+          question: "¿Quién publica muy por encima del promedio?",
+          answer: info.name,
+          detail: `${(mostActive.posts_per_day || 0).toFixed(1)} posts/día vs promedio ${avg.toFixed(1)}`,
+          icon: <Flame className="h-5 w-5 text-orange-500" />,
+          variant: "warning",
+          value: `${((mostActive.posts_per_day || 0) / avg).toFixed(1)}x`,
+          network: info.network || undefined,
+        });
+      }
     }
   }
 
@@ -253,13 +315,13 @@ const NETWORK_BADGE_COLORS: Record<FKNetwork, string> = {
   twitter: "bg-cyan-100 text-cyan-700 border-cyan-200",
 };
 
-export function RankingInsightsPanel({ profiles, kpis, isLoading }: RankingInsightsPanelProps) {
+export function RankingInsightsPanel({ profiles, kpis, isLoading, periodMetrics }: RankingInsightsPanelProps) {
   const [filterNetwork, setFilterNetwork] = useState<FKNetwork | "all">("all");
   
   const profileNetworks = profiles.map(p => p.network as FKNetwork);
   const insights = useMemo(
-    () => generateInsights(profiles, kpis, filterNetwork), 
-    [profiles, kpis, filterNetwork]
+    () => generateInsights(profiles, kpis, filterNetwork, periodMetrics), 
+    [profiles, kpis, filterNetwork, periodMetrics]
   );
 
   if (isLoading) {

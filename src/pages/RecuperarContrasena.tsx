@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link } from "react-router-dom";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ const RecuperarContrasena = () => {
       await api.post('/auth/recover-password', { email: email.trim() });
       setSuccess(true);
     } catch (err: any) {
-      setError(err.response?.data?.error || "Ocurrió un error al enviar el correo de recuperación.");
+      setError(err.response?.data?.error || "OcurriÃ³ un error al enviar el correo de recuperaciÃ³n.");
     } finally {
       setLoading(false);
     }
@@ -43,13 +43,13 @@ const RecuperarContrasena = () => {
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-foreground">Revisa tu correo</h1>
             <p className="text-sm text-muted-foreground">
-              Hemos enviado un enlace de recuperación a <strong>{email}</strong>
+              Hemos enviado un enlace de recuperaciÃ³n a <strong>{email}</strong>
             </p>
           </div>
           <Link to="/login">
             <Button variant="outline" className="w-full gap-2">
               <ArrowLeft size={16} />
-              Volver al inicio de sesión
+              Volver al inicio de sesiÃ³n
             </Button>
           </Link>
         </motion.div>
@@ -71,9 +71,9 @@ const RecuperarContrasena = () => {
             <img src={wizrLogo} alt="Wizr" className="h-16 w-auto transition-transform hover:scale-105" />
           </Link>
           <div className="space-y-1 text-center">
-            <h1 className="text-xl font-semibold text-foreground">Recuperar contraseña</h1>
+            <h1 className="text-xl font-semibold text-foreground">Recuperar contraseÃ±a</h1>
             <p className="text-sm text-muted-foreground">
-              Ingresa tu correo y te enviaremos un enlace para restablecer tu contraseña
+              Ingresa tu correo y te enviaremos un enlace para restablecer tu contraseÃ±a
             </p>
           </div>
         </div>
@@ -82,7 +82,7 @@ const RecuperarContrasena = () => {
         <form onSubmit={handleResetPassword} className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="email" className="text-sm font-medium">
-              Correo electrónico
+              Correo electrÃ³nico
             </Label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -116,7 +116,7 @@ const RecuperarContrasena = () => {
                 Enviando...
               </>
             ) : (
-              "Enviar enlace de recuperación"
+              "Enviar enlace de recuperaciÃ³n"
             )}
           </Button>
         </form>
@@ -127,7 +127,7 @@ const RecuperarContrasena = () => {
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
           >
             <ArrowLeft size={14} />
-            Volver al inicio de sesión
+            Volver al inicio de sesiÃ³n
           </Link>
         </div>
       </motion.div>
@@ -136,3 +136,4 @@ const RecuperarContrasena = () => {
 };
 
 export default RecuperarContrasena;
+

@@ -1,6 +1,7 @@
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FKProfile, FKNetwork, getNetworkLabel } from "@/hooks/useFanpageKarma";
 import { Users } from "lucide-react";
+import { getFKProfileDisplayName } from "@/lib/fkProfileUtils";
 
 interface ProfileSelectGroupedProps {
   profiles: FKProfile[];
@@ -62,12 +63,7 @@ export function ProfileSelectGrouped({
           {filteredProfiles.map((profile) => (
             <SelectItem key={profile.id} value={profile.id}>
               <div className="flex items-center gap-2">
-                <span className="font-medium">@{profile.profile_id}</span>
-                {profile.display_name && profile.display_name !== profile.profile_id && (
-                  <span className="text-muted-foreground text-xs">
-                    ({profile.display_name})
-                  </span>
-                )}
+                <span className="font-medium">{getFKProfileDisplayName(profile)}</span>
               </div>
             </SelectItem>
           ))}
@@ -94,12 +90,7 @@ export function ProfileSelectGrouped({
             {groupedByNetwork[network].map((profile) => (
               <SelectItem key={profile.id} value={profile.id}>
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">@{profile.profile_id}</span>
-                  {profile.display_name && profile.display_name !== profile.profile_id && (
-                    <span className="text-muted-foreground text-xs">
-                      ({profile.display_name})
-                    </span>
-                  )}
+                  <span className="font-medium">{getFKProfileDisplayName(profile)}</span>
                 </div>
               </SelectItem>
             ))}

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { format, startOfDay, setHours, subDays } from "date-fns";
+import { format, startOfDay, endOfDay, setHours, subDays } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarIcon, Clock, CalendarRange } from "lucide-react";
+import { CalendarIcon, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -18,19 +18,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { DateRange } from "react-day-picker";
 
 export type TimeRangePreset = "7d" | "30d" | "90d" | "day" | "range";
 
 export interface DateRangeConfig {
   type: TimeRangePreset;
-  // For single day reports
   customDate?: Date;
-  // For custom range
   rangeStart?: Date;
   rangeEnd?: Date;
-  cutoffHour: number; // 0-23, default 8 (8 AM)
+  cutoffHour: number;
 }
 
 export interface DateRangeResult {
@@ -45,25 +42,31 @@ interface DateRangeSelectorProps {
 }
 
 const CUTOFF_HOURS = [
-  { value: 0, label: "12:00 AM (medianoche)" },
+  { value: 0, label: "12:00 AM" },
   { value: 6, label: "6:00 AM" },
   { value: 7, label: "7:00 AM" },
   { value: 8, label: "8:00 AM" },
   { value: 9, label: "9:00 AM" },
   { value: 10, label: "10:00 AM" },
-  { value: 12, label: "12:00 PM (mediodía)" },
+  { value: 12, label: "12:00 PM" },
+];
+
+const PRESETS = [
+  { value: "7d", label: "7 días" },
+  { value: "30d", label: "30 días" },
+  { value: "90d", label: "90 días" },
+  { value: "day", label: "Un día" },
+  { value: "range", label: "Rango personalizado" },
 ];
 
 export function calculateDateRange(config: DateRangeConfig): DateRangeResult {
   const now = new Date();
   const cutoffHour = config.cutoffHour;
 
-  // Single day report
   if (config.type === "day" && config.customDate) {
     const selectedDate = config.customDate;
     const endDate = setHours(startOfDay(selectedDate), cutoffHour);
     const startDate = setHours(startOfDay(subDays(selectedDate, 1)), cutoffHour);
-
     return {
       startDate,
       endDate,
@@ -71,22 +74,19 @@ export function calculateDateRange(config: DateRangeConfig): DateRangeResult {
     };
   }
 
-  // Custom range
   if (config.type === "range" && config.rangeStart && config.rangeEnd) {
-    const startDate = setHours(startOfDay(config.rangeStart), cutoffHour);
-    const endDate = setHours(startOfDay(config.rangeEnd), cutoffHour);
-
+    const startDate = startOfDay(config.rangeStart);
+    const rangeEndDate = endOfDay(config.rangeEnd);
     return {
       startDate,
-      endDate,
+      endDate: rangeEndDate,
       label: `${format(config.rangeStart, "d MMM", { locale: es })} - ${format(config.rangeEnd, "d MMM yyyy", { locale: es })}`,
     };
   }
 
-  // Preset ranges
   const days = config.type === "7d" ? 7 : config.type === "30d" ? 30 : 90;
   const endDate = now;
-  const startDate = subDays(now, days);
+  const startDate = startOfDay(subDays(now, days));
 
   const labelMap: Record<string, string> = {
     "7d": "Últimos 7 días",
@@ -102,16 +102,13 @@ export function calculateDateRange(config: DateRangeConfig): DateRangeResult {
 }
 
 export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
+  const [startCalOpen, setStartCalOpen] = useState(false);
+  const [endCalOpen, setEndCalOpen] = useState(false);
   const [dayCalendarOpen, setDayCalendarOpen] = useState(false);
-  const [rangeCalendarOpen, setRangeCalendarOpen] = useState(false);
 
-  const handlePresetChange = (preset: TimeRangePreset) => {
+  const handlePresetChange = (preset: string) => {
     if (preset === "day") {
-      onChange({
-        ...value,
-        type: "day",
-        customDate: value.customDate || new Date(),
-      });
+      onChange({ ...value, type: "day", customDate: value.customDate || new Date() });
     } else if (preset === "range") {
       onChange({
         ...value,
@@ -120,85 +117,69 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
         rangeEnd: value.rangeEnd || new Date(),
       });
     } else {
-      onChange({
-        ...value,
-        type: preset,
-      });
+      onChange({ ...value, type: preset as TimeRangePreset });
     }
   };
 
   const handleDaySelect = (date: Date | undefined) => {
     if (date) {
-      onChange({
-        ...value,
-        type: "day",
-        customDate: date,
-      });
+      onChange({ ...value, type: "day", customDate: date });
       setDayCalendarOpen(false);
     }
   };
 
-  const handleRangeSelect = (range: DateRange | undefined) => {
-    if (range) {
-      onChange({
-        ...value,
-        type: "range",
-        rangeStart: range.from,
-        rangeEnd: range.to || range.from,
-      });
-      // Close when both dates selected
-      if (range.from && range.to) {
-        setRangeCalendarOpen(false);
-      }
+  const handleStartSelect = (date: Date | undefined) => {
+    if (date) {
+      onChange({ ...value, type: "range", rangeStart: date });
+      setStartCalOpen(false);
+    }
+  };
+
+  const handleEndSelect = (date: Date | undefined) => {
+    if (date) {
+      onChange({ ...value, type: "range", rangeEnd: date });
+      setEndCalOpen(false);
     }
   };
 
   const handleCutoffChange = (hour: string) => {
-    onChange({
-      ...value,
-      cutoffHour: parseInt(hour, 10),
-    });
+    onChange({ ...value, cutoffHour: parseInt(hour, 10) });
   };
 
   const rangeResult = calculateDateRange(value);
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:flex-wrap">
-      <Tabs
-        value={value.type}
-        onValueChange={(v) => handlePresetChange(v as TimeRangePreset)}
-        className="w-full sm:w-auto"
-      >
-        <TabsList className="grid w-full grid-cols-5 sm:w-auto">
-          <TabsTrigger value="7d">7d</TabsTrigger>
-          <TabsTrigger value="30d">30d</TabsTrigger>
-          <TabsTrigger value="90d">90d</TabsTrigger>
-          <TabsTrigger value="day">Día</TabsTrigger>
-          <TabsTrigger value="range">Rango</TabsTrigger>
-        </TabsList>
-      </Tabs>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:flex-wrap">
+      {/* Preset selector */}
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Período</Label>
+        <Select value={value.type} onValueChange={handlePresetChange}>
+          <SelectTrigger className="w-[180px] h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PRESETS.map((p) => (
+              <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       {/* Single Day Selector */}
       {value.type === "day" && (
-        <div className="flex items-end gap-2">
+        <>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Fecha</Label>
             <Popover open={dayCalendarOpen} onOpenChange={setDayCalendarOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-[160px] justify-start text-left font-normal",
-                    !value.customDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
+                <Button variant="outline" size="sm" className="w-[150px] justify-start font-normal h-9">
+                  <CalendarIcon className="mr-2 h-3.5 w-3.5" />
                   {value.customDate
                     ? format(value.customDate, "d MMM yyyy", { locale: es })
                     : "Seleccionar"}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 bg-popover border shadow-lg z-50" align="start">
+              <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="single"
                   selected={value.customDate}
@@ -211,65 +192,43 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
               </PopoverContent>
             </Popover>
           </div>
-
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Corte</Label>
-            <Select
-              value={value.cutoffHour.toString()}
-              onValueChange={handleCutoffChange}
-            >
-              <SelectTrigger className="w-[120px]">
-                <Clock className="mr-2 h-4 w-4" />
+            <Select value={value.cutoffHour.toString()} onValueChange={handleCutoffChange}>
+              <SelectTrigger className="w-[110px] h-9">
+                <Clock className="mr-1 h-3.5 w-3.5" />
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-popover border shadow-lg z-50">
+              <SelectContent>
                 {CUTOFF_HOURS.map((h) => (
-                  <SelectItem key={h.value} value={h.value.toString()}>
-                    {h.label}
-                  </SelectItem>
+                  <SelectItem key={h.value} value={h.value.toString()}>{h.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-        </div>
+        </>
       )}
 
-      {/* Range Selector */}
+      {/* Range: two independent date pickers */}
       {value.type === "range" && (
-        <div className="flex items-end gap-2">
+        <>
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Rango de fechas</Label>
-            <Popover open={rangeCalendarOpen} onOpenChange={setRangeCalendarOpen}>
+            <Label className="text-xs text-muted-foreground">Desde</Label>
+            <Popover open={startCalOpen} onOpenChange={setStartCalOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-[260px] justify-start text-left font-normal",
-                    !value.rangeStart && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarRange className="mr-2 h-4 w-4" />
-                  {value.rangeStart && value.rangeEnd ? (
-                    <>
-                      {format(value.rangeStart, "d MMM", { locale: es })} - {format(value.rangeEnd, "d MMM yyyy", { locale: es })}
-                    </>
-                  ) : value.rangeStart ? (
-                    format(value.rangeStart, "d MMM yyyy", { locale: es })
-                  ) : (
-                    "Seleccionar rango"
-                  )}
+                <Button variant="outline" size="sm" className="w-[150px] justify-start font-normal h-9">
+                  <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+                  {value.rangeStart
+                    ? format(value.rangeStart, "d MMM yyyy", { locale: es })
+                    : "Inicio"}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 bg-popover border shadow-lg z-50" align="start">
+              <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
-                  mode="range"
-                  selected={{
-                    from: value.rangeStart,
-                    to: value.rangeEnd,
-                  }}
-                  onSelect={handleRangeSelect}
+                  mode="single"
+                  selected={value.rangeStart}
+                  onSelect={handleStartSelect}
                   disabled={(date) => date > new Date()}
-                  numberOfMonths={2}
                   initialFocus
                   className={cn("p-3 pointer-events-auto")}
                   locale={es}
@@ -277,38 +236,37 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
               </PopoverContent>
             </Popover>
           </div>
-
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Corte</Label>
-            <Select
-              value={value.cutoffHour.toString()}
-              onValueChange={handleCutoffChange}
-            >
-              <SelectTrigger className="w-[120px]">
-                <Clock className="mr-2 h-4 w-4" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-popover border shadow-lg z-50">
-                {CUTOFF_HOURS.map((h) => (
-                  <SelectItem key={h.value} value={h.value.toString()}>
-                    {h.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label className="text-xs text-muted-foreground">Hasta</Label>
+            <Popover open={endCalOpen} onOpenChange={setEndCalOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="w-[150px] justify-start font-normal h-9">
+                  <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+                  {value.rangeEnd
+                    ? format(value.rangeEnd, "d MMM yyyy", { locale: es })
+                    : "Fin"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={value.rangeEnd}
+                  onSelect={handleEndSelect}
+                  disabled={(date) => date > new Date() || (value.rangeStart ? date < value.rangeStart : false)}
+                  initialFocus
+                  className={cn("p-3 pointer-events-auto")}
+                  locale={es}
+                />
+              </PopoverContent>
+            </Popover>
           </div>
-        </div>
+        </>
       )}
 
-      {/* Show computed range for day/range modes */}
-      {(value.type === "day" || value.type === "range") && (
-        <div className="text-xs text-muted-foreground sm:ml-2 flex items-center gap-1">
-          <span className="font-medium">Período:</span>
-          {format(rangeResult.startDate, "d MMM HH:mm", { locale: es })}
-          {" → "}
-          {format(rangeResult.endDate, "d MMM HH:mm", { locale: es })}
-        </div>
-      )}
+      {/* Computed range display */}
+      <div className="text-xs text-muted-foreground flex items-center gap-1 h-9 sm:ml-1">
+        <span>{rangeResult.label}</span>
+      </div>
     </div>
   );
 }

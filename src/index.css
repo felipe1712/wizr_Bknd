@@ -139,7 +139,25 @@ Wizr Brand: Purple (#5A2FBA), Orange (#FF6B35), with light theme as default.
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Space Grotesk', system-ui, sans-serif;
-    @apply font-semibold tracking-tight;
+    @apply font-semibold tracking-tight text-foreground;
+  }
+
+  /* Section labels — muted uppercase micro-text for grouping */
+  .section-label {
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    @apply text-xs font-semibold uppercase tracking-widest text-muted-foreground;
+  }
+
+  /* Data value — large prominent numbers/metrics */
+  .data-value {
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    @apply text-2xl font-bold text-foreground;
+  }
+
+  /* Data card — slightly tinted background to contrast with page */
+  .data-card {
+    @apply bg-card border border-border rounded-xl shadow-sm;
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--secondary) / 0.3) 100%);
   }
 }
 

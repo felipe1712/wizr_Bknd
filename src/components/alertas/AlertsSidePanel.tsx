@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import api from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Plus,
@@ -58,11 +58,21 @@ export function AlertsSidePanel({ projectId }: AlertsSidePanelProps) {
   const handleRunMonitoring = async () => {
     setIsRunningMonitoring(true);
     try {
-      const { data } = await api.post('/monitoring/run', { manual: true });
+      const { data, error } = await supabase.functions.invoke('scheduled-unified-search', {
+        body: { manual: true },
+      });
+
+      if (error) {
+        toast.error('Error al ejecutar monitoreo', {
+          description: error.message,
+        });
+        return;
+      }
 
       if (data?.success) {
+        const totalAlerts = (data.results || []).reduce((sum: number, r: any) => sum + (r.alertsTriggered || 0), 0);
         toast.success('Monitoreo completado', {
-          description: `${data.processed.alertsTriggered} alertas activadas`,
+          description: `${totalAlerts} alertas activadas`,
         });
         refetchNotifications();
       }

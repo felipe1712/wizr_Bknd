@@ -42,6 +42,10 @@ const ProjectSelector = () => {
   }
 
   const handleChange = (projectId: string) => {
+    if (projectId === "__none__") {
+      setSelectedProject(null);
+      return;
+    }
     const project = projects.find((p) => p.id === projectId);
     if (project) {
       setSelectedProject(project);
@@ -52,19 +56,27 @@ const ProjectSelector = () => {
     <div className="flex items-center gap-2">
       <FolderOpen className="h-4 w-4 text-muted-foreground" />
       <Select
-        value={selectedProject?.id || ""}
+        value={selectedProject?.id || "__none__"}
         onValueChange={handleChange}
       >
         <SelectTrigger className="h-9 w-56 bg-background">
           <SelectValue placeholder="Seleccionar proyecto">
-            {selectedProject && (
+            {selectedProject ? (
               <div className="flex items-center gap-2">
                 <span className="truncate">{selectedProject.nombre}</span>
               </div>
+            ) : (
+              <span className="text-muted-foreground">Sin proyecto</span>
             )}
           </SelectValue>
         </SelectTrigger>
         <SelectContent className="bg-popover">
+          <SelectItem value="__none__">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <FolderOpen className="h-4 w-4" />
+              <span>Sin proyecto</span>
+            </div>
+          </SelectItem>
           {projects.map((project) => {
             const TypeIcon = TYPE_ICONS[project.tipo] || FolderOpen;
             return (

@@ -1,4 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callClaudeText } from "../_shared/anthropic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -304,9 +305,9 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_API_KEY) {
+      throw new Error("ANTHROPIC_API_KEY is not configured");
     }
 
     const body: ReportRequest = await req.json();
@@ -379,47 +380,37 @@ Responde en formato JSON con esta estructura exacta:
   "templates": {
     "executive": "string - 3-4 párrafos para directivos, enfoque en impacto y decisiones estratégicas",
     "technical": "string - 3-4 párrafos para analistas, con métricas detalladas y metodología", 
-    "public": "string - 2 párrafos con emojis apropiados para WhatsApp, resumen accesible"
+    "public": "string - 2 párrafos con emojis apropiados para resumen público, resumen accesible"
   }
 }`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        max_tokens: maxTokens + 800,
-        temperature: 0.6,
-      }),
-    });
-
-    if (!response.ok) {
-      if (response.status === 429) {
+    let content: string;
+    try {
+      content = await callClaudeText({
+        apiKey: ANTHROPIC_API_KEY,
+        systemPrompt,
+        userPrompt,
+        maxTokens: maxTokens + 800,
+        temperature: 0.2,
+        timeoutMs: 110000,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "RATE_LIMIT") {
         return new Response(
           JSON.stringify({ error: "Rate limits exceeded. Please try again later." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
+      if (msg === "PAYMENT_REQUIRED") {
         return new Response(
           JSON.stringify({ error: "Payment required. Please add credits to your account." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+      console.error("Claude error:", msg);
+      throw err;
     }
-
-    const aiResponse = await response.json();
-    const content = aiResponse.choices?.[0]?.message?.content;
 
     if (!content) {
       throw new Error("No content in AI response");
@@ -473,3 +464,4 @@ Responde en formato JSON con esta estructura exacta:
     );
   }
 });
+

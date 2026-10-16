@@ -1,3 +1,4 @@
+import { NoProjectState } from "@/components/layout/NoProjectState";
 import { useState } from "react";
 import { useProject } from "@/contexts/ProjectContext";
 import { useInfluencersData } from "@/hooks/useInfluencersData";
@@ -107,19 +108,7 @@ const InfluenciadoresPage = () => {
   const topInfluencers = filteredInfluencers.slice(0, 6);
 
   if (!selectedProject) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <Card className="max-w-md">
-          <CardHeader className="text-center">
-            <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <CardTitle>Sin proyecto seleccionado</CardTitle>
-            <CardDescription>
-              Selecciona un proyecto para ver el análisis de influenciadores
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
+    return <NoProjectState action="ver el análisis de influenciadores" />;
   }
 
   return (
@@ -129,7 +118,7 @@ const InfluenciadoresPage = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Influenciadores</h1>
           <p className="text-muted-foreground">
-            Fuentes con mayor impacto en las menciones de {selectedProject.nombre}
+            Perfiles y usuarios con mayor impacto en las menciones de {selectedProject.nombre}
           </p>
         </div>
 
@@ -239,7 +228,7 @@ const InfluenciadoresPage = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Fuentes Únicas</CardTitle>
+            <CardTitle className="text-sm font-medium">Perfiles Únicos</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -249,13 +238,13 @@ const InfluenciadoresPage = () => {
               <div className="text-2xl font-bold">{uniqueSources}</div>
             )}
             <p className="text-xs text-muted-foreground">
-              Dominios identificados
+              Autores identificados
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Fuente Principal</CardTitle>
+            <CardTitle className="text-sm font-medium">Top Influenciador</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -263,11 +252,11 @@ const InfluenciadoresPage = () => {
               <Skeleton className="h-8 w-32" />
             ) : (
               <div className="text-2xl font-bold truncate">
-                {influencers[0]?.domain || "-"}
+                {influencers[0]?.authorName || "-"}
               </div>
             )}
             <p className="text-xs text-muted-foreground">
-              {influencers[0]?.totalMentions || 0} menciones
+              {influencers[0]?.totalMentions || 0} publicaciones • {influencers[0]?.platform || ""}
             </p>
           </CardContent>
         </Card>
@@ -325,7 +314,7 @@ const InfluenciadoresPage = () => {
           {viewMode === "cards" ? (
             <div>
               <h2 className="text-xl font-semibold mb-4">
-                Top Fuentes 
+                Top Influenciadores
                 {sourceTypeFilter !== "all" && (
                   <span className="text-muted-foreground font-normal ml-2">
                     ({SOURCE_TYPE_OPTIONS.find(o => o.value === sourceTypeFilter)?.label})

@@ -25,6 +25,8 @@ import {
 interface MentionsSummaryCardProps {
   mentions: Mention[];
   projectName: string;
+  startDate?: Date;
+  endDate?: Date;
   onPlatformClick?: (platform: string, label: string) => void;
   onSentimentClick?: (sentiment: string, label: string) => void;
 }
@@ -61,7 +63,7 @@ const PLATFORM_CONFIG: Record<string, { label: string; icon: React.ComponentType
   other: { label: "Otros", icon: Globe, color: "bg-gray-400" },
 };
 
-export function MentionsSummaryCard({ mentions, projectName, onPlatformClick, onSentimentClick }: MentionsSummaryCardProps) {
+export function MentionsSummaryCard({ mentions, projectName, startDate, endDate, onPlatformClick, onSentimentClick }: MentionsSummaryCardProps) {
   const navigate = useNavigate();
 
   const summary = useMemo(() => {
@@ -96,8 +98,8 @@ export function MentionsSummaryCard({ mentions, projectName, onPlatformClick, on
       .map((m) => new Date(m.published_at || m.created_at))
       .filter((d) => !isNaN(d.getTime()));
     
-    const minDate = dates.length > 0 ? min(dates) : null;
-    const maxDate = dates.length > 0 ? max(dates) : null;
+    const minDate = startDate || (dates.length > 0 ? min(dates) : null);
+    const maxDate = endDate || (dates.length > 0 ? max(dates) : null);
 
     // Sentiment counts
     const sentiment = {
@@ -119,7 +121,7 @@ export function MentionsSummaryCard({ mentions, projectName, onPlatformClick, on
       sentiment,
       uniqueSources,
     };
-  }, [mentions]);
+  }, [mentions, startDate, endDate]);
 
   if (!summary) {
     return (

@@ -21,7 +21,7 @@ import {
   Database,
 } from "lucide-react";
 import { FKProfile, FKPost, FKNetwork, FKDailyTopPost } from "@/hooks/useFanpageKarma";
-import api from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 import { format, isWithinInterval } from "date-fns";
 import { es } from "date-fns/locale";
 import { NetworkFilter } from "./NetworkFilter";
@@ -43,11 +43,20 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { ContentAnalysisDisplay, type ContentAnalysisData } from "./ContentAnalysisDisplay";
+import { NetworkBadge } from "./NetworkBadge";
 
 interface TopContentTabProps {
   profiles: FKProfile[];
   isLoading: boolean;
   dateRange?: { from: Date; to: Date };
+  /**
+   * Contexto del análisis. 'brand' = análisis de UNA marca propia (Performance/Listening),
+   * 'benchmark' = análisis de un ECOSISTEMA COMPETITIVO (Benchmarking).
+   * Determina cómo el AI redacta narrativas, fortalezas y oportunidades.
+   */
+  analysisContext?: "brand" | "benchmark";
+  /** Nombre de la marca foco cuando analysisContext === 'brand' (ej. "Actinver") */
+  brandName?: string;
 }
 
 type SortBy = "engagement" | "likes" | "comments" | "shares" | "date";
@@ -67,6 +76,7 @@ interface DisplayPost {
   engagement: number;
   profile_id?: string;
   display_name?: string;
+  network?: string;
 }
 
 const formatNumber = (num: number | null | undefined): string => {
@@ -128,6 +138,9 @@ function PostCard({ post, profileName, rank }: { post: DisplayPost; profileName:
               <Badge variant="secondary" className="text-xs">
                 @{profileName}
               </Badge>
+              {post.network && (
+                <NetworkBadge network={post.network} size="xs" />
+              )}
               {post.content_type && (
                 <Badge variant="outline" className="text-xs flex items-center gap-1">
                   {getContentTypeIcon(post.content_type)}
@@ -185,30 +198,51 @@ function PostCard({ post, profileName, rank }: { post: DisplayPost; profileName:
 const POSTS_PER_PAGE = 20;
 
 /**
- * Hook that reads posts from fk_daily_top_posts table (DB) instead of calling the API.
- * This eliminates API costs for viewing content.
+ * Hook that reads ALL posts from fk_posts table (DB) instead of calling the API.
+ * Reads from the full historical posts table — not the per-day top, so the user
+ * sees every imported post (not just the daily best).
+ * Paginates with .range() to get past the default 1000-row Supabase limit.
  */
-function useTopPostsFromDB(profileIds: string[], startDate?: string, endDate?: string) {
+function useAllPostsFromDB(profileIds: string[], startDate?: string, endDate?: string) {
   return useQuery({
-    queryKey: ["fk-top-content-db", profileIds, startDate, endDate],
+    queryKey: ["fk-posts-db", profileIds, startDate, endDate],
     queryFn: async () => {
       if (profileIds.length === 0) return [];
 
-      const { data } = await api.get("/fanpage-karma/daily-top-posts", {
-        params: {
-          profileIds: profileIds.join(","),
-          startDate,
-          endDate,
+      const PAGE = 1000;
+      const all: any[] = [];
+      let from = 0;
+      // Hard upper bound to avoid runaway loops
+      while (from < 20000) {
+        let query = supabase
+          .from("fk_posts")
+          .select("id, fk_profile_id, network, external_id, published_at, message, link, post_image_url, post_type, likes, comments, shares, engagement, reach")
+          .in("fk_profile_id", profileIds)
+          .order("published_at", { ascending: false })
+          .range(from, from + PAGE - 1);
+
+        if (startDate) {
+          query = query.gte("published_at", `${startDate}T00:00:00`);
         }
-      });
-      return data as FKDailyTopPost[];
+        if (endDate) {
+          query = query.lte("published_at", `${endDate}T23:59:59`);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      return all;
     },
     enabled: profileIds.length > 0,
-    staleTime: 10 * 60 * 1000, // 10 minutes - data is synced daily
+    staleTime: 5 * 60 * 1000,
   });
 }
 
-export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange }: TopContentTabProps) {
+export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange, analysisContext = "benchmark", brandName }: TopContentTabProps) {
   const { toast } = useToast();
   const [selectedProfileId, setSelectedProfileId] = useState<string>("__all__");
   const [filterNetwork, setFilterNetwork] = useState<FKNetwork | "all">("all");
@@ -245,7 +279,7 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
   const dbEndDate = dateRange ? format(dateRange.to, "yyyy-MM-dd") : undefined;
 
   // Fetch from DB instead of API!
-  const { data: dbTopPosts = [], isLoading: postsLoading, isFetching, refetch } = useTopPostsFromDB(
+  const { data: dbPosts = [], isLoading: postsLoading, isFetching, refetch } = useAllPostsFromDB(
     queryProfileIds,
     dbStartDate,
     dbEndDate
@@ -260,23 +294,25 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
 
   // Convert DB posts to display format
   const posts: DisplayPost[] = useMemo(() => {
-    return dbTopPosts.map(post => {
+    return dbPosts.map((post: any) => {
       const profile = profileMap.get(post.fk_profile_id);
       return {
         id: post.id,
-        url: post.post_url || undefined,
-        message: post.post_content || undefined,
+        url: post.link || undefined,
+        message: post.message || undefined,
+        content_type: post.post_type || undefined,
         image_url: post.post_image_url || undefined,
-        published_at: post.post_date,
+        published_at: post.published_at,
         likes: post.likes || 0,
         comments: post.comments || 0,
         shares: post.shares || 0,
-        engagement: post.engagement || 0,
+        engagement: post.engagement || ((post.likes || 0) + (post.comments || 0) + (post.shares || 0)),
         profile_id: profile?.profile_id,
         display_name: profile?.display_name || profile?.profile_id,
+        network: post.network || profile?.network,
       };
     });
-  }, [dbTopPosts, profileMap]);
+  }, [dbPosts, profileMap]);
 
   // Reset selection when filter changes
   useEffect(() => {
@@ -368,7 +404,8 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
         date: post.published_at,
       }));
 
-      const { data } = await api.post("/reports/narratives/analyze", {
+      const { data, error } = await supabase.functions.invoke("analyze-narratives", {
+        body: {
           profileName: isAllProfiles ? `${filteredProfiles.length} perfiles` : (selectedProfile?.profile_id || "Perfil"),
           network: isAllProfiles ? "múltiples redes" : (selectedProfile?.network || "social"),
           posts: postsForAnalysis,
@@ -376,7 +413,13 @@ export function TopContentTab({ profiles, isLoading: profilesLoading, dateRange 
             from: format(dateRange.from, "yyyy-MM-dd"),
             to: format(dateRange.to, "yyyy-MM-dd"),
           } : null,
+          analysisContext,
+          brandName,
+        },
       });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || "Error en el análisis");
 
       const analysis = data.analysis;
       const structuredAnalysis: ContentAnalysisData = {

@@ -17,7 +17,7 @@ import {
   Clock,
   ChevronRight,
 } from "lucide-react";
-import api from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { subHours, subDays, format, isWithinInterval } from "date-fns";
 import { es } from "date-fns/locale";
@@ -60,13 +60,14 @@ export function DailyIntelligenceSummary({ projectId, projectName }: DailyIntell
     queryFn: async () => {
       const sevenDaysAgo = subDays(new Date(), 7);
       
-      const { data } = await api.get("/mentions", {
-        params: {
-          projectId,
-          isArchived: false,
-          fromDate: sevenDaysAgo.toISOString(),
-        }
-      });
+      const { data, error } = await supabase
+        .from("mentions")
+        .select("id, title, description, source_domain, sentiment, matched_keywords, created_at, published_at")
+        .eq("project_id", projectId)
+        .eq("is_archived", false)
+        .gte("created_at", sevenDaysAgo.toISOString());
+
+      if (error) throw error;
       return data || [];
     },
     enabled: !!projectId,
@@ -164,7 +165,8 @@ export function DailyIntelligenceSummary({ projectId, projectName }: DailyIntell
         isWithinInterval(new Date(m.created_at), { start: yesterday, end: now })
       );
 
-      const { data } = await api.post("/reports/smart-report", {
+      const { data, error } = await supabase.functions.invoke("generate-smart-report", {
+        body: {
           mentions: recentMentions.slice(0, 30).map(m => ({
             id: m.id,
             title: m.title,
@@ -184,7 +186,10 @@ export function DailyIntelligenceSummary({ projectId, projectName }: DailyIntell
             end: now.toISOString(),
             label: "Últimas 24 horas",
           },
+        },
       });
+
+      if (error) throw error;
 
       if (data?.title) {
         setAiSummary({

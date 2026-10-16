@@ -11,6 +11,7 @@ enum AppRole {
   admin
   analista
   director
+  executive
 }
 
 enum ProjectType {
@@ -65,6 +66,7 @@ model User {
   roles          UserRole[]
   projects       Project[]
   rankings       Ranking[]
+  clients        Client[]
   accessRequests AccessRequest[] @relation("ReviewedBy")
 
   @@map("users")
@@ -95,21 +97,49 @@ model UserRole {
   @@map("user_roles")
 }
 
+model Client {
+  id                   String   @id @default(uuid()) @db.Uuid
+  user_id              String?  @db.Uuid
+  name                 String
+  description          String?
+  client_type          String   @default("empresa")
+  logo_url             String?
+  services_enabled     Json     @default("{}")
+  kimediamx_profile_id String?
+  aliases              String[] @default([])
+  industry             String?
+  is_active            Boolean  @default(true)
+  is_probono           Boolean  @default(false)
+  notes                String?
+  portal_modules       Json     @default("{}")
+  services             String[] @default([])
+  website_url          String?
+  created_at           DateTime @default(now())
+  updated_at           DateTime @default(now()) @updatedAt
+
+  user          User?          @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  fkProfiles    FkProfile[]
+  sharedReports SharedReport[]
+
+  @@map("clients")
+}
+
 model Project {
-  id                 String           @id @default(uuid()) @db.Uuid
-  user_id            String           @db.Uuid
-  nombre             String
-  tipo               ProjectType      @default(monitoreo)
-  objetivo           String
-  audiencia          String
-  sensibilidad       SensitivityLevel @default(medio)
-  alcance_temporal   TemporalScope    @default(diario)
-  alcance_geografico String[]         @default([])
-  version            Int              @default(1)
-  descripcion        String?
-  activo             Boolean          @default(true)
-  created_at         DateTime         @default(now())
-  updated_at         DateTime         @default(now()) @updatedAt
+  id                   String           @id @default(uuid()) @db.Uuid
+  user_id              String           @db.Uuid
+  nombre               String
+  tipo                 ProjectType      @default(monitoreo)
+  objetivo             String
+  audiencia            String
+  sensibilidad         SensitivityLevel @default(medio)
+  alcance_temporal     TemporalScope    @default(diario)
+  alcance_geografico   String[]         @default([])
+  version              Int              @default(1)
+  descripcion          String?
+  contexto_estrategico String?
+  activo               Boolean          @default(true)
+  created_at           DateTime         @default(now())
+  updated_at           DateTime         @default(now()) @updatedAt
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
@@ -128,17 +158,18 @@ model Project {
 }
 
 model Entity {
-  id             String     @id @default(uuid()) @db.Uuid
-  project_id     String     @db.Uuid
-  tipo           EntityType
-  nombre         String
-  descripcion    String?
-  palabras_clave String[]   @default([])
-  aliases        String[]   @default([])
-  metadata       Json       @default("{}")
-  activo         Boolean    @default(true)
-  created_at     DateTime   @default(now())
-  updated_at     DateTime   @default(now()) @updatedAt
+  id                String     @id @default(uuid()) @db.Uuid
+  project_id        String     @db.Uuid
+  tipo              EntityType
+  nombre            String
+  descripcion       String?
+  palabras_clave    String[]   @default([])
+  aliases           String[]   @default([])
+  platform_keywords Json       @default("{}")
+  metadata          Json       @default("{}")
+  activo            Boolean    @default(true)
+  created_at        DateTime   @default(now())
+  updated_at        DateTime   @default(now()) @updatedAt
 
   project  Project   @relation(fields: [project_id], references: [id], onDelete: Cascade)
   mentions Mention[]
@@ -158,7 +189,7 @@ model Mention {
   source_domain    String?
   published_at     DateTime?
   matched_keywords String[]  @default([])
-  sentiment        String? // positivo, neutral, negativo
+  sentiment        String?
   relevance_score  Decimal?  @default(0.5) @db.Decimal(3, 2)
   raw_metadata     Json      @default("{}")
   is_read          Boolean   @default(false)
@@ -243,10 +274,10 @@ model ThematicCard {
   id           String    @id @default(uuid()) @db.Uuid
   project_id   String    @db.Uuid
   title        String
-  card_type    String // conversation_analysis, informative
+  card_type    String
   period_start DateTime? @db.Date
   period_end   DateTime? @db.Date
-  status       String    @default("draft") // draft, published
+  status       String    @default("draft")
   content      Json      @default("{}")
   mention_ids  String[]  @default([]) @db.Uuid
   created_at   DateTime  @default(now())
@@ -354,44 +385,53 @@ model PostComment {
 }
 
 model FkProfile {
-  id             String    @id @default(uuid()) @db.Uuid
-  project_id     String?   @db.Uuid
-  ranking_id     String?   @db.Uuid
-  network        String
-  profile_id     String
-  display_name   String?
-  avatar_url     String?
-  is_own_profile Boolean   @default(false)
-  is_active      Boolean   @default(true)
-  last_synced_at DateTime?
-  created_at     DateTime  @default(now())
-  updated_at     DateTime  @default(now()) @updatedAt
+  id                        String    @id @default(uuid()) @db.Uuid
+  project_id                String?   @db.Uuid
+  ranking_id                String?   @db.Uuid
+  client_id                 String?   @db.Uuid
+  network                   String
+  profile_id                String
+  display_name              String?
+  display_name_normalized   String?
+  canonical_name            String?
+  canonical_name_normalized String?
+  classification_status     String    @default("unclassified")
+  avatar_url                String?
+  is_own_profile            Boolean   @default(false)
+  is_competitor             Boolean   @default(false)
+  is_active                 Boolean   @default(true)
+  last_synced_at            DateTime?
+  created_at                DateTime  @default(now())
+  updated_at                DateTime  @default(now()) @updatedAt
 
   project       Project?         @relation(fields: [project_id], references: [id], onDelete: Cascade)
   ranking       Ranking?         @relation(fields: [ranking_id], references: [id], onDelete: Cascade)
+  client        Client?          @relation(fields: [client_id], references: [id], onDelete: SetNull)
   kpis          FkProfileKpi[]
   dailyTopPosts FkDailyTopPost[]
+  posts         FkPost[]
 
   @@unique([project_id, network, profile_id])
   @@map("fk_profiles")
 }
 
 model FkProfileKpi {
-  id                          String   @id @default(uuid()) @db.Uuid
-  fk_profile_id               String   @db.Uuid
-  period_start                DateTime @db.Date
-  period_end                  DateTime @db.Date
+  id                          String    @id @default(uuid()) @db.Uuid
+  fk_profile_id               String    @db.Uuid
+  period_start                DateTime  @db.Date
+  period_end                  DateTime  @db.Date
+  snapshot_date               DateTime? @default(now()) @db.Date
   followers                   Int?
-  follower_growth_percent     Decimal? @db.Decimal(10, 4)
-  engagement_rate             Decimal? @db.Decimal(10, 4)
-  posts_per_day               Decimal? @db.Decimal(10, 2)
+  follower_growth_percent     Decimal?  @db.Decimal(10, 4)
+  engagement_rate             Decimal?  @db.Decimal(10, 4)
+  posts_per_day               Decimal?  @db.Decimal(10, 2)
   reach_per_day               Int?
-  impressions_per_interaction Decimal? @db.Decimal(10, 4)
-  page_performance_index      Decimal? @db.Decimal(10, 4)
+  impressions_per_interaction Decimal?  @db.Decimal(10, 4)
+  page_performance_index      Decimal?  @db.Decimal(10, 4)
   position                    Int?
   previous_position           Int?
-  raw_data                    Json     @default("{}")
-  fetched_at                  DateTime @default(now())
+  raw_data                    Json      @default("{}")
+  fetched_at                  DateTime  @default(now())
 
   profile FkProfile @relation(fields: [fk_profile_id], references: [id], onDelete: Cascade)
 
@@ -421,6 +461,35 @@ model FkDailyTopPost {
   @@index([fk_profile_id, post_date])
   @@index([network, post_date])
   @@map("fk_daily_top_posts")
+}
+
+model FkPost {
+  id                         String   @id @default(uuid()) @db.Uuid
+  fk_profile_id              String   @db.Uuid
+  network                    String
+  external_id                String?
+  message                    String?
+  link                       String?
+  post_image_url             String?
+  post_type                  String?
+  published_at               DateTime
+  likes                      Int?     @default(0)
+  comments                   Int?     @default(0)
+  shares                     Int?     @default(0)
+  engagement                 Int?     @default(0)
+  reach                      Int?     @default(0)
+  interaction_rate           Decimal? @db.Decimal(10, 4)
+  interaction_per_impression Decimal? @db.Decimal(10, 4)
+  raw_data                   Json?    @default("{}")
+  imported_at                DateTime @default(now())
+  created_at                 DateTime @default(now())
+  updated_at                 DateTime @default(now()) @updatedAt
+
+  profile FkProfile @relation(fields: [fk_profile_id], references: [id], onDelete: Cascade)
+
+  @@index([fk_profile_id])
+  @@index([published_at])
+  @@map("fk_posts")
 }
 
 model Ranking {
@@ -466,4 +535,589 @@ model AutoSaveConfig {
   updated_at          DateTime @default(now()) @updatedAt
 
   @@map("auto_save_configs")
+}
+
+model SharedReport {
+  id             String    @id @default(uuid()) @db.Uuid
+  client_id      String?   @db.Uuid
+  project_id     String?   @db.Uuid
+  project_name   String
+  title          String
+  report_kind    String    @default("smart")
+  public_token   String    @unique @default(uuid())
+  content        Json      @default("{}")
+  date_range     Json      @default("{}")
+  view_count     Int       @default(0)
+  is_revoked     Boolean   @default(false)
+  expires_at     DateTime?
+  last_viewed_at DateTime?
+  created_by     String    @db.Uuid
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @default(now()) @updatedAt
+
+  client Client? @relation(fields: [client_id], references: [id], onDelete: SetNull)
+
+  @@index([public_token])
+  @@map("shared_reports")
+}
+
+model SmartReportJob {
+  id              String    @id @default(uuid()) @db.Uuid
+  user_id         String    @db.Uuid
+  status          String    @default("pending")
+  request_payload Json      @default("{}")
+  result          Json?
+  error_message   String?
+  started_at      DateTime?
+  completed_at    DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @default(now()) @updatedAt
+
+  @@map("smart_report_jobs")
+}
+
+// ============================================================================
+// MODELOS DEL PORTAL EJECUTIVO MULTI-CLIENTE & GABINETE (Wizr-ZIP-2610)
+// ============================================================================
+
+model ClientAccess {
+  id         String   @id @default(uuid()) @db.Uuid
+  client_id  String   @db.Uuid
+  user_id    String   @db.Uuid
+  created_by String?  @db.Uuid
+  created_at DateTime @default(now())
+
+  @@unique([client_id, user_id])
+  @@map("client_access")
+}
+
+model ClientEfemerideDecision {
+  id             String   @id @default(uuid()) @db.Uuid
+  client_id      String   @db.Uuid
+  efemeride_date String
+  efemeride_name String
+  decision       String   @default("pendiente")
+  note           String?
+  decided_by     String?  @db.Uuid
+  created_at     DateTime @default(now())
+  updated_at     DateTime @default(now()) @updatedAt
+
+  @@map("client_efemeride_decisions")
+}
+
+model ClientPortalDependencia {
+  id            String   @id @default(uuid()) @db.Uuid
+  client_id     String   @db.Uuid
+  nombre        String
+  nombre_corto  String?
+  tipo          String   @default("secretaria")
+  titular       String?
+  titular_cargo String?
+  sort_order    Int      @default(0)
+  active        Boolean  @default(true)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now()) @updatedAt
+
+  @@index([client_id])
+  @@map("client_portal_dependencias")
+}
+
+model ClientPortalBenchmarkCompetitor {
+  id                  String   @id @default(uuid()) @db.Uuid
+  client_id           String   @db.Uuid
+  dependencia_id      String?  @db.Uuid
+  name                String
+  handle              String?
+  network             String
+  platform            String   @default("social")
+  account_type        String?  @default("institucional")
+  profile_external_id String?
+  external_url        String?
+  image_url           String?
+  brand_color         String   @default("#3b82f6")
+  scope               String   @default("general")
+  is_client           Boolean  @default(false)
+  is_default          Boolean  @default(true)
+  active              Boolean  @default(true)
+  sort_order          Int      @default(0)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @default(now()) @updatedAt
+
+  @@index([client_id])
+  @@map("client_portal_benchmark_competitors")
+}
+
+model ClientPortalBenchmarkPeriod {
+  id           String   @id @default(uuid()) @db.Uuid
+  client_id    String   @db.Uuid
+  period_label String
+  period_start String
+  period_end   String
+  period_type  String   @default("monthly")
+  scope        String   @default("general")
+  notes        String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @default(now()) @updatedAt
+
+  @@index([client_id])
+  @@map("client_portal_benchmark_periods")
+}
+
+model ClientPortalBenchmarkMetric {
+  id                         String   @id @default(uuid()) @db.Uuid
+  client_id                  String   @db.Uuid
+  period_id                  String   @db.Uuid
+  competitor_id              String   @db.Uuid
+  network                    String
+  followers                  Float?
+  follower_growth_rate       Float?
+  engagement_rate            Float?
+  posts_per_day              Float?
+  reach_per_day              Float?
+  interaction_per_impression Float?
+  performance_index          Float?
+  raw                        Json?    @default("{}")
+  created_at                 DateTime @default(now())
+
+  @@index([client_id, period_id])
+  @@map("client_portal_benchmark_metrics")
+}
+
+model ClientPortalBenchmarkPost {
+  id                         String   @id @default(uuid()) @db.Uuid
+  client_id                  String   @db.Uuid
+  period_id                  String   @db.Uuid
+  competitor_id              String?  @db.Uuid
+  network                    String
+  profile_name               String
+  posted_at                  String?
+  message                    String?
+  message_external_id        String?
+  link                       String?
+  image_link                 String?
+  likes                      Float?
+  comments                   Float?
+  interactions               Float?
+  reach                      Float?
+  engagement_rate            Float?
+  interaction_per_impression Float?
+  raw                        Json?    @default("{}")
+  created_at                 DateTime @default(now())
+
+  @@index([client_id, period_id])
+  @@map("client_portal_benchmark_posts")
+}
+
+model ClientPortalBenchmarkFollowerDaily {
+  id            String   @id @default(uuid()) @db.Uuid
+  client_id     String   @db.Uuid
+  period_id     String   @db.Uuid
+  competitor_id String   @db.Uuid
+  network       String
+  day           String
+  delta         Float    @default(0)
+  created_at    DateTime @default(now())
+
+  @@index([client_id, period_id])
+  @@map("client_portal_benchmark_follower_daily")
+}
+
+model ClientPortalBenchmarkNarrative {
+  id            String   @id @default(uuid()) @db.Uuid
+  client_id     String   @db.Uuid
+  competitor_id String?  @db.Uuid
+  profile_name  String
+  network       String
+  range_start   String
+  range_end     String
+  posts_sampled Int      @default(0)
+  narratives    Json     @default("{}")
+  model         String?
+  generated_at  DateTime @default(now())
+
+  @@index([client_id])
+  @@map("client_portal_benchmark_narratives")
+}
+
+model ClientPortalBenchmarkUpload {
+  id          String   @id @default(uuid()) @db.Uuid
+  client_id   String   @db.Uuid
+  period_id   String   @db.Uuid
+  file_name   String
+  upload_type String
+  row_count   Int      @default(0)
+  uploaded_by String?  @db.Uuid
+  created_at  DateTime @default(now())
+
+  @@map("client_portal_benchmark_uploads")
+}
+
+model ClientPortalListeningEntry {
+  id               String    @id @default(uuid()) @db.Uuid
+  client_id        String    @db.Uuid
+  entry_date       String
+  content_md       String
+  source           String    @default("manual")
+  raw_source_ref   String?
+  sentiment        String?
+  sentiment_score  Float?
+  urgency          String?
+  topics           String[]  @default([])
+  actors           String[]  @default([])
+  summary          String?
+  total_mentions   Int?      @default(0)
+  sentiment_counts Json?     @default("{}")
+  channels         Json?     @default("[]")
+  entities         Json?     @default("[]")
+  mentions         Json?     @default("[]")
+  events           Json?     @default("[]")
+  key_quotes       Json?     @default("[]")
+  competitors      Json?     @default("[]")
+  media_mentions   Json      @default("[]")
+  social_mentions  Json      @default("[]")
+  national_context Json      @default("[]")
+  scope_counts     Json      @default("{}")
+  analyzed_at      DateTime?
+  created_by       String?   @db.Uuid
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @default(now()) @updatedAt
+
+  @@index([client_id, entry_date])
+  @@map("client_portal_listening_entries")
+}
+
+model ClientPortalListeningAnalysis {
+  id                     String   @id @default(uuid()) @db.Uuid
+  client_id              String   @db.Uuid
+  week_start             String
+  week_end               String
+  entries_count          Int      @default(0)
+  total_mentions         Int      @default(0)
+  executive_summary      String?
+  key_findings           Json?    @default("[]")
+  alerts                 Json?    @default("[]")
+  recommendations_client String?
+  recommendations_team   String?
+  sentiment_breakdown    Json?    @default("{}")
+  top_topics             Json?    @default("[]")
+  top_mentions           Json?    @default("[]")
+  generated_by           String?  @db.Uuid
+  created_at             DateTime @default(now())
+  updated_at             DateTime @default(now()) @updatedAt
+
+  @@index([client_id, week_start])
+  @@map("client_portal_listening_analyses")
+}
+
+model ClientPortalListeningAnalysisJob {
+  id            String   @id @default(uuid()) @db.Uuid
+  client_id     String   @db.Uuid
+  period_start  String
+  period_end    String
+  status        String   @default("pending")
+  result        Json?
+  error_message String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now()) @updatedAt
+
+  @@map("client_portal_listening_analysis_jobs")
+}
+
+model ClientPortalDepRecommendation {
+  id             String   @id @default(uuid()) @db.Uuid
+  client_id      String   @db.Uuid
+  dependencia_id String   @db.Uuid
+  enfoque        String   @default("combinado")
+  range_start    String
+  range_end      String
+  payload        Json     @default("{}")
+  model          String?
+  generated_at   DateTime @default(now())
+  created_at     DateTime @default(now()) @updatedAt
+
+  @@index([client_id, dependencia_id])
+  @@map("client_portal_dep_recommendations")
+}
+
+model ClientPortalStrategyReport {
+  id           String   @id @default(uuid()) @db.Uuid
+  client_id    String   @db.Uuid
+  range_start  String
+  range_end    String
+  payload      Json     @default("{}")
+  model        String?
+  generated_at DateTime @default(now())
+
+  @@index([client_id])
+  @@map("client_portal_strategy_reports")
+}
+
+model ClientPortalSocialMetric {
+  id                   String   @id @default(uuid()) @db.Uuid
+  client_id            String   @db.Uuid
+  network              String
+  account_key          String
+  account_name         String
+  account_handle       String?
+  period_start         String
+  period_end           String
+  period_label         String?
+  followers            Float?
+  follower_growth      Float?
+  follower_growth_rate Float?
+  posts                Float?
+  interactions         Float?
+  engagement_rate      Float?
+  reach                Float?
+  impressions          Float?
+  performance_index    Float?
+  source               String   @default("manual")
+  raw                  Json     @default("{}")
+  created_by           String?  @db.Uuid
+  created_at           DateTime @default(now())
+  updated_at           DateTime @default(now()) @updatedAt
+
+  @@index([client_id, period_end])
+  @@map("client_portal_social_metrics")
+}
+
+model ClientPortalWebAnalytics {
+  id                  String   @id @default(uuid()) @db.Uuid
+  client_id           String   @db.Uuid
+  period_start        String
+  period_end          String
+  period_label        String?
+  users               Float?
+  new_users           Float?
+  sessions            Float?
+  pageviews           Float?
+  bounce_rate         Float?
+  avg_session_seconds Float?
+  conversions         Float?
+  channels            Json     @default("[]")
+  notes               String?
+  raw                 Json     @default("{}")
+  created_by          String?  @db.Uuid
+  created_at          DateTime @default(now())
+  updated_at          DateTime @default(now()) @updatedAt
+
+  @@index([client_id, period_end])
+  @@map("client_portal_web_analytics")
+}
+
+model ClientPortalAdsMetric {
+  id              String   @id @default(uuid()) @db.Uuid
+  client_id       String   @db.Uuid
+  platform        String
+  campaign_key    String
+  campaign_name   String
+  objective       String?
+  period_start    String
+  period_end      String
+  period_label    String?
+  spend           Float?
+  impressions     Float?
+  reach           Float?
+  clicks          Float?
+  ctr             Float?
+  cpc             Float?
+  cpm             Float?
+  results         Float?
+  result_type     String?
+  cost_per_result Float?
+  conversions     Float?
+  raw             Json     @default("{}")
+  created_by      String?  @db.Uuid
+  created_at      DateTime @default(now())
+  updated_at      DateTime @default(now()) @updatedAt
+
+  @@index([client_id, period_end])
+  @@map("client_portal_ads_metrics")
+}
+
+model ClientPortalReport {
+  id          String   @id @default(uuid()) @db.Uuid
+  client_id   String   @db.Uuid
+  report_date String
+  title       String
+  type        String   @default("weekly")
+  summary_md  String?
+  created_by  String?  @db.Uuid
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now()) @updatedAt
+
+  @@index([client_id, report_date])
+  @@map("client_portal_reports")
+}
+
+model ClientPortalAttachment {
+  id           String   @id @default(uuid()) @db.Uuid
+  report_id    String   @db.Uuid
+  file_name    String
+  mime_type    String?
+  size_bytes   Int?
+  storage_path String
+  created_at   DateTime @default(now())
+
+  @@index([report_id])
+  @@map("client_portal_attachments")
+}
+
+model ClientPortalAsset {
+  id           String   @id @default(uuid()) @db.Uuid
+  client_id    String   @db.Uuid
+  name         String
+  channel      String?
+  stage        String   @default("produccion")
+  status       String   @default("activo")
+  owner        String?
+  url          String?
+  metric_label String?
+  metric_value String?
+  notes        String?
+  sort_order   Int      @default(0)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @default(now()) @updatedAt
+
+  @@index([client_id])
+  @@map("client_portal_assets")
+}
+
+model ClientPortalCredential {
+  id             String   @id @default(uuid()) @db.Uuid
+  client_id      String   @db.Uuid
+  portal_email   String?
+  portal_user_id String?  @db.Uuid
+  notes          String?
+  created_by     String?  @db.Uuid
+  created_at     DateTime @default(now())
+  updated_at     DateTime @default(now()) @updatedAt
+
+  @@index([client_id])
+  @@map("client_portal_credentials")
+}
+
+model ClientPortalDataset {
+  id           String   @id @default(uuid()) @db.Uuid
+  client_id    String   @db.Uuid
+  source       String   @default("manual")
+  platform     String?
+  period_start String
+  period_end   String
+  file_name    String?
+  mime_type    String?
+  size_bytes   Int?
+  storage_path String?
+  parsed_data  Json     @default("{}")
+  notes        String?
+  uploaded_by  String?  @db.Uuid
+  created_at   DateTime @default(now())
+  updated_at   DateTime @default(now()) @updatedAt
+
+  @@index([client_id])
+  @@map("client_portal_datasets")
+}
+
+model ClientPortalUpdate {
+  id                      String   @id @default(uuid()) @db.Uuid
+  client_id               String   @db.Uuid
+  updated_on              String
+  press_data_through      String?
+  social_data_through     String?
+  narratives_data_through String?
+  notes                   String?
+  created_by              String?  @db.Uuid
+  created_at              DateTime @default(now())
+  updated_at              DateTime @default(now()) @updatedAt
+
+  @@index([client_id])
+  @@map("client_portal_updates")
+}
+
+model ClientPortalUserPref {
+  id                   String   @id @default(uuid()) @db.Uuid
+  client_id            String   @db.Uuid
+  user_id              String   @db.Uuid
+  focus_dependencia_id String?  @db.Uuid
+  theme                String   @default("dark")
+  created_at           DateTime @default(now())
+  updated_at           DateTime @default(now()) @updatedAt
+
+  @@unique([client_id, user_id])
+  @@map("client_portal_user_prefs")
+}
+
+model ClientPortalWeeklyRecommendation {
+  id            String   @id @default(uuid()) @db.Uuid
+  client_id     String   @db.Uuid
+  week_start    String
+  priority      String   @default("alta")
+  for_client_md String?
+  for_team_md   String?
+  created_by    String?  @db.Uuid
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now()) @updatedAt
+
+  @@index([client_id, week_start])
+  @@map("client_portal_weekly_recommendations")
+}
+
+model NotionParrillaSource {
+  id                 String    @id @default(uuid()) @db.Uuid
+  label              String
+  notion_database_id String
+  default_client_id  String?   @db.Uuid
+  multi_client       Boolean   @default(false)
+  account_map        Json      @default("{}")
+  active             Boolean   @default(true)
+  last_synced_at     DateTime?
+  created_at         DateTime  @default(now())
+
+  @@map("notion_parrilla_sources")
+}
+
+model NotionParrillaItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  source_id      String?  @db.Uuid
+  client_id      String?  @db.Uuid
+  notion_page_id String   @unique
+  notion_url     String?
+  title          String?
+  network        String?
+  format         String?
+  status         String?
+  scheduled_date String?
+  account        String?
+  objective      String?
+  theme          String?
+  responsible    String?
+  raw            Json     @default("{}")
+  synced_at      DateTime @default(now())
+
+  @@index([client_id, scheduled_date])
+  @@map("notion_parrilla_items")
+}
+
+model ClientGa4Property {
+  id          String   @id @default(uuid()) @db.Uuid
+  client_id   String   @db.Uuid
+  property_id String
+  label       String?
+  active      Boolean  @default(true)
+  created_at  DateTime @default(now())
+
+  @@index([client_id])
+  @@map("client_ga4_properties")
+}
+
+model ClientGoogleAdsAccount {
+  id          String   @id @default(uuid()) @db.Uuid
+  client_id   String   @db.Uuid
+  customer_id String
+  label       String?
+  active      Boolean  @default(true)
+  created_at  DateTime @default(now())
+
+  @@index([client_id])
+  @@map("client_google_ads_accounts")
 }

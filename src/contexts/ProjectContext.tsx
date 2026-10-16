@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import api from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
 type ProjectType = "monitoreo" | "investigacion" | "crisis" | "benchmark";
@@ -16,6 +16,7 @@ export interface Project {
   sensibilidad: SensitivityLevel;
   alcance_temporal: TemporalScope;
   alcance_geografico: string[];
+  contexto_estrategico: string | null;
   version: number;
   activo: boolean;
   created_at: string;
@@ -49,30 +50,30 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const { data } = await api.get("/projects", {
-        params: {
-          activo: true
-        }
-      });
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("activo", true)
+        .order("updated_at", { ascending: false });
+
+      if (error) throw error;
 
       const projectList = (data as Project[]) || [];
       setProjects(projectList);
 
-      // Restore previously selected project from localStorage
+      // Restore ONLY if user explicitly selected one before. Never auto-pick.
       const savedProjectId = localStorage.getItem(SELECTED_PROJECT_KEY);
       if (savedProjectId) {
         const savedProject = projectList.find((p) => p.id === savedProjectId);
         if (savedProject) {
           setSelectedProjectState(savedProject);
-        } else if (projectList.length > 0) {
-          // Saved project no longer exists, select first
-          setSelectedProjectState(projectList[0]);
-          localStorage.setItem(SELECTED_PROJECT_KEY, projectList[0].id);
+        } else {
+          // Saved project no longer exists — clear and stay neutral
+          localStorage.removeItem(SELECTED_PROJECT_KEY);
+          setSelectedProjectState(null);
         }
-      } else if (projectList.length > 0) {
-        // No saved project, select first
-        setSelectedProjectState(projectList[0]);
-        localStorage.setItem(SELECTED_PROJECT_KEY, projectList[0].id);
+      } else {
+        setSelectedProjectState(null);
       }
     } catch (error) {
       console.error("Error fetching projects:", error);

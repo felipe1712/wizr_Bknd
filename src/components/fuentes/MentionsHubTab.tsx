@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,8 +42,17 @@ import {
   Trash2,
   Loader2,
   Sparkles,
+  Download,
+  User,
+  Newspaper,
+  Share2,
+  ArrowUpDown,
+  AlertCircle,
 } from "lucide-react";
 import type { Mention, SentimentType } from "@/hooks/useMentions";
+import { getMentionAuthorInfo } from "@/lib/mentionAuthors";
+import { ExecutiveSummaryCard } from "@/components/fuentes/ExecutiveSummaryCard";
+import { useProject } from "@/contexts/ProjectContext";
 
 // Platform icons mapping
 const PLATFORM_ICONS: Record<string, React.ElementType> = {
@@ -55,6 +64,14 @@ const PLATFORM_ICONS: Record<string, React.ElementType> = {
   "linkedin.com": Linkedin,
   "tiktok.com": MessageSquare,
   "reddit.com": MessageSquare,
+};
+
+const SOCIAL_DOMAINS = ["twitter", "x.com", "facebook", "instagram", "youtube", "linkedin", "tiktok", "threads", "reddit"];
+
+const isSocialDomain = (domain: string | null): boolean => {
+  if (!domain) return false;
+  const normalized = domain.toLowerCase().replace("www.", "");
+  return SOCIAL_DOMAINS.some((sd) => normalized.includes(sd));
 };
 
 const getPlatformIcon = (domain: string | null) => {
@@ -76,12 +93,30 @@ const getPlatformLabel = (domain: string | null): string => {
   return domain;
 };
 
+const getAuthorInfo = (mention: Mention) => getMentionAuthorInfo(mention);
+
+// Extract engagement metrics from raw_metadata
+const getEngagementMetrics = (mention: Mention) => {
+  const meta = mention.raw_metadata as Record<string, unknown> | null;
+  if (!meta) return null;
+  const likes = typeof meta.likes === "number" ? meta.likes : 0;
+  const comments = typeof meta.comments === "number" ? meta.comments : 0;
+  const shares = typeof meta.shares === "number" ? meta.shares : 0;
+  const views = typeof meta.views === "number" ? meta.views : 0;
+  // Check if metadata actually has ANY engagement keys at all
+  const hasEngagementKeys = "likes" in meta || "comments" in meta || "shares" in meta || "views" in meta;
+  if (!hasEngagementKeys) return null;
+  return { likes, comments, shares, views, total: likes + comments + shares + views };
+};
+
 const SENTIMENT_CONFIG = {
   positivo: { label: "Positivo", icon: Smile, color: "text-green-600", bg: "bg-green-100" },
   neutral: { label: "Neutral", icon: Meh, color: "text-gray-600", bg: "bg-gray-100" },
   negativo: { label: "Negativo", icon: Frown, color: "text-red-600", bg: "bg-red-100" },
   unknown: { label: "Sin analizar", icon: HelpCircle, color: "text-gray-400", bg: "bg-gray-50" },
 };
+
+type SourceCategory = "__all__" | "social" | "news";
 
 const ITEMS_PER_PAGE = 15;
 
@@ -111,25 +146,43 @@ export function MentionsHubTab({
   isAnalyzing,
 }: MentionsHubTabProps) {
   const navigate = useNavigate();
+  const { selectedProject } = useProject();
   
-  // Filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPlatform, setSelectedPlatform] = useState<string>("__all__");
   const [selectedSentiment, setSelectedSentiment] = useState<string>("__all__");
   const [selectedEntity, setSelectedEntity] = useState<string>("__all__");
+  const [sourceCategory, setSourceCategory] = useState<SourceCategory>("__all__");
   const [dateFrom, setDateFrom] = useState<Date | undefined>(subDays(new Date(), 30));
   const [dateTo, setDateTo] = useState<Date | undefined>(new Date());
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "engagement_desc" | "engagement_asc">("date_desc");
 
-  // Extract unique platforms
-  const platforms = useMemo(() => {
-    const uniqueDomains = new Set<string>();
+  // Normalize social domains to canonical display names
+  const normalizePlatformDomain = (domain: string): string => {
+    const d = domain.toLowerCase().replace(/^(www\.|m\.|mobile\.)/, "");
+    if (d.includes("twitter") || d.includes("x.com")) return "X (Twitter)";
+    if (d.includes("facebook")) return "Facebook";
+    if (d.includes("instagram")) return "Instagram";
+    if (d.includes("tiktok")) return "TikTok";
+    if (d.includes("youtube")) return "YouTube";
+    if (d.includes("reddit")) return "Reddit";
+    if (d.includes("linkedin")) return "LinkedIn";
+    return d;
+  };
+
+  // Extract unique platforms grouped by category
+  const { platforms, socialCount, newsCount } = useMemo(() => {
+    const uniqueLabels = new Set<string>();
+    let sc = 0, nc = 0;
     mentions.forEach((m) => {
       if (m.source_domain) {
-        uniqueDomains.add(m.source_domain.toLowerCase().replace("www.", ""));
+        const label = normalizePlatformDomain(m.source_domain);
+        uniqueLabels.add(label);
+        if (isSocialDomain(m.source_domain)) sc++; else nc++;
       }
     });
-    return Array.from(uniqueDomains).sort();
+    return { platforms: Array.from(uniqueLabels).sort(), socialCount: sc, newsCount: nc };
   }, [mentions]);
 
   // Filter mentions
@@ -141,13 +194,22 @@ export function MentionsHubTab({
         const matchesTitle = mention.title?.toLowerCase().includes(query);
         const matchesDesc = mention.description?.toLowerCase().includes(query);
         const matchesKeywords = mention.matched_keywords?.some((k) => k.toLowerCase().includes(query));
-        if (!matchesTitle && !matchesDesc && !matchesKeywords) return false;
+        const author = getAuthorInfo(mention);
+        const matchesAuthor = author && (author.name.toLowerCase().includes(query) || author.username.toLowerCase().includes(query));
+        if (!matchesTitle && !matchesDesc && !matchesKeywords && !matchesAuthor) return false;
+      }
+
+      // Source category filter (social vs news)
+      if (sourceCategory !== "__all__") {
+        const social = isSocialDomain(mention.source_domain);
+        if (sourceCategory === "social" && !social) return false;
+        if (sourceCategory === "news" && social) return false;
       }
 
       // Platform filter
       if (selectedPlatform !== "__all__") {
-        const domain = mention.source_domain?.toLowerCase().replace("www.", "") || "";
-        if (!domain.includes(selectedPlatform)) return false;
+        const label = normalizePlatformDomain(mention.source_domain || "");
+        if (label !== selectedPlatform) return false;
       }
 
       // Sentiment filter
@@ -173,14 +235,56 @@ export function MentionsHubTab({
 
       return true;
     });
-  }, [mentions, searchQuery, selectedPlatform, selectedSentiment, selectedEntity, dateFrom, dateTo]);
+  }, [mentions, searchQuery, selectedPlatform, selectedSentiment, selectedEntity, sourceCategory, dateFrom, dateTo]);
+
+  // Sort mentions
+  const sortedMentions = useMemo(() => {
+    const sorted = [...filteredMentions];
+    sorted.sort((a, b) => {
+      if (sortBy === "date_desc" || sortBy === "date_asc") {
+        const dateA = new Date(a.published_at || a.created_at).getTime();
+        const dateB = new Date(b.published_at || b.created_at).getTime();
+        return sortBy === "date_desc" ? dateB - dateA : dateA - dateB;
+      }
+      const metricsA = getEngagementMetrics(a);
+      const metricsB = getEngagementMetrics(b);
+      // Mentions without engagement data go to the bottom
+      if (!metricsA && !metricsB) return 0;
+      if (!metricsA) return 1;
+      if (!metricsB) return -1;
+      const engA = metricsA.total;
+      const engB = metricsB.total;
+      return sortBy === "engagement_desc" ? engB - engA : engA - engB;
+    });
+    return sorted;
+  }, [filteredMentions, sortBy]);
 
   // Pagination
-  const totalPages = Math.ceil(filteredMentions.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(sortedMentions.length / ITEMS_PER_PAGE);
   const paginatedMentions = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredMentions.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredMentions, currentPage]);
+    return sortedMentions.slice(start, start + ITEMS_PER_PAGE);
+  }, [sortedMentions, currentPage]);
+
+  // In-range counts (only date filter applied) — used to show "X total (Y en rango)"
+  const inRangeCounts = useMemo(() => {
+    let total = 0, social = 0, news = 0;
+    mentions.forEach((m) => {
+      if (dateFrom || dateTo) {
+        const d = new Date(m.published_at || m.created_at);
+        if (dateFrom && d < startOfDay(dateFrom)) return;
+        if (dateTo && d > endOfDay(dateTo)) return;
+      }
+      total++;
+      if (m.source_domain) {
+        if (isSocialDomain(m.source_domain)) social++;
+        else news++;
+      }
+    });
+    return { total, social, news };
+  }, [mentions, dateFrom, dateTo]);
+
+  const hasDateFilter = !!(dateFrom || dateTo);
 
   // Stats for analysis panels
   const stats = useMemo(() => {
@@ -197,7 +301,11 @@ export function MentionsHubTab({
       byPlatform[platform] = (byPlatform[platform] || 0) + 1;
     });
 
-    return { bySentiment, byPlatform };
+    // Engagement coverage
+    const withEngagement = filteredMentions.filter((m) => getEngagementMetrics(m) !== null).length;
+    const withoutEngagement = filteredMentions.length - withEngagement;
+
+    return { bySentiment, byPlatform, withEngagement, withoutEngagement };
   }, [filteredMentions]);
 
   // Reset page when filters change
@@ -211,16 +319,54 @@ export function MentionsHubTab({
     setSelectedPlatform("__all__");
     setSelectedSentiment("__all__");
     setSelectedEntity("__all__");
+    setSourceCategory("__all__");
     setDateFrom(subDays(new Date(), 30));
     setDateTo(new Date());
     setCurrentPage(1);
   };
+
+  // Export CSV
+  const exportCSV = useCallback(() => {
+    const headers = ["Título", "Descripción", "URL", "Plataforma", "Autor", "Username", "Sentimiento", "Fecha", "Keywords", "Likes", "Comentarios", "Shares", "Vistas", "Engagement Total", "Entidad"];
+    const rows = sortedMentions.map((m) => {
+      const author = getAuthorInfo(m);
+      const metrics = getEngagementMetrics(m);
+      const entity = entities.find((e) => e.id === m.entity_id);
+      const totalEng = metrics ? metrics.likes + metrics.comments + metrics.shares + metrics.views : 0;
+      return [
+        (m.title || "").replace(/"/g, '""'),
+        (m.description || "").replace(/"/g, '""'),
+        m.url,
+        getPlatformLabel(m.source_domain),
+        author?.name || "",
+        author?.username || "",
+        m.sentiment || "sin analizar",
+        m.published_at || m.created_at,
+        (m.matched_keywords || []).join("; "),
+        metrics?.likes ?? "",
+        metrics?.comments ?? "",
+        metrics?.shares ?? "",
+        metrics?.views ?? "",
+        totalEng || "",
+        entity?.nombre || "",
+      ].map((v) => `"${v}"`).join(",");
+    });
+    const csv = "\uFEFF" + [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `menciones_${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [sortedMentions, entities]);
 
   const activeFiltersCount = [
     searchQuery.trim(),
     selectedPlatform !== "__all__",
     selectedSentiment !== "__all__",
     selectedEntity !== "__all__",
+    sourceCategory !== "__all__",
   ].filter(Boolean).length;
 
   // Navigate to analysis panels with context
@@ -323,6 +469,15 @@ export function MentionsHubTab({
         </Card>
       </div>
 
+      {/* AI Executive Summary */}
+      <ExecutiveSummaryCard
+        mentions={filteredMentions}
+        projectName={selectedProject?.nombre}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        activeFiltersLabel={activeFiltersCount > 0 ? `${activeFiltersCount} filtro${activeFiltersCount > 1 ? "s" : ""} activo${activeFiltersCount > 1 ? "s" : ""}` : undefined}
+      />
+
       {/* Sentiment Summary */}
       <Card>
         <CardHeader className="pb-3">
@@ -394,6 +549,41 @@ export function MentionsHubTab({
         </CardContent>
       </Card>
 
+      {/* Source Category Tabs + Export */}
+      <div className="flex items-center justify-between">
+        <div className="flex rounded-lg border bg-muted p-1">
+          <Button
+            variant={sourceCategory === "__all__" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { setSourceCategory("__all__"); handleFilterChange(); }}
+          >
+            Todas ({mentions.length}{hasDateFilter && inRangeCounts.total !== mentions.length ? ` · ${inRangeCounts.total} en rango` : ""})
+          </Button>
+          <Button
+            variant={sourceCategory === "social" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { setSourceCategory("social"); handleFilterChange(); }}
+            className="gap-1"
+          >
+            <Share2 className="h-3.5 w-3.5" />
+            Redes Sociales ({socialCount}{hasDateFilter && inRangeCounts.social !== socialCount ? ` · ${inRangeCounts.social} en rango` : ""})
+          </Button>
+          <Button
+            variant={sourceCategory === "news" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { setSourceCategory("news"); handleFilterChange(); }}
+            className="gap-1"
+          >
+            <Newspaper className="h-3.5 w-3.5" />
+            Medios Digitales ({newsCount}{hasDateFilter && inRangeCounts.news !== newsCount ? ` · ${inRangeCounts.news} en rango` : ""})
+          </Button>
+        </div>
+        <Button variant="outline" size="sm" onClick={exportCSV} className="gap-2">
+          <Download className="h-4 w-4" />
+          Exportar CSV
+        </Button>
+      </div>
+
       {/* Filters */}
       <Card>
         <CardHeader className="pb-3">
@@ -422,7 +612,7 @@ export function MentionsHubTab({
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar en título, descripción o keywords..."
+                  placeholder="Buscar en título, descripción, keywords o autor..."
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -561,12 +751,34 @@ export function MentionsHubTab({
       {/* Results */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">
-              {filteredMentions.length} menciones encontradas
-            </CardTitle>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              Página {currentPage} de {totalPages || 1}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <CardTitle className="text-base">
+                {filteredMentions.length} menciones encontradas
+              </CardTitle>
+              {(sortBy === "engagement_desc" || sortBy === "engagement_asc") && stats.withoutEngagement > 0 && (
+                <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  {stats.withEngagement} con datos de engagement · {stats.withoutEngagement} sin datos (capturadas vía búsqueda web)
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <Select value={sortBy} onValueChange={(v) => { setSortBy(v as typeof sortBy); setCurrentPage(1); }}>
+                <SelectTrigger className="w-[200px] h-8 text-xs">
+                  <ArrowUpDown className="h-3 w-3 mr-1" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background border shadow-lg z-50">
+                  <SelectItem value="date_desc">Más recientes</SelectItem>
+                  <SelectItem value="date_asc">Más antiguas</SelectItem>
+                  <SelectItem value="engagement_desc">Mayor engagement</SelectItem>
+                  <SelectItem value="engagement_asc">Menor engagement</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                Página {currentPage} de {totalPages || 1}
+              </span>
             </div>
           </div>
         </CardHeader>
@@ -590,6 +802,9 @@ export function MentionsHubTab({
                   const sentimentConfig = SENTIMENT_CONFIG[sentimentKey];
                   const SentimentIcon = sentimentConfig.icon;
                   const globalIndex = (currentPage - 1) * ITEMS_PER_PAGE + index + 1;
+                  const author = getAuthorInfo(mention);
+                  const metrics = getEngagementMetrics(mention);
+                  const isSocial = isSocialDomain(mention.source_domain);
 
                   return (
                     <div
@@ -609,6 +824,27 @@ export function MentionsHubTab({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
+                              {/* Author line */}
+                              {author && (
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <User className="h-3 w-3 text-muted-foreground" />
+                                  {author.url ? (
+                                    <a
+                                      href={author.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs font-semibold text-primary hover:underline"
+                                    >
+                                      {author.name}
+                                    </a>
+                                  ) : (
+                                    <span className="text-xs font-semibold text-foreground">{author.name}</span>
+                                  )}
+                                  {author.username && author.username !== author.name && (
+                                    <span className="text-xs text-muted-foreground">@{author.username}</span>
+                                  )}
+                                </div>
+                              )}
                               <a
                                 href={mention.url}
                                 target="_blank"
@@ -658,9 +894,12 @@ export function MentionsHubTab({
 
                           {/* Meta */}
                           <div className="flex flex-wrap items-center gap-2 mt-2">
-                            <Badge variant="outline" className="text-xs gap-1">
+                            <Badge variant="outline" className={cn("text-xs gap-1", isSocial ? "border-primary/30" : "border-muted-foreground/30")}>
                               <PlatformIcon className="h-3 w-3" />
                               {getPlatformLabel(mention.source_domain)}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {isSocial ? "Red Social" : "Medio Digital"}
                             </Badge>
                             <Badge className={cn("text-xs gap-1", sentimentConfig.bg, sentimentConfig.color)}>
                               <SentimentIcon className="h-3 w-3" />
@@ -675,6 +914,23 @@ export function MentionsHubTab({
                               {format(new Date(mention.published_at || mention.created_at), "d MMM yyyy HH:mm", { locale: es })}
                             </span>
                           </div>
+
+                          {/* Engagement metrics for social */}
+                          {metrics ? (
+                            <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs">
+                              <span className="font-semibold text-foreground">
+                                📊 {metrics.total.toLocaleString()} eng.
+                              </span>
+                              {metrics.views > 0 && <span className="text-muted-foreground">👁 {metrics.views.toLocaleString()}</span>}
+                              {metrics.likes > 0 && <span className="text-muted-foreground">❤️ {metrics.likes.toLocaleString()}</span>}
+                              {metrics.comments > 0 && <span className="text-muted-foreground">💬 {metrics.comments.toLocaleString()}</span>}
+                              {metrics.shares > 0 && <span className="text-muted-foreground">🔄 {metrics.shares.toLocaleString()}</span>}
+                            </div>
+                          ) : isSocial ? (
+                            <p className="text-xs text-muted-foreground/60 mt-1.5 italic">
+                              Sin datos de engagement — recapturar desde Redes Sociales
+                            </p>
+                          ) : null}
 
                           {/* Keywords */}
                           {mention.matched_keywords && mention.matched_keywords.length > 0 && (
